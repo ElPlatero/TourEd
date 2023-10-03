@@ -1,0 +1,239 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <title>Toured OpenStreetMaps</title>
+    <link rel="stylesheet" href="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css" type="text/css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        #content {
+            min-height: 100%;
+        }
+        #infoCard {
+            padding: 0.25em;
+            cursor: pointer;
+            font-family: sans-serif;
+            font-size: 11pt;
+            position: absolute;
+            display: inline-block;
+            height: auto;
+            width: 200px;
+            text-align: left;
+            z-index: 100;
+            background-color: #FFFFFF;
+            color: #555555;
+            border: 1px dashed #555555;
+            border-radius: 10px;
+            left: 50%;
+            transform: translateX(3%);
+            visibility: hidden;
+            pointer-events: none;
+        }
+        #infoCard>div {
+            margin-top:0.5em;
+        }
+        #infoCard .number {
+            font-style: italic;
+            font-size: smaller;
+        }
+        #infoCard .name {
+            font-weight: bold;
+            border-top: 1px solid #555555;
+            border-bottom: 1px solid #555555;
+            padding-top: 0.25em;
+            padding-bottom: 0.25em;
+            background-color: #EEEEEE;
+        }
+        #infoCard .tour {
+            
+        }
+        
+        #infoCard .visited {
+            color: #AAAAAA;
+            font-style: italic;
+            font-size: smaller;
+        }
+    </style>
+</head>
+<body>
+<div id="content">
+    <div id="userIdInput" style="position:absolute;z-index: 100;width:100%;overflow: auto">
+        <div style="float: right;background: white;border:1px solid black;padding:0.5em;font-family: sans-serif" >
+            <label for="userid">Benutzer-ID:</label>
+            <input type="text" id="userid" name="userid">
+            <input type="submit" value="Anmelden" onclick="window.location=`?userid=${$('#userid').val()}`">
+        </div>
+    </div>
+    <div id="map" style="width: 100%; height: 100%; position:fixed">
+        <div id="infoCard"></div>
+    </div>
+</div>
+<script>
+    let app = {
+        PinType: {
+            VisitedVanilla: 1,
+            UnvisitedVanilla: 2,
+            VisitedExtended: 3,
+            UnvisitedExtended: 4
+        },
+        getPinType: (stampingPoint, isVisited) => stampingPoint.number
+            ? stampingPoint.number > 221
+                ? isVisited
+                    ? app.PinType.VisitedExtended
+                    : app.PinType.UnvisitedExtended
+                : isVisited
+                    ? app.PinType.VisitedVanilla
+                    : app.PinType.UnvisitedVanilla
+            : undefined,
+        map: new ol.Map({
+            controls: ol.control.defaults({attribution: false}).extend([new ol.control.Attribution({
+                collapsible: false
+            })]),
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.OSM({
+                        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        attributions: [ol.source.OSM.ATTRIBUTION, '&copy; Trips 2023'],
+                        maxZoom: 18
+                    })
+                })
+            ],
+            target: 'map',
+            view: new ol.View({
+                center: ol.proj.fromLonLat([11.816394330314203, 50.972084944877366]),
+                maxZoom: 18,
+                zoom: 12
+            })
+        })
+    };
+
+    app.createPin = function(stampingPoint, isVisited) {
+        const pinType = app.getPinType(stampingPoint, isVisited);
+        let data = {};
+
+        const webMercatorProjection = new ol.proj.fromLonLat([stampingPoint.position.longitude, stampingPoint.position.latitude]);
+        const point = new ol.geom.Point(webMercatorProjection);
+        const feature = new ol.Feature(point);
+        feature.vector = pinType === app.PinType.VisitedVanilla || pinType === app.PinType.VisitedExtended ? app.visitedMarkers : app.unvisitedMarkers;
+        feature.stampingPoint = stampingPoint;
+        return feature;
+    }
+    
+    app.createMarkersLayer = (iconSrc) => new ol.layer.Vector({
+        source: new ol.source.Vector(),
+        style: new ol.style.Style({
+            image: new ol.style.Icon({
+                anchor: [0.5, 1],
+                src: iconSrc,
+                title: 'huhu',
+                scale: 0.2
+            })
+        })
+    });
+
+    app.displayTooltip = (e) => {
+        const features = app.map.getFeaturesAtPixel(e.pixel);
+        let tooltip = $('#infoCard')[0];
+        if (features?.length > 0 && features[0].stampingPoint) {
+            const stampingPoint = features[0].stampingPoint;
+            tooltip.innerHTML = `
+<div class="number">Stempelstelle ${stampingPoint.number}</div>
+<div class="name">${stampingPoint.name}</div>
+`;
+            if (stampingPoint.tours && Array.isArray(stampingPoint.tours) && stampingPoint.tours.length > 0) {
+                for (const tour of stampingPoint.tours) {
+                    tooltip.innerHTML += `<div class="tour">${tour.name}</div>`;
+                }
+            } else {
+                tooltip.innerHTML += `<div class="tour">Einzelstempel</div>`;
+            }
+            if (stampingPoint.visited && stampingPoint.visited.length > 0) {
+                const visitedDate = new Date(stampingPoint.visited);
+                
+                tooltip.innerHTML += `<div class="visited">${visitedDate.toLocaleString("de-DE", {year: 'numeric', month: 'long', day: '2-digit', hour: '2-digit', minute: '2-digit'})} Uhr</div>`;
+            }
+            tooltip.style.visibility = 'visible';
+            tooltip.style.pointerEvents = 'auto';
+            tooltip.style.left = e.pixel[0] + 'px';
+            tooltip.style.top = e.pixel[1] + 'px';
+        } else {
+            tooltip.style.visibility = 'hidden';
+            tooltip.style.pointerEvents = 'none';
+        }
+    };
+    
+    app.initialize = () => {
+        const params = new Proxy(new URLSearchParams(window.location.search), {
+            get: (searchParams, prop) => searchParams.get(prop),
+        });
+        app.userId = params.userid;
+        app.hasUserId = app.userId !== null && app.userId !== undefined;
+        if (app.hasUserId) {
+            let userIdInput = $('#userIdInput')[0];
+            userIdInput.style.visibility = 'hidden';
+            userIdInput.style.pointerEvents = 'none';
+        }
+    }
+    
+    app.setRequestHeaders = (request) => {
+        if (!app.hasUserId) {
+            return;
+        }
+        request.setRequestHeader('toured-user', app.userId);
+    };
+    
+    app.visitedMarkers = app.createMarkersLayer('img/pin_icon_green.png');
+    app.unvisitedMarkers = app.createMarkersLayer('img/pin_icon_red.png');
+
+    app.map.addLayer(app.visitedMarkers);
+    app.map.addLayer(app.unvisitedMarkers);
+    app.map.on('pointermove', app.displayTooltip);
+    app.initialize();
+    
+    if (app.hasUserId) {
+        $.ajax({
+            type: "GET",
+            beforeSend: app.setRequestHeaders,
+            url: "api/points?vis=false",
+        }).then(p => {
+            let points = [];
+            for (const sp of p.stampingPoints) {
+                const stampingPoint = app.createPin(sp)
+                points.push(stampingPoint);
+            }
+            points.forEach(p => p.vector.getSource().addFeature(p))
+        });
+        $.ajax({
+            type: "GET",
+            beforeSend: app.setRequestHeaders,
+            url: "api/points?vis=true",
+        }).then(p => {
+            let points = [];
+            for (const sp of p.stampingPoints) {
+                const stampingPoint = app.createPin(sp, true);
+                points.push(stampingPoint);
+            }
+            points.forEach(p => p.vector.getSource().addFeature(p))
+        });
+    } else {
+        $.ajax({
+            type: "GET",
+            url: "api/points",
+        }).then(p => {
+            let points = [];
+            for (const sp of p.stampingPoints) {
+                const stampingPoint = app.createPin(sp, false);
+                points.push(stampingPoint);
+            }
+            points.forEach(p => p.vector.getSource().addFeature(p))
+        });
+    }
+</script>
+</body>
+</html>
