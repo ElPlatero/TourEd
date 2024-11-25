@@ -75,6 +75,29 @@
     </div>
 </div>
 <script>
+    class PositionInfo {
+        constructor(position) {
+            this.Location = position.coords;
+            app.map.getView().setCenter(ol.proj.fromLonLat([this.Location.longitude, this.Location.latitude]));
+            const positionDeature = new ol.feature();
+            positionFeature.setStyle(
+                new Style({
+                    image: new CircleStyle({
+                        radius: 6,
+                        fill: new Fill({
+                            color: '#3399CC',
+                        }),
+                        stroke: new Stroke({
+                            color: '#fff',
+                            width: 2,
+                        }),
+                    }),
+                }),
+            );
+
+        }
+    }
+    
     let app = {
         PinType: {
             VisitedVanilla: 1,
@@ -99,7 +122,7 @@
                 new ol.layer.Tile({
                     source: new ol.source.OSM({
                         url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        attributions: [ol.source.OSM.ATTRIBUTION, '&copy; Trips 2023'],
+                        attributions: [ol.source.OSM.ATTRIBUTION, '&copy; Trips 2023-2024'],
                         maxZoom: 18
                     })
                 })
@@ -163,6 +186,7 @@
             userIdInput.style.visibility = 'hidden';
             userIdInput.style.pointerEvents = 'none';
         }
+        navigator.geolocation.getCurrentPosition(position => app.positionInfo = new PositionInfo(position));
     }
     
     app.setRequestHeaders = (request) => {
@@ -174,7 +198,6 @@
     
     app.visitedMarkers = app.createMarkersLayer('img/pin_icon_green.png');
     app.unvisitedMarkers = app.createMarkersLayer('img/pin_icon_red.png');
-
     app.stampingPointInfo = {
         isVisible: false,
         isLocked: false,
@@ -210,7 +233,6 @@
             this.isVisible = true;
         }
     }
-    
     
     app.map.addLayer(app.visitedMarkers);
     app.map.addLayer(app.unvisitedMarkers);
