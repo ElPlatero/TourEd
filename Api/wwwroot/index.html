@@ -19,12 +19,12 @@
             padding: 0.25em;
             cursor: pointer;
             font-family: sans-serif;
-            font-size: 11pt;
             position: absolute;
             display: inline-block;
             height: auto;
-            width: 200px;
+            width: 400px;
             text-align: left;
+            font-size:24px;
             z-index: 100;
             background-color: #FFFFFF;
             color: #555555;
@@ -40,7 +40,7 @@
         }
         #infoCard .number {
             font-style: italic;
-            font-size: smaller;
+            font-size: 16px;
         }
         #infoCard .name {
             font-weight: bold;
@@ -51,13 +51,13 @@
             background-color: #EEEEEE;
         }
         #infoCard .tour {
-            
+            font-size: 20px;
         }
         
         #infoCard .visited {
             color: #AAAAAA;
             font-style: italic;
-            font-size: smaller;
+            font-size: 16px;
         }
     </style>
 </head>
@@ -132,39 +132,23 @@
                 anchor: [0.5, 1],
                 src: iconSrc,
                 title: 'huhu',
-                scale: 0.2
+                scale: 0.4
             })
         })
     });
 
-    app.displayTooltip = (e) => {
+    app.displayTooltip = (e, fixed) => {
         const features = app.map.getFeaturesAtPixel(e.pixel);
-        let tooltip = $('#infoCard')[0];
         if (features?.length > 0 && features[0].stampingPoint) {
-            const stampingPoint = features[0].stampingPoint;
-            tooltip.innerHTML = `
-<div class="number">Stempelstelle ${stampingPoint.number}</div>
-<div class="name">${stampingPoint.name}</div>
-`;
-            if (stampingPoint.tours && Array.isArray(stampingPoint.tours) && stampingPoint.tours.length > 0) {
-                for (const tour of stampingPoint.tours) {
-                    tooltip.innerHTML += `<div class="tour">${tour.name}</div>`;
-                }
-            } else {
-                tooltip.innerHTML += `<div class="tour">Einzelstempel</div>`;
+            app.stampingPointInfo.show(features[0].stampingPoint, e.pixel)
+            if (fixed === true) {
+                app.stampingPointInfo.isLocked = true;
             }
-            if (stampingPoint.visited && stampingPoint.visited.length > 0) {
-                const visitedDate = new Date(stampingPoint.visited);
-                
-                tooltip.innerHTML += `<div class="visited">${visitedDate.toLocaleString("de-DE", {year: 'numeric', month: 'long', day: '2-digit', hour: '2-digit', minute: '2-digit'})} Uhr</div>`;
-            }
-            tooltip.style.visibility = 'visible';
-            tooltip.style.pointerEvents = 'auto';
-            tooltip.style.left = e.pixel[0] + 'px';
-            tooltip.style.top = e.pixel[1] + 'px';
         } else {
-            tooltip.style.visibility = 'hidden';
-            tooltip.style.pointerEvents = 'none';
+            if (fixed === true) {
+                app.stampingPointInfo.isLocked = false;
+            }
+            app.stampingPointInfo.hide();
         }
     };
     
@@ -191,9 +175,47 @@
     app.visitedMarkers = app.createMarkersLayer('img/pin_icon_green.png');
     app.unvisitedMarkers = app.createMarkersLayer('img/pin_icon_red.png');
 
+    app.stampingPointInfo = {
+        isVisible: false,
+        isLocked: false,
+        hide: () => {
+            if (this.isLocked || !this.isVisible) {
+                return;
+            }
+            const tooltipElement = $('#infoCard')[0];
+            tooltipElement.style.visibility = 'hidden';
+            tooltipElement.style.pointerEvents = 'none';
+        },
+        show: (stampingPoint, coordinates) => {
+            const tooltipElement = $('#infoCard')[0];
+            tooltipElement.innerHTML = `
+<div class="number">Stempelstelle ${stampingPoint.number}</div>
+<div class="name">${stampingPoint.name}</div>
+`;
+            if (stampingPoint.tours && Array.isArray(stampingPoint.tours) && stampingPoint.tours.length > 0) {
+                for (const tour of stampingPoint.tours) {
+                    tooltipElement.innerHTML += `<div class="tour">${tour.name}</div>`;
+                }
+            } else {
+                tooltipElement.innerHTML += `<div class="tour">Einzelstempel</div>`;
+            }
+            if (stampingPoint.visited && stampingPoint.visited.length > 0) {
+                const visitedDate = new Date(stampingPoint.visited);
+                tooltipElement.innerHTML += `<div class="visited">${visitedDate.toLocaleString("de-DE", {year: 'numeric', month: 'long', day: '2-digit', hour: '2-digit', minute: '2-digit'})} Uhr</div>`;
+            }
+            tooltipElement.style.visibility = 'visible';
+            tooltipElement.style.pointerEvents = 'auto';
+            tooltipElement.style.left = coordinates[0] + 'px';
+            tooltipElement.style.top = coordinates[1] + 'px';
+            this.isVisible = true;
+        }
+    }
+    
+    
     app.map.addLayer(app.visitedMarkers);
     app.map.addLayer(app.unvisitedMarkers);
-    app.map.on('pointermove', app.displayTooltip);
+    app.map.on('click', e => app.displayTooltip(e, true))
+    app.map.on('pointermove', e => app.displayTooltip(e, false));
     app.initialize();
     
     if (app.hasUserId) {
