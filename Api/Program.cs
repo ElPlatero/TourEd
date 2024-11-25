@@ -15,6 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .Configure<TouringenWebsiteConfiguration>(builder.Configuration.GetSection("touringen"))
+    .AddOpenApi("toured")
     .AddHttpClient<IHtmlParsingService, HtmlParsingService>().Services
     .AddImportServices()
     .AddRepositories()
@@ -23,7 +24,6 @@ builder.Services
     .AddAuthentication(EmailHeaderAuthenticationOptions.DefaultScheme).AddScheme<EmailHeaderAuthenticationOptions, TouredAuthenticationHandler>(EmailHeaderAuthenticationOptions.DefaultScheme, options => {}).Services
     .AddSingleton<IHttpContextAccessor, HttpContextAccessor>()
     .AddEndpointsApiExplorer()
-    .AddSwaggerGen()
     .AddDbContext<DataContext>(options => options.UseSqlite(builder.Configuration.GetConnectionString("TouredDb")))
     .AddControllers().AddJsonOptions(options =>
     {
@@ -37,11 +37,9 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi("/openapi/{documentName}.json");
 }
 
-// app.UseHttpsRedirection();
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
@@ -51,6 +49,6 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseCors(options => options.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
-app.MapControllers().WithOpenApi();
+app.MapControllers();
 
 app.Run();

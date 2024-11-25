@@ -4,7 +4,7 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 .idea/
-*.db
+**/*.db*
 **/wwwroot/
 */*.service*
 */*appsettings.Development.json
