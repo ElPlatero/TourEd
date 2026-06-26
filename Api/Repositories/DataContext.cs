@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Repositories;
@@ -53,6 +53,11 @@ public class DataContext : DbContext
         modelBuilder.Entity<StampingPoint>(dto =>
         {
             dto.HasKey(p => p.Id);
+            dto.Property(p => p.ProviderId).HasDefaultValue(StampingProvider.TouringenId);
+            dto.Property(p => p.ExternalId).IsRequired();
+            dto.HasOne(p => p.Provider).WithMany().OnDelete(DeleteBehavior.Restrict);
+            dto.HasIndex(p => new { p.ProviderId, p.Number }).IsUnique();
+            dto.HasIndex(p => new { p.ProviderId, p.ExternalId }).IsUnique();
             dto.Ignore(p => p.Position);
         });
 
