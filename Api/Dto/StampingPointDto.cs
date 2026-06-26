@@ -1,9 +1,9 @@
-﻿using TourEd.Lib.Abstractions.Models;
+using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Dto;
 
-public record StampingPointDto(int Number, string Name, Position Position, DateTime? Visited)
+public record StampingPointDto(int Number, string Name, Position Position, DateTime? Visited, StampingProviderDto Provider)
 {
     public IEnumerable<TourCompactDto>? Tours { get; set; }
-    public static StampingPointDto Create(StampingPoint point, UserVisit? visit = null) => new(point.Number, point.Name, point.Position, visit?.Visited);
+    public static StampingPointDto Create(StampingPoint point, UserVisit? visit = null) => new(point.Number, point.Name, point.Position, visit?.Visited, StampingProviderDto.Create(point.Provider));
 }

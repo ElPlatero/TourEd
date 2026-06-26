@@ -1,4 +1,4 @@
-﻿using Api.Dto;
+using Api.Dto;
 using Api.Managers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,38 +22,53 @@ public class PointsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetStampingPoints([FromQuery] StampingPointQuery query)
     {
-        var result = await _manager.GetStampingPointsAsync(query.GetGeoFilterOrDefault(), query.GetUserFilterOrDefault(User));
-        return Ok(new GetStampingPointsResponse(result.Count, result.OrderBy(p => p.Point.Number).Select(CreateDto)));
+        try
+        {
+            var result = await _manager.GetStampingPointsAsync(query.Provider, GetCurrentUserIdOrDefault(), query.GetGeoFilterOrDefault(), query.GetUserFilterOrDefault(User));
+            return Ok(new GetStampingPointsResponse(result.Count, result.OrderBy(p => p.Point.Provider.Slug).ThenBy(p => p.Point.Number).Select(CreateDto)));
+        }
+        catch (EntityNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
     [Authorize]
     [HttpGet("{stampingPointNumber:int:min(1)}")]
-    public async Task<IActionResult> GetVisit(int stampingPointNumber)
+    public async Task<IActionResult> GetVisit(int stampingPointNumber, [FromQuery] string? provider = null)
     {
         try
         {
-            var (stampingPoint, userVisit) = await _manager.GetVisitAsync(User.GetUser(), stampingPointNumber);
+            var (stampingPoint, userVisit) = await _manager.GetVisitAsync(User.GetUser(), stampingPointNumber, provider);
             return Ok(new GetVisitResult(VisitDto.Create(userVisit, StampingPointDto.Create(stampingPoint))));
         }
         catch (EntityNotFoundException)
         {
             return NotFound();
         }
+        catch (NotSupportedException)
+        {
+            return BadRequest();
+        }
     }
 
     [Authorize]
     [HttpPut("{stampingPointNumber:int:min(1)}")]
-    public async Task<IActionResult> AddVisit(int stampingPointNumber, [FromBody] AddVisitRequest request)
+    public async Task<IActionResult> AddVisit(int stampingPointNumber, [FromBody] AddVisitRequest request, [FromQuery] string? provider = null)
     {
         try
         {
-            await _manager.AddVisitAsync(User.GetUser(), stampingPointNumber, request.Visited);
+            await _manager.AddVisitAsync(User.GetUser(), stampingPointNumber, request.Visited, provider);
             return NoContent();
         }
         catch (EntityNotFoundException)
         {
             return NotFound();
         } 
+        catch (NotSupportedException)
+        {
+            return BadRequest();
+        }
         catch (InvalidOperationException)
         {
             return Conflict();
@@ -66,4 +81,7 @@ public class PointsController : ControllerBase
         if (data.Tours != null) result.Tours = data.Tours.Select(TourCompactDto.Create);
         return result;
     }
+
+    private int? GetCurrentUserIdOrDefault()
+        => User.Identity?.IsAuthenticated == true ? User.GetUser().Id : null;
 }
