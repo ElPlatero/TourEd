@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+using System.Drawing;
+using Api.Managers;
 using Microsoft.EntityFrameworkCore;
 using TourEd.Lib.Abstractions.Exceptions;
 using TourEd.Lib.Abstractions.Interfaces.Services;
@@ -15,9 +16,44 @@ public class TouredRepository : IUserService
         _dbContext = dbContext;
     }
 
-    public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
+    public async Task<StampingProviderFilter> GetStampingProviderFilterAsync(string? providerSlug = null, int? userId = null)
     {
-        var query = _dbContext.StampingPoints.AsNoTracking();
+        if (string.Equals(providerSlug, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            return StampingProviderFilter.All;
+        }
+
+        if (!string.IsNullOrWhiteSpace(providerSlug))
+        {
+            var provider = await _dbContext.StampingProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Slug.ToLower() == providerSlug.Trim().ToLowerInvariant());
+            return provider == null
+                ? throw EntityNotFoundException.Create<StampingProvider>(providerSlug)
+                : StampingProviderFilter.Single(provider.Id);
+        }
+
+        if (userId != null)
+        {
+            var defaultProviderId = await _dbContext.Users.AsNoTracking()
+                .Where(p => p.Id == userId.Value)
+                .Select(p => p.DefaultStampingProviderId)
+                .FirstOrDefaultAsync();
+            if (defaultProviderId != default)
+            {
+                return StampingProviderFilter.Single(defaultProviderId);
+            }
+        }
+
+        return StampingProviderFilter.Single(StampingProvider.TouringenId);
+    }
+
+    public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
+    {
+        IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking().Include(p => p.Provider);
+        if (providerFilter is { IncludesAllProviders: false, ProviderId: { } providerId })
+        {
+            query = query.Where(p => p.ProviderId == providerId);
+        }
+
         if (!string.IsNullOrWhiteSpace(nameFilter))
         {
             query = query.Where(p => p.Name.ToLower().Contains(nameFilter.Trim().ToLowerInvariant()));
@@ -60,7 +96,7 @@ public class TouredRepository : IUserService
 
         var result = from tour in query
             join tourPoint in _dbContext.StampingPointsInTours.AsNoTracking() on tour.Id equals tourPoint.Tour.Id
-            join point in _dbContext.StampingPoints.AsNoTracking() on tourPoint.StampingPointId equals point.Id
+            join point in _dbContext.StampingPoints.AsNoTracking().Include(p => p.Provider) on tourPoint.StampingPointId equals point.Id
             group point by tour into groupedStampingPoints
             select new { Tour = groupedStampingPoints.Key, Points = groupedStampingPoints.ToList() };
 
@@ -146,8 +182,16 @@ public class TouredRepository : IUserService
     public async Task<UserVisit?> GetUserVisitOrDefaultAsync(User currentUser, int stampingPointId) 
         => await _dbContext.UserVisits.FirstOrDefaultAsync(p => p.StampingPointId == stampingPointId && p.UserId == currentUser.Id);
 
-    public async Task<StampingPoint> GetStampingPointAsync(int stampingPointNumber) 
-        => await _dbContext.StampingPoints.FirstOrDefaultAsync(p => p.Number == stampingPointNumber) ?? throw EntityNotFoundException.Create<StampingPoint>(stampingPointNumber);
+    public async Task<StampingPoint> GetStampingPointAsync(int stampingPointNumber, StampingProviderFilter providerFilter)
+    {
+        if (providerFilter.IncludesAllProviders)
+        {
+            throw new NotSupportedException("A single stamping point lookup requires one provider.");
+        }
+
+        return await _dbContext.StampingPoints.Include(p => p.Provider).FirstOrDefaultAsync(p => p.Number == stampingPointNumber && p.ProviderId == providerFilter.ProviderId)
+               ?? throw EntityNotFoundException.Create<StampingPoint>(stampingPointNumber);
+    }
 
     public async Task AddUserVisitAsync(User currentUser, int stampingPointId, DateTime? visited)
     {

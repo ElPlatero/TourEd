@@ -21,6 +21,7 @@ The page calls the backend with relative URLs:
 
 - `GET api/points`
   - Used when no user id is present.
+  - Uses the anonymous default provider, currently `touringen`.
   - Treats all returned points as unvisited.
 - `GET api/points?vis=false`
   - Used when `?userid=...` is present in the page URL.
@@ -30,6 +31,12 @@ The page calls the backend with relative URLs:
   - Used when `?userid=...` is present in the page URL.
   - Sends header `toured-user`.
   - Returns visited points for that user.
+
+Optional `provider` query behavior on `GET api/points`:
+
+- Omitted: uses the authenticated user's default provider, or `touringen` for anonymous requests.
+- Provider slug, for example `provider=touringen`: returns points from that provider.
+- `provider=all`: returns points from all providers.
 
 The map expects red and green pin image assets outside this repo, currently:
 
@@ -44,7 +51,7 @@ Normal user flow:
 
 1. User opens the external HTML map.
 2. Browser requests stamping points from the backend.
-3. Backend returns points, optional tour summaries, and user visit state depending on query/header.
+3. Backend returns points, provider info, optional tour summaries, and user visit state depending on query/header.
 4. Map renders markers and shows a small info card on hover/click.
 
 Maintenance/admin flow:
@@ -122,9 +129,13 @@ Main consumer endpoint:
 
 Useful query behavior:
 
+- `provider=<slug>` returns points for a specific stamping provider.
+- `provider=all` returns points for all stamping providers.
 - `vis=true` returns visited points for the authenticated user.
 - `vis=false` returns unvisited points for the authenticated user.
 - Geo filtering exists via query parameters and is used server-side.
+
+Point DTOs include provider info while preserving the existing number, name, position, visited, and tours fields.
 
 Other endpoints:
 
@@ -158,6 +169,12 @@ Current verification baseline:
 
 - `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
 - `dotnet test --no-restore` runs after a fresh restore with the .NET 10 SDK.
+
+Line endings:
+
+- Keep repository text files on CRLF line endings.
+- `.gitattributes` declares CRLF for common project text files so Git does not emit LF-to-CRLF replacement warnings during diffs/status operations.
+- When adding new tracked text file types, update `.gitattributes` if Git starts warning about line-ending normalization.
 
 ## Working Preferences
 

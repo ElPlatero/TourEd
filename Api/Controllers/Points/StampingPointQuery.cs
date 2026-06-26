@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using TourEd.Lib.Abstractions.Models;
 using TourEd.Lib.Extensions;
@@ -13,6 +13,8 @@ public class StampingPointQuery
     public decimal Radius { get; set; }
     [FromQuery(Name = "vis")]
     public bool? ShowVisited { get; set; }
+    [FromQuery(Name = "provider")]
+    public string? Provider { get; set; }
 
     public (Position, decimal)? GetGeoFilterOrDefault()
     {

@@ -1,4 +1,4 @@
-﻿using TourEd.Lib.Abstractions.Interfaces.Services;
+using TourEd.Lib.Abstractions.Interfaces.Services;
 using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Lib.Services;
@@ -21,7 +21,7 @@ public class StampingPointImportService : IImportService<StampingPoint>
 
 public static class AdapterExtensions
 {
-    public static StampingPoint CreateStampingPoint(this RawStampPoint rawStampPoint) => new(rawStampPoint.Id, string.IsNullOrWhiteSpace(rawStampPoint.Name) ? rawStampPoint.Title.Trim('"', ' ') : rawStampPoint.Name.Trim('"', ' '), rawStampPoint.Longitude, rawStampPoint.Latitude, rawStampPoint.StampPointNumber, rawStampPoint.StampPointExtendedNumber);
+    public static StampingPoint CreateStampingPoint(this RawStampPoint rawStampPoint) => new(rawStampPoint.Id, string.IsNullOrWhiteSpace(rawStampPoint.Name) ? rawStampPoint.Title.Trim('"', ' ') : rawStampPoint.Name.Trim('"', ' '), rawStampPoint.Longitude, rawStampPoint.Latitude, rawStampPoint.StampPointNumber, rawStampPoint.StampPointExtendedNumber, StampingProvider.TouringenId, rawStampPoint.Id.ToString());
 }
 
 public class HikingToursImportService : IImportService<HikingTour>
