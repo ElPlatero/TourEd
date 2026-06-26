@@ -121,17 +121,62 @@ namespace Api.Migrations
                     b.ToTable("StampingPoints");
                 });
 
+            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.StampingProvider", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WebsiteUri")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("StampingProviders");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Description = "Touringen stamping points and hiking tours.",
+                            Name = "Touringen",
+                            Slug = "touringen",
+                            WebsiteUri = "https://www.touringen.de/"
+                        });
+                });
+
             modelBuilder.Entity("TourEd.Lib.Abstractions.Models.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("DefaultStampingProviderId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DefaultStampingProviderId");
 
                     b.ToTable("Users");
                 });
@@ -189,6 +234,17 @@ namespace Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.User", b =>
+                {
+                    b.HasOne("TourEd.Lib.Abstractions.Models.StampingProvider", "DefaultStampingProvider")
+                        .WithMany()
+                        .HasForeignKey("DefaultStampingProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DefaultStampingProvider");
                 });
 
             modelBuilder.Entity("TourEd.Lib.Abstractions.Models.HikingTour", b =>
