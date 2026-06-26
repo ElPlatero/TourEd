@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TourEd is a small .NET 7 backend for Touringen stamping points and hiking tours.
+TourEd is a small .NET 10 backend for Touringen stamping points and hiking tours.
 
 It stores Touringen stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
@@ -140,7 +140,7 @@ The repository currently has no frontend project and no static HTML consumer. Th
 
 The API uses:
 
-- .NET 7
+- .NET 10
 - ASP.NET Core
 - EF Core
 - SQLite
@@ -152,8 +152,8 @@ The configured database connection is:
 
 Current verification baseline:
 
-- `dotnet build TourEd.sln --no-restore` succeeds.
-- `dotnet test --no-restore` runs but discovers no tests.
+- `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
+- `dotnet test --no-restore` runs after a fresh restore with the .NET 10 SDK.
 
 ## Working Preferences
 
