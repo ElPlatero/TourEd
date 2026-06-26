@@ -10,6 +10,7 @@ public class DataContext : DbContext
     public DataContext(IConfiguration configuration) { _configuration = configuration; }
 
     public DbSet<Import> Imports { get; set; } = null!;
+    public DbSet<StampingProvider> StampingProviders { get; set; } = null!;
     public DbSet<StampingPoint> StampingPoints { get; set; } = null!;
     public DbSet<SortedStampingPoint> StampingPointsInTours { get; set; } = null!;
     public DbSet<HikingTour> HikingTours { get; set; } = null!;
@@ -30,6 +31,23 @@ public class DataContext : DbContext
             dto.HasKey(p => p.Id);
             dto.Property(p => p.Id).ValueGeneratedOnAdd();
             dto.Property(p => p.Date).HasDefaultValueSql("datetime('now')");
+        });
+
+        modelBuilder.Entity<StampingProvider>(dto =>
+        {
+            dto.HasKey(p => p.Id);
+            dto.Property(p => p.Id).ValueGeneratedOnAdd();
+            dto.Property(p => p.Slug).IsRequired();
+            dto.Property(p => p.Name).IsRequired();
+            dto.HasIndex(p => p.Slug).IsUnique();
+            dto.HasData(new StampingProvider
+            {
+                Id = StampingProvider.TouringenId,
+                Slug = StampingProvider.TouringenSlug,
+                Name = "Touringen",
+                WebsiteUri = new Uri("https://www.touringen.de/"),
+                Description = "Touringen stamping points and hiking tours."
+            });
         });
 
         modelBuilder.Entity<StampingPoint>(dto =>
@@ -55,6 +73,8 @@ public class DataContext : DbContext
         {
             dto.HasKey(p => p.Id);
             dto.Property(p => p.Id).ValueGeneratedOnAdd();
+            dto.Property(p => p.DefaultStampingProviderId).HasDefaultValue(StampingProvider.TouringenId);
+            dto.HasOne(p => p.DefaultStampingProvider).WithMany().OnDelete(DeleteBehavior.Restrict);
             dto.HasMany(p => p.VisitedStampingPoints);
         });
 

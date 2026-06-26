@@ -6,6 +6,8 @@ TourEd is a small .NET 10 backend for Touringen stamping points and hiking tours
 
 It stores Touringen stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
+Stamping points and future provider-specific data are anchored by `StampingProvider`. The initial provider is `touringen`, and users store a `DefaultStampingProviderId` that currently defaults to Touringen.
+
 ## External Consumer
 
 The user-facing consumer is intentionally not part of this repository.
@@ -84,6 +86,8 @@ The backend follows a simple layered structure:
 - `TouredRepository` contains EF Core queries and persistence operations.
 - `DataContext` defines SQLite-backed EF Core mappings.
 - `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
+
+Provider data is represented by `StampingProvider`. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
 
 The main runtime composition happens in `Api/Program.cs`.
 
