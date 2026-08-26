@@ -13,7 +13,7 @@ public class TouredAuthenticationHandler : AuthenticationHandler<EmailHeaderAuth
 {
     private readonly IUserService _userService;
 
-    public TouredAuthenticationHandler(IUserService userService, IOptionsMonitor<EmailHeaderAuthenticationOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
+    public TouredAuthenticationHandler(IUserService userService, IOptionsMonitor<EmailHeaderAuthenticationOptions> options, ILoggerFactory logger, UrlEncoder encoder) : base(options, logger, encoder)
     {
         _userService = userService;
     }
