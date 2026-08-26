@@ -82,7 +82,7 @@ The solution has three projects:
   - Utility extensions and JSON converters.
 - `TourEd.Tests`
   - xUnit test project.
-  - Currently minimal; test discovery finds no actual tests.
+  - Covers provider-aware stamping point persistence and import behavior.
 
 ## Architecture
 
@@ -111,14 +111,15 @@ Touringen data import:
 - Fetches `https://www.touringen.de/stempelstellen`.
 - Extracts an embedded JavaScript `dmos` JSON string.
 - Deserializes raw areas, tours, and stamp points.
-- Saves normalized stamping points and hiking tours.
+- Saves normalized stamping points using provider-scoped external identities and database-generated internal ids.
+- Maps hiking-tour relationships to the generated stamping point ids.
 - Records import metadata.
 
 User data import:
 
 - Accepts uploaded CSV-like data.
 - Parses stamping point numbers and optional visit timestamps.
-- Maps numbers to stored stamping points.
+- Maps numbers only to stored stamping points from the authenticated user's default provider.
 - Creates user visit records for the authenticated user.
 
 ## Important API Context
@@ -168,7 +169,7 @@ The configured database connection is:
 Current verification baseline:
 
 - `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
-- `dotnet test --no-restore` runs after a fresh restore with the .NET 10 SDK.
+- `dotnet test --no-restore` runs provider-aware persistence and import tests after a fresh restore with the .NET 10 SDK.
 
 Line endings:
 

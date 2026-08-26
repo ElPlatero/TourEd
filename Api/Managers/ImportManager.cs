@@ -45,13 +45,25 @@ public partial class ImportManager : IImportManager
             throw new SerializationException("no data");
         }
 
-        var stampingPoints = _stampingPointsImporter.Import(importData).ToDictionary(p => p.Id);
-        await _repository.SaveStampingPointsAsync(stampingPoints.Values.ToArray());
+        var stampingPoints = _stampingPointsImporter.Import(importData).ToArray();
+        var savedStampingPoints = await _repository.SaveStampingPointsAsync(stampingPoints);
+        var stampingPointIdsByExternalId = savedStampingPoints
+            .Where(p => p.ProviderId == StampingProvider.TouringenId)
+            .ToDictionary(p => p.ExternalId, p => p.Id);
 
         var hikingTours = _hikingToursImporter.Import(importData).ToArray();
+        foreach (var hikingTour in hikingTours)
+        {
+            hikingTour.StampingPoints = hikingTour.StampingPoints.Select(point => new SortedStampingPoint(point.Position)
+            {
+                StampingPointId = stampingPointIdsByExternalId[point.StampingPointId.ToString(CultureInfo.InvariantCulture)],
+                Tour = hikingTour
+            }).ToList();
+        }
+
         await _repository.SaveHikingToursAsync(hikingTours);
 
-        await _repository.SaveImportAsync(stampingPoints.Count, hikingTours.Length);
+        await _repository.SaveImportAsync(stampingPoints.Length, hikingTours.Length);
     }
 
     public async Task ImportUserDataAsync(Stream stream)
@@ -67,17 +79,18 @@ public partial class ImportManager : IImportManager
             visits.Add((Convert.ToInt32(match.Groups[1].Value), GetDateTime(match)));
         }
 
-        var stampingPointsMap = (await _repository.GetStampingPointsAsync(stampingPointsNr: visits.Select(p => p.StampingPointNumber).ToArray())).Select(p => p.Point).GroupBy(p => p.Number).ToDictionary(p => p.Key, p => p.ToList());
+        var providerFilter = await _repository.GetStampingProviderFilterAsync(userId: user.Id);
+        var stampingPointsMap = (await _repository.GetStampingPointsAsync(providerFilter: providerFilter, stampingPointsNr: visits.Select(p => p.StampingPointNumber).ToArray())).Select(p => p.Point).ToDictionary(p => p.Number);
         List<UserVisit> importedVisits = new();
         foreach (var visit in visits)
         {
-            if (!stampingPointsMap.TryGetValue(visit.StampingPointNumber, out var stampingPoints)) continue;
-            importedVisits.AddRange(stampingPoints.Select(p => new UserVisit
+            if (!stampingPointsMap.TryGetValue(visit.StampingPointNumber, out var stampingPoint)) continue;
+            importedVisits.Add(new UserVisit
             {
-                StampingPointId = p.Id,
+                StampingPointId = stampingPoint.Id,
                 UserId = user.Id,
                 Visited = visit.Visited
-            }));
+            });
         }
 
         await _repository.SaveUserDataAsync(importedVisits.ToArray());

@@ -108,23 +108,41 @@ public class TouredRepository : IUserService
         return dto.Select(p => (p.Tour, p.Points)).ToList();
     }
     
-    public async Task SaveStampingPointsAsync(params StampingPoint[] points)
+    public async Task<IReadOnlyList<StampingPoint>> SaveStampingPointsAsync(params StampingPoint[] points)
     {
-        List<StampingPoint> updatedEntries = new();
-        var updatedPoints = points.ToDictionary(p => p.Id);
-        var allPoints = await _dbContext.StampingPoints.AsNoTracking().ToListAsync();
-
-        foreach (var existingPoint in allPoints.Where(p => updatedPoints.ContainsKey(p.Id)))
+        if (points.Length == 0)
         {
-            _dbContext.Update(updatedPoints[existingPoint.Id]);
-            updatedEntries.Add(updatedPoints[existingPoint.Id]);
-            updatedPoints.Remove(existingPoint.Id);
+            return Array.Empty<StampingPoint>();
         }
 
-        await _dbContext.AddRangeAsync(updatedPoints.Values);
-        updatedEntries.AddRange(updatedPoints.Values);
+        var importedPoints = points.ToDictionary(p => (p.ProviderId, p.ExternalId));
+        var providerIds = importedPoints.Keys.Select(p => p.ProviderId).Distinct().ToArray();
+        var existingPoints = await _dbContext.StampingPoints.AsNoTracking()
+            .Where(p => providerIds.Contains(p.ProviderId))
+            .ToDictionaryAsync(p => new { p.ProviderId, p.ExternalId });
+        var savedPoints = new List<StampingPoint>(importedPoints.Count);
+
+        foreach (var (key, importedPoint) in importedPoints)
+        {
+            var pointToSave = existingPoints.TryGetValue(new { key.ProviderId, key.ExternalId }, out var existingPoint)
+                ? importedPoint with { Id = existingPoint.Id }
+                : importedPoint with { Id = default };
+
+            if (pointToSave.Id == default)
+            {
+                await _dbContext.AddAsync(pointToSave);
+            }
+            else
+            {
+                _dbContext.Update(pointToSave);
+            }
+
+            savedPoints.Add(pointToSave);
+        }
+
         await _dbContext.SaveChangesAsync();
-        updatedEntries.ForEach(p => _dbContext.Entry(p).State = EntityState.Detached);
+        savedPoints.ForEach(p => _dbContext.Entry(p).State = EntityState.Detached);
+        return savedPoints;
     }
 
     public async Task SaveHikingToursAsync(params HikingTour[] tours)
