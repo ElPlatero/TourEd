@@ -1,17 +1,158 @@
-using TourEd.Tests.Fixtures;
-using Xunit.Abstractions;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
+using Api.Managers;
+using Api.Repositories;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using TourEd.Lib.Abstractions;
+using TourEd.Lib.Abstractions.Interfaces.Services;
+using TourEd.Lib.Abstractions.Models;
+using TourEd.Lib.Abstractions.Options;
+using TourEd.Lib.Services;
 
 namespace TourEd.Tests;
 
-public class ImportServiceTests : IClassFixture<XmlImportTestsFixture>
+public sealed class ImportServiceTests : IDisposable
 {
-    private readonly XmlImportTestsFixture _fixture;
-    private readonly ITestOutputHelper _testOutputHelper;
+    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"toured-tests-{Guid.NewGuid():N}.db");
 
-    public ImportServiceTests(XmlImportTestsFixture fixture, ITestOutputHelper testOutputHelper)
+    [Fact]
+    public void TouringenAdapterUsesProviderScopedExternalId()
     {
-        _fixture = fixture;
-        _testOutputHelper = testOutputHelper;
+        var rawPoint = CreateRawStampPoint(9_001, 42);
+
+        var point = rawPoint.CreateStampingPoint();
+
+        Assert.Equal(default, point.Id);
+        Assert.Equal(StampingProvider.TouringenId, point.ProviderId);
+        Assert.Equal("9001", point.ExternalId);
     }
-   
+
+    [Fact]
+    public async Task SavingPointsUsesProviderAndExternalIdAsImportIdentity()
+    {
+        await using var context = await CreateContextAsync();
+        context.StampingProviders.Add(CreateProvider(2, "other"));
+        await context.SaveChangesAsync();
+        var repository = new TouredRepository(context);
+
+        var savedPoints = await repository.SaveStampingPointsAsync(
+            CreatePoint("Touringen", StampingProvider.TouringenId, "shared", 42),
+            CreatePoint("Other", 2, "shared", 42));
+
+        Assert.Equal(2, savedPoints.Count);
+        Assert.All(savedPoints, point => Assert.True(point.Id > 0));
+        Assert.NotEqual(savedPoints[0].Id, savedPoints[1].Id);
+
+        var updatedPoint = CreatePoint("Touringen updated", StampingProvider.TouringenId, "shared", 42) with { Id = 99_999 };
+        var updated = Assert.Single(await repository.SaveStampingPointsAsync(updatedPoint));
+
+        Assert.Equal(savedPoints[0].Id, updated.Id);
+        Assert.Equal(2, await context.StampingPoints.CountAsync());
+        Assert.Equal("Touringen updated", (await context.StampingPoints.SingleAsync(p => p.Id == updated.Id)).Name);
+    }
+
+    [Fact]
+    public async Task UserImportUsesUsersDefaultProvider()
+    {
+        await using var context = await CreateContextAsync();
+        context.StampingProviders.Add(CreateProvider(2, "other"));
+        await context.SaveChangesAsync();
+
+        var user = new User { Email = "user@example.test", DefaultStampingProviderId = 2 };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var repository = new TouredRepository(context);
+        var points = await repository.SaveStampingPointsAsync(
+            CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42),
+            CreatePoint("Other", 2, "other-42", 42));
+        var otherPoint = points.Single(p => p.ProviderId == 2);
+        var manager = CreateImportManager(context, repository, user, null);
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
+
+        await manager.ImportUserDataAsync(stream);
+
+        var visit = Assert.Single(await context.UserVisits.AsNoTracking().ToListAsync());
+        Assert.Equal(otherPoint.Id, visit.StampingPointId);
+        Assert.Equal(new DateTime(2026, 2, 1, 12, 30, 0), visit.Visited);
+    }
+
+    [Fact]
+    public async Task TouringenImportMapsTourRelationsToGeneratedPointIds()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new TouredRepository(context);
+        var rawPoint = CreateRawStampPoint(9_001, 42);
+        var rawTour = new RawTour(101, "Tour", [rawPoint], false, true, false, null, "Start", "End");
+        var rawData = JsonSerializer.Serialize(new[] { new RawArea(1, "Area", [rawTour], []) });
+        var manager = CreateImportManager(context, repository, null, rawData);
+
+        await manager.ImportTouringenDataAsync();
+
+        var point = await context.StampingPoints.AsNoTracking().SingleAsync();
+        var relation = await context.StampingPointsInTours.AsNoTracking().SingleAsync();
+        Assert.NotEqual(rawPoint.Id, point.Id);
+        Assert.Equal(rawPoint.Id.ToString(), point.ExternalId);
+        Assert.Equal(point.Id, relation.StampingPointId);
+    }
+
+    private async Task<DataContext> CreateContextAsync()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
+            })
+            .Build();
+        var context = new DataContext(configuration);
+        await context.Database.EnsureCreatedAsync();
+        return context;
+    }
+
+    private static ImportManager CreateImportManager(DataContext context, TouredRepository repository, User? user, string? rawData)
+    {
+        var httpContext = new DefaultHttpContext();
+        if (user != null)
+        {
+            httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(Constants.ClaimsNames.UserId, user.Id.ToString()),
+                new Claim(Constants.ClaimsNames.UserEmail, user.Email)
+            ], "test"));
+        }
+
+        return new ImportManager(
+            new HttpContextAccessor { HttpContext = httpContext },
+            new StubHtmlParsingService(rawData),
+            Options.Create(new TouringenWebsiteConfiguration { StempelstellenUri = new Uri("https://example.test/stamping-points") }),
+            new StampingPointImportService(),
+            new HikingToursImportService(),
+            repository);
+    }
+
+    private static RawStampPoint CreateRawStampPoint(int externalId, int number)
+        => new(externalId, $"Point {number}", 50.0m, 11.0m, 1, number, number * 10, $"Point {number}");
+
+    private static StampingProvider CreateProvider(int id, string slug)
+        => new() { Id = id, Slug = slug, Name = slug };
+
+    private static StampingPoint CreatePoint(string name, int providerId, string externalId, int number)
+        => new(default, name, 11.0m, 50.0m, number, number * 10, providerId, externalId);
+
+    public void Dispose()
+    {
+        if (File.Exists(_databasePath))
+        {
+            File.Delete(_databasePath);
+        }
+    }
+
+    private sealed class StubHtmlParsingService(string? rawData) : IHtmlParsingService
+    {
+        public Task<string?> GetRawDmoStringAsync(Uri uri) => Task.FromResult(rawData);
+    }
 }
