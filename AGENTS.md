@@ -162,6 +162,8 @@ The API uses:
 - SQLite
 - Swagger in development
 
+`Toured.Lib` uses the shared `Microsoft.AspNetCore.App` framework for authentication types. Do not reintroduce the obsolete `Microsoft.AspNetCore.Identity` 2.2 package dependency.
+
 The configured database connection is:
 
 - `Data Source=toured.db`
