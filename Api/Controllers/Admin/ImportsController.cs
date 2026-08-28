@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Api.Authentication;
 using Api.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,7 @@ using TourEd.Lib.Abstractions.Options;
 
 namespace Api.Controllers.Admin;
 
-[ApiController, Route("api/admin/[controller]"), Authorize]
+[ApiController, Route("api/admin/[controller]"), Authorize(Policy = TouredAuthorizationPolicies.CliImport)]
 public class ImportsController : ControllerBase
 {
     private readonly IImportManager _importManager;

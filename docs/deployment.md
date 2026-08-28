@@ -48,6 +48,66 @@ The file configures:
 
 The setup installs this file as root-owned mode `0600` at `/etc/toured-deploy.conf`. The deployment command refuses a configuration writable by group or others.
 
+## Configure CLI authentication for imports
+
+The two import endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or the legacy `toured-user` header cannot authorize these routes.
+
+Generate a 256-bit token on the server and install it together with the existing user's email in a root-only environment file. Keep the generated `TOURED_CLI_TOKEN` shell variable in the current trusted administrator session for the first verification call:
+
+```bash
+TOURED_CLI_USER_EMAIL='existing-user@example.com'
+TOURED_CLI_TOKEN="$(openssl rand -hex 32)"
+printf 'Authentication__Cli__UserEmail=%s\nAuthentication__Cli__Token=%s\n' \
+    "$TOURED_CLI_USER_EMAIL" "$TOURED_CLI_TOKEN" \
+    | sudo tee /etc/toured-api.env >/dev/null
+sudo chown root:root /etc/toured-api.env
+sudo chmod 0600 /etc/toured-api.env
+```
+
+Do not use a newly invented email: the configured address must already exist in the TourEd database. An unknown user is rejected even when the token is correct.
+
+Load the root-protected file through a systemd drop-in rather than placing either value in the visible unit:
+
+```bash
+sudo systemctl edit toured-api.service
+```
+
+Add these lines in the editor:
+
+```ini
+[Service]
+EnvironmentFile=/etc/toured-api.env
+```
+
+Then reload and restart the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart toured-api.service
+sudo systemctl is-active toured-api.service
+```
+
+Use the token without writing its literal value into shell history. For the Touringen import:
+
+```bash
+curl --fail-with-body --request POST \
+    --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
+    https://server.example/toured/api/admin/imports/touringen
+```
+
+For a user visit import:
+
+```bash
+curl --fail-with-body --request POST \
+    --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
+    --form 'csvImport=@/path/to/visits.csv' \
+    https://server.example/toured/api/admin/imports
+```
+
+Avoid shell tracing and verbose HTTP output while handling the token. In a later administrator session, load it without echoing it by running `read -rsp 'CLI token: ' TOURED_CLI_TOKEN` and pressing Enter.
+
+To rotate the credential, generate a new token, replace only `Authentication__Cli__Token` in `/etc/toured-api.env`, and restart the service. The old token becomes invalid immediately after restart. Verify both import calls with the new value, then run `unset TOURED_CLI_TOKEN` in every shell that held it.
+
 ## Run the one-time server setup
 
 Copy the server files, configuration, and public key while logged in as the existing administrator:

@@ -105,6 +105,7 @@ Authentication is transitional and policy-based:
 - Requests with the legacy `TouredUser` / `toured-user` header continue to use `TouredAuthenticationHandler` while the bundled frontend is still unchanged.
 - Other requests authenticate through the encrypted `toured-session` cookie, which is `Secure`, `HttpOnly`, `SameSite=Lax`, expires after eight hours, and uses sliding expiration.
 - Google is used only by the explicit `/auth/login` challenge. Its callback binds through `GoogleLoginService`, discards Google claims/tokens, and stores only internal user-id and email claims in the TourEd cookie.
+- Import routes use the separate `TouredCliImport` policy and `TouredCliBearer` scheme. Only the configured bearer token can resolve the configured existing user; cookie and legacy-header identities do not satisfy this policy.
 - Protected API endpoints return `401`/`403` instead of redirecting to Google or returning HTML.
 - Permissive CORS is disabled; browser authentication is intentionally Same-Origin.
 
@@ -114,7 +115,7 @@ Authentication endpoints:
 - `GET /auth/session` returns anonymous/authenticated state and the authenticated email only.
 - `POST /auth/logout` removes the TourEd session cookie.
 
-Runtime authentication configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, optional `PathBase`, and optional `DataProtection__KeysPath`. The default Data-Protection location is the runtime user's local application-data directory; configured paths must be absolute and are restricted to the runtime user on Unix.
+Runtime authentication configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, `Authentication__Cli__UserEmail`, `Authentication__Cli__Token`, optional `PathBase`, and optional `DataProtection__KeysPath`. The CLI values belong in the root-protected `/etc/toured-api.env` file, not in appsettings or the systemd unit. The default Data-Protection location is the runtime user's local application-data directory; configured paths must be absolute and are restricted to the runtime user on Unix.
 
 ## Data Import
 
@@ -130,6 +131,7 @@ Touringen data import:
 
 User data import:
 
+- Requires `Authorization: Bearer <token>` using the dedicated CLI configuration and runs as its configured existing TourEd user.
 - Accepts uploaded CSV-like data.
 - Parses stamping point numbers and optional visit timestamps.
 - Maps numbers only to stored stamping points from the authenticated user's default provider.
@@ -162,10 +164,10 @@ Other endpoints:
   - Not currently used by the bundled HTML map.
 - `POST /api/admin/imports/touringen`
   - Imports Touringen source data.
-  - Intended for manual/admin use.
+  - Requires the dedicated CLI bearer token and is intended for manual/admin use.
 - `POST /api/admin/imports`
   - Imports user visit data.
-  - Intended for manual/admin use.
+  - Requires the dedicated CLI bearer token and is intended for manual/admin use.
 
 ## Development Notes
 
@@ -188,7 +190,7 @@ The configured database connection is:
 Current verification baseline:
 
 - `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
-- `dotnet test --no-restore` runs provider-aware persistence/import, readiness, Google account-binding, and backend authentication-integration tests after a fresh restore with the .NET 10 SDK.
+- `dotnet test --no-restore` runs provider-aware persistence/import, readiness, Google account-binding, browser-session, and CLI-authentication integration tests after a fresh restore with the .NET 10 SDK.
 
 ## Deployment
 
