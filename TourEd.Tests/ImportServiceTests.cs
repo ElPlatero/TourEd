@@ -20,6 +20,54 @@ public sealed class ImportServiceTests : IDisposable
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"toured-tests-{Guid.NewGuid():N}.db");
 
     [Fact]
+    public async Task ProviderMigrationsCanBeAppliedToEmptyDatabase()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
+            })
+            .Build();
+        await using var context = new DataContext(configuration);
+
+        await context.Database.MigrateAsync();
+
+        var migrations = await context.Database.GetAppliedMigrationsAsync();
+
+        Assert.Contains("20260626000000_AddStampingProvider", migrations);
+        Assert.Contains("20260626010000_AddProviderFieldsToStampingPoints", migrations);
+        Assert.Equal(StampingProvider.TouringenSlug, (await context.StampingProviders.SingleAsync()).Slug);
+    }
+
+    [Fact]
+    public async Task ProviderMigrationsPreserveExistingUsersAndStampingPoints()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
+            })
+            .Build();
+        await using var context = new DataContext(configuration);
+        await context.Database.MigrateAsync("20231014145354_AddForeignKeyToSortedStampingPoint");
+        await context.Database.ExecuteSqlRawAsync(
+            "INSERT INTO Users (Id, Email) VALUES (7, 'existing@example.test');");
+        await context.Database.ExecuteSqlRawAsync(
+            "INSERT INTO StampingPoints (Id, Name, Longitude, Latitude, Number, Code) " +
+            "VALUES (42, 'Existing point', '11.5', '50.5', 123, 456);");
+
+        await context.Database.MigrateAsync();
+
+        var user = await context.Users.AsNoTracking().SingleAsync();
+        var point = await context.StampingPoints.AsNoTracking().SingleAsync();
+        Assert.Equal(7, user.Id);
+        Assert.Equal(StampingProvider.TouringenId, user.DefaultStampingProviderId);
+        Assert.Equal(42, point.Id);
+        Assert.Equal(StampingProvider.TouringenId, point.ProviderId);
+        Assert.Equal("42", point.ExternalId);
+    }
+
+    [Fact]
     public void TouringenAdapterUsesProviderScopedExternalId()
     {
         var rawPoint = CreateRawStampPoint(9_001, 42);
