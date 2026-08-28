@@ -22,6 +22,7 @@ internal static class ServiceCollectionExtensions
     public static IServiceCollection AddRepositories(this IServiceCollection services)
     {
         services.TryAddTransient<IUserService, TouredRepository>();
+        services.TryAddTransient<IGoogleLoginService, GoogleLoginService>();
         services.TryAddTransient<TouredRepository>();
         return services;
     }

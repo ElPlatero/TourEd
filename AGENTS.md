@@ -94,6 +94,8 @@ The backend follows a simple layered structure:
 
 Provider data is represented by `StampingProvider`. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
 
+Users can optionally store a unique Google subject identifier. `GoogleLoginService` resolves an existing binding by subject or atomically binds the first verified Google login to an existing user by normalized email. It never creates users, and no Google login endpoint is exposed yet.
+
 The main runtime composition happens in `Api/Program.cs`.
 
 `Api/Program.cs` enables default and static files, so `Api/wwwroot/index.html` and its assets are served by the same application as the API.
