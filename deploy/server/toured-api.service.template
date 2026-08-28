@@ -12,6 +12,7 @@ User=@@RUNTIME_USER@@
 Group=@@RUNTIME_GROUP@@
 UMask=0007
 Environment=ASPNETCORE_ENVIRONMENT=Production
+EnvironmentFile=@@RUNTIME_ENV_FILE@@
 Restart=on-failure
 RestartSec=5
 

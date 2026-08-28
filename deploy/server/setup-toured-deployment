@@ -15,6 +15,13 @@ readonly PUBLIC_KEY_FILE="$1"
 readonly INPUT_CONFIG_FILE="$2"
 readonly INSTALLED_CONFIG_FILE="/etc/toured-deploy.conf"
 
+for required_command in awk grep install stat systemd-analyze; do
+    command -v "$required_command" >/dev/null 2>&1 || {
+        printf 'Required command is missing: %s\n' "$required_command" >&2
+        exit 1
+    }
+done
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 deploy_script="$script_dir/deploy-toured"
 service_template="$script_dir/toured-api.service.template"
@@ -27,7 +34,8 @@ service_template="$script_dir/toured-api.service.template"
 source "$INPUT_CONFIG_FILE"
 
 for variable_name in DEPLOY_USER DEPLOY_HOME RUNTIME_USER RUNTIME_GROUP APP_DIR \
-    BACKUP_ROOT DATABASE_FILE SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL KEEP_BACKUPS; do
+    BACKUP_ROOT DATABASE_FILE SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL \
+    RUNTIME_ENV_FILE DATA_PROTECTION_KEYS_DIR KEEP_BACKUPS; do
     if [[ ! -v "$variable_name" ]]; then
         printf 'Missing configuration value: %s\n' "$variable_name" >&2
         exit 1
@@ -45,7 +53,8 @@ if [[ ! "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] ||
     exit 1
 fi
 
-for configured_path in "$DEPLOY_HOME" "$APP_DIR" "$BACKUP_ROOT" "$DOTNET_PATH"; do
+for configured_path in "$DEPLOY_HOME" "$APP_DIR" "$BACKUP_ROOT" "$DOTNET_PATH" \
+    "$RUNTIME_ENV_FILE" "$DATA_PROTECTION_KEYS_DIR"; do
     if [[ ! "$configured_path" =~ ^/[A-Za-z0-9._/-]+$ || "$configured_path" == */ ]]; then
         printf 'Invalid configured path: %s\n' "$configured_path" >&2
         exit 1
@@ -68,11 +77,55 @@ if [[ "$BACKUP_ROOT" != "$apps_root/"* || "$BACKUP_ROOT" == "$APP_DIR" ]]; then
     printf 'BACKUP_ROOT must be a separate directory below %s.\n' "$apps_root" >&2
     exit 1
 fi
+if [[ "$RUNTIME_ENV_FILE" == "$INSTALLED_CONFIG_FILE" ||
+      "$RUNTIME_ENV_FILE" == "$APP_DIR" || "$RUNTIME_ENV_FILE" == "$APP_DIR/"* ]]; then
+    printf 'RUNTIME_ENV_FILE must be separate from deployment configuration and APP_DIR.\n' >&2
+    exit 1
+fi
+if [[ "$DATA_PROTECTION_KEYS_DIR" == "$APP_DIR" || "$DATA_PROTECTION_KEYS_DIR" == "$APP_DIR/"* ||
+      "$APP_DIR" == "$DATA_PROTECTION_KEYS_DIR/"* ||
+      "$DATA_PROTECTION_KEYS_DIR" == "$BACKUP_ROOT" || "$DATA_PROTECTION_KEYS_DIR" == "$BACKUP_ROOT/"* ||
+      "$BACKUP_ROOT" == "$DATA_PROTECTION_KEYS_DIR/"* ]]; then
+    printf 'DATA_PROTECTION_KEYS_DIR must be separate from APP_DIR and BACKUP_ROOT.\n' >&2
+    exit 1
+fi
 
 id "$RUNTIME_USER" >/dev/null 2>&1 || { printf 'Runtime user %s does not exist.\n' "$RUNTIME_USER" >&2; exit 1; }
 [[ -x "$DOTNET_PATH" ]] || { printf 'dotnet executable %s does not exist.\n' "$DOTNET_PATH" >&2; exit 1; }
 [[ -d "$APP_DIR" ]] || { printf 'Application directory %s does not exist.\n' "$APP_DIR" >&2; exit 1; }
 [[ -f "$APP_DIR/$DATABASE_FILE" ]] || { printf 'Database %s/%s does not exist.\n' "$APP_DIR" "$DATABASE_FILE" >&2; exit 1; }
+
+if [[ ! -f "$RUNTIME_ENV_FILE" || -L "$RUNTIME_ENV_FILE" ]]; then
+    printf 'Runtime environment file is missing or is a symlink: %s\n' "$RUNTIME_ENV_FILE" >&2
+    exit 1
+fi
+if [[ "$(stat --format '%u' "$RUNTIME_ENV_FILE")" != 0 ]]; then
+    printf 'Runtime environment file must be owned by root.\n' >&2
+    exit 1
+fi
+runtime_env_mode="$(stat --format '%a' "$RUNTIME_ENV_FILE")"
+if (( (8#$runtime_env_mode & 0077) != 0 )); then
+    printf 'Runtime environment file must not be accessible by group or others.\n' >&2
+    exit 1
+fi
+
+for environment_key in Authentication__Google__ClientId Authentication__Google__ClientSecret \
+    Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath; do
+    if ! awk -F= -v key="$environment_key" \
+        '$1 == key && length($0) > length(key) + 1 { count++ } END { exit count == 1 ? 0 : 1 }' \
+        "$RUNTIME_ENV_FILE"; then
+        printf 'Runtime environment file must contain exactly one non-empty %s value.\n' "$environment_key" >&2
+        exit 1
+    fi
+done
+if ! grep -Fqx "DataProtection__KeysPath=$DATA_PROTECTION_KEYS_DIR" "$RUNTIME_ENV_FILE"; then
+    printf 'DataProtection__KeysPath must equal configured DATA_PROTECTION_KEYS_DIR.\n' >&2
+    exit 1
+fi
+if [[ -e "$DATA_PROTECTION_KEYS_DIR" && ( ! -d "$DATA_PROTECTION_KEYS_DIR" || -L "$DATA_PROTECTION_KEYS_DIR" ) ]]; then
+    printf 'Data-Protection keys path exists but is not a regular directory: %s\n' "$DATA_PROTECTION_KEYS_DIR" >&2
+    exit 1
+fi
 
 mapfile -t public_key_lines < <(sed 's/\r$//' "$PUBLIC_KEY_FILE")
 if [[ ${#public_key_lines[@]} -ne 1 ]] ||
@@ -106,6 +159,7 @@ chmod 0600 "$DEPLOY_HOME/.ssh/authorized_keys"
 incoming_dir="$DEPLOY_HOME/incoming"
 install -d -m 0700 -o "$DEPLOY_USER" -g "$deploy_group" "$incoming_dir"
 install -d -m 0700 -o root -g root "$BACKUP_ROOT"
+install -d -m 0700 -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" "$DATA_PROTECTION_KEYS_DIR"
 
 chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 2770 {} +
@@ -121,6 +175,7 @@ sed \
     -e "s|@@LISTEN_URL@@|$LISTEN_URL|g" \
     -e "s|@@RUNTIME_USER@@|$RUNTIME_USER|g" \
     -e "s|@@RUNTIME_GROUP@@|$RUNTIME_GROUP|g" \
+    -e "s|@@RUNTIME_ENV_FILE@@|$RUNTIME_ENV_FILE|g" \
     "$service_template" > "$rendered_service"
 systemd-analyze verify "$rendered_service"
 
