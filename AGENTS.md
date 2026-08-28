@@ -121,7 +121,7 @@ Authentication endpoints:
 - `GET /auth/session` returns anonymous/authenticated state and the authenticated email only.
 - `POST /auth/logout` removes the TourEd session cookie.
 
-Runtime authentication configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, `Authentication__Cli__UserEmail`, `Authentication__Cli__Token`, optional `PathBase`, and optional `DataProtection__KeysPath`. The CLI values belong in the root-protected `/etc/toured-api.env` file, not in appsettings or the systemd unit. The default Data-Protection location is the runtime user's local application-data directory; configured paths must be absolute and are restricted to the runtime user on Unix.
+Runtime authentication configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, `Authentication__Cli__UserEmail`, `Authentication__Cli__Token`, `PathBase`, and `DataProtection__KeysPath`. Production values belong in the root-protected runtime environment file configured by `RUNTIME_ENV_FILE`, not in appsettings or the visible systemd unit. Server setup validates the required entries and creates the configured persistent Data-Protection directory outside the replaceable application release for the runtime user only.
 
 ## Data Import
 
@@ -204,6 +204,7 @@ Production deployment is manual through `.github/workflows/deploy.yml` and only 
 
 - GitHub `production` environment variables configure the SSH target, deployment account/home, public URL, and Linux runtime architecture.
 - Root-owned `/etc/toured-deploy.conf` configures runtime accounts, application/database/backup paths, service, .NET/listen settings, the public `/health` readiness URL, and retention.
+- The same deployment configuration points to a root-only runtime environment file and a persistent Data-Protection key directory; setup validates and installs their systemd integration before deployment.
 - `deploy/server/toured-deploy.conf.example` records the current production values without embedding them in deployment logic.
 - `deploy/server/toured-api.service.template` is rendered by the server setup from that configuration.
 

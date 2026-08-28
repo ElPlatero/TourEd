@@ -44,48 +44,55 @@ The file configures:
 - application, database, and backup paths;
 - systemd service name, .NET executable, and listen URL;
 - the public `HEALTH_URL`, which must end in `/health` and is used to decide success or rollback;
+- the root-owned runtime environment file and persistent Data-Protection key directory;
 - backup retention.
 
 The setup installs this file as root-owned mode `0600` at `/etc/toured-deploy.conf`. The deployment command refuses a configuration writable by group or others.
 
-## Configure CLI authentication for imports
+## Configure Google OAuth
 
-The two import endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or arbitrary identity header cannot authorize these routes.
+Create an OAuth 2.0 client of type **Web application** in Google Cloud. Configure the exact public callback URI, including the deployed path base:
 
-Generate a 256-bit token on the server and install it together with the existing user's email in a root-only environment file. Keep the generated `TOURED_CLI_TOKEN` shell variable in the current trusted administrator session for the first verification call:
+```text
+https://server.example/toured/signin-google
+```
+
+For local development, add only the exact HTTPS callback URI and port actually used, for example `https://localhost:7082/signin-google`. Google redirects to the backend callback; no JavaScript origin is needed by TourEd. While the consent screen remains in testing mode, add every permitted Google account as a test user.
+
+The Google account must have a verified email matching an existing, unbound TourEd user on its first login. TourEd never creates a user from Google. Once bound, the stable Google subject identifies the user and later email changes do not rebind the account.
+
+## Configure the runtime environment
+
+The root-owned runtime environment file contains the Google credentials, CLI identity, public path base, and persistent Data-Protection location. None of these values belongs in the repository, release artifact, visible systemd unit, pull request, issue, or chat.
+
+Generate a 256-bit CLI token on the server and enter the Google secret without placing either literal in shell history. The CLI email must already exist in the TourEd database:
 
 ```bash
+TOURED_GOOGLE_CLIENT_ID='client-id.apps.googleusercontent.com'
 TOURED_CLI_USER_EMAIL='existing-user@example.com'
 TOURED_CLI_TOKEN="$(openssl rand -hex 32)"
-printf 'Authentication__Cli__UserEmail=%s\nAuthentication__Cli__Token=%s\n' \
-    "$TOURED_CLI_USER_EMAIL" "$TOURED_CLI_TOKEN" \
+read -rsp 'Google client secret: ' TOURED_GOOGLE_CLIENT_SECRET
+printf '\n'
+printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecret=%s\nAuthentication__Cli__UserEmail=%s\nAuthentication__Cli__Token=%s\nPathBase=%s\nDataProtection__KeysPath=%s\n' \
+    "$TOURED_GOOGLE_CLIENT_ID" \
+    "$TOURED_GOOGLE_CLIENT_SECRET" \
+    "$TOURED_CLI_USER_EMAIL" \
+    "$TOURED_CLI_TOKEN" \
+    '/toured' \
+    '/srv/toured/data-protection-keys' \
     | sudo tee /etc/toured-api.env >/dev/null
 sudo chown root:root /etc/toured-api.env
 sudo chmod 0600 /etc/toured-api.env
+unset TOURED_GOOGLE_CLIENT_SECRET
 ```
 
-Do not use a newly invented email: the configured address must already exist in the TourEd database. An unknown user is rejected even when the token is correct.
+`DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` has no trailing slash. The reverse proxy must preserve the `/toured` prefix and send the original host and HTTPS protocol through forwarded headers.
 
-Load the root-protected file through a systemd drop-in rather than placing either value in the visible unit:
+The server setup validates that the environment file is a regular root-owned file inaccessible to group and others, requires every expected setting exactly once, creates the persistent key directory for the runtime user with mode `0700`, and renders the environment-file path into the systemd unit.
 
-```bash
-sudo systemctl edit toured-api.service
-```
+## Use CLI authentication for imports
 
-Add these lines in the editor:
-
-```ini
-[Service]
-EnvironmentFile=/etc/toured-api.env
-```
-
-Then reload and restart the service:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart toured-api.service
-sudo systemctl is-active toured-api.service
-```
+The two import endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or arbitrary identity header cannot authorize these routes.
 
 Use the token without writing its literal value into shell history. For the Touringen import:
 
@@ -106,7 +113,7 @@ curl --fail-with-body --request POST \
 
 Avoid shell tracing and verbose HTTP output while handling the token. In a later administrator session, load it without echoing it by running `read -rsp 'CLI token: ' TOURED_CLI_TOKEN` and pressing Enter.
 
-To rotate the credential, generate a new token, replace only `Authentication__Cli__Token` in `/etc/toured-api.env`, and restart the service. The old token becomes invalid immediately after restart. Verify both import calls with the new value, then run `unset TOURED_CLI_TOKEN` in every shell that held it.
+To rotate the credential, generate a new token, replace only `Authentication__Cli__Token` in `/etc/toured-api.env`, and restart the service. The old token becomes invalid immediately after restart. Verify both import calls with the new value, then run `unset TOURED_CLI_TOKEN` in every shell that held it. Rotate the Google client secret the same way and restart the service after replacing `Authentication__Google__ClientSecret`.
 
 ## Run the one-time server setup
 
@@ -129,12 +136,13 @@ The setup:
 - manages its single authorized key with forwarding and PTY restrictions;
 - creates an isolated upload directory;
 - creates the runtime group and applies private application/database permissions;
+- validates the root-owned runtime environment file and creates the persistent Data-Protection key directory;
 - installs `/etc/toured-deploy.conf` and `/usr/local/sbin/deploy-toured` as root-owned files;
-- renders and installs the systemd unit from the repository template;
+- renders and installs the systemd unit with the configured environment file;
 - grants passwordless sudo access only to the deployment command without arguments;
 - restarts and verifies the configured service.
 
-Re-run the setup after changing the server script, service template, or configuration. Passing a new public key replaces the old deployment key.
+Re-run the setup after changing the server script, service template, deployment configuration, runtime-environment path, or Data-Protection path. Passing a new public key replaces the old deployment key. Changing only a credential value requires a service restart, not another setup run.
 
 ## Pin the SSH host key
 

@@ -33,7 +33,8 @@ load_configuration() {
     source "$CONFIG_FILE"
 
     for variable_name in DEPLOY_USER DEPLOY_HOME RUNTIME_USER RUNTIME_GROUP APP_DIR \
-        BACKUP_ROOT DATABASE_FILE SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL KEEP_BACKUPS; do
+        BACKUP_ROOT DATABASE_FILE SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL \
+        RUNTIME_ENV_FILE DATA_PROTECTION_KEYS_DIR KEEP_BACKUPS; do
         [[ -v "$variable_name" ]] || fail "Missing configuration value: $variable_name"
         [[ -n "${!variable_name}" ]] || fail "Empty configuration value: $variable_name"
     done
@@ -47,6 +48,8 @@ load_configuration() {
     [[ "$DATABASE_FILE" =~ ^[A-Za-z0-9._-]+$ ]] || fail "Invalid DATABASE_FILE"
     [[ "$SERVICE_NAME" =~ ^[A-Za-z0-9_.@-]+\.service$ ]] || fail "Invalid SERVICE_NAME"
     [[ "$DOTNET_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]] || fail "Invalid DOTNET_PATH"
+    [[ "$RUNTIME_ENV_FILE" =~ ^/[A-Za-z0-9._/-]+$ && "$RUNTIME_ENV_FILE" != */ ]] || fail "Invalid RUNTIME_ENV_FILE"
+    [[ "$DATA_PROTECTION_KEYS_DIR" =~ ^/[A-Za-z0-9._/-]+$ && "$DATA_PROTECTION_KEYS_DIR" != */ ]] || fail "Invalid DATA_PROTECTION_KEYS_DIR"
     [[ "$LISTEN_URL" =~ ^https?://[A-Za-z0-9.:-]+$ ]] || fail "Invalid LISTEN_URL"
     [[ "$HEALTH_URL" =~ ^https?://[^[:space:]]+$ ]] || fail "Invalid HEALTH_URL"
     [[ "$HEALTH_URL" == */health ]] || fail "HEALTH_URL must end with /health"
@@ -54,13 +57,13 @@ load_configuration() {
     ((KEEP_BACKUPS >= 1 && KEEP_BACKUPS <= 50)) || fail "KEEP_BACKUPS must be between 1 and 50"
 }
 
-for configuration_command in dirname stat; do
+for configuration_command in awk dirname grep id stat; do
     command -v "$configuration_command" >/dev/null || fail "Required command is missing: $configuration_command"
 done
 load_configuration
 
 readonly DEPLOY_USER DEPLOY_HOME RUNTIME_USER RUNTIME_GROUP APP_DIR BACKUP_ROOT DATABASE_FILE
-readonly SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL KEEP_BACKUPS
+readonly SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL RUNTIME_ENV_FILE DATA_PROTECTION_KEYS_DIR KEEP_BACKUPS
 readonly PUBLIC_BASE_URL="${HEALTH_URL%/health}"
 readonly API_SMOKE_URL="$PUBLIC_BASE_URL/api/points"
 readonly FRONTEND_SMOKE_URL="$PUBLIC_BASE_URL/index.html"
@@ -72,6 +75,38 @@ readonly CHECKSUM="$INCOMING_DIR/toured-release.tar.gz.sha256"
 
 [[ "$BACKUP_ROOT" == "$APPS_ROOT/"* && "$BACKUP_ROOT" != "$APP_DIR" ]] || \
     fail "BACKUP_ROOT must be a separate directory below $APPS_ROOT"
+[[ "$RUNTIME_ENV_FILE" != "$CONFIG_FILE" &&
+   "$RUNTIME_ENV_FILE" != "$APP_DIR" && "$RUNTIME_ENV_FILE" != "$APP_DIR/"* ]] || \
+    fail "RUNTIME_ENV_FILE must be separate from deployment configuration and APP_DIR"
+[[ "$DATA_PROTECTION_KEYS_DIR" != "$APP_DIR" && "$DATA_PROTECTION_KEYS_DIR" != "$APP_DIR/"* &&
+   "$APP_DIR" != "$DATA_PROTECTION_KEYS_DIR/"* &&
+   "$DATA_PROTECTION_KEYS_DIR" != "$BACKUP_ROOT" && "$DATA_PROTECTION_KEYS_DIR" != "$BACKUP_ROOT/"* &&
+   "$BACKUP_ROOT" != "$DATA_PROTECTION_KEYS_DIR/"* ]] || \
+    fail "DATA_PROTECTION_KEYS_DIR must be separate from APP_DIR and BACKUP_ROOT"
+
+[[ -f "$RUNTIME_ENV_FILE" && ! -L "$RUNTIME_ENV_FILE" ]] || \
+    fail "Runtime environment file is missing or is a symlink: $RUNTIME_ENV_FILE"
+[[ "$(stat --format '%u' "$RUNTIME_ENV_FILE")" == 0 ]] || \
+    fail "Runtime environment file must be owned by root"
+runtime_env_mode="$(stat --format '%a' "$RUNTIME_ENV_FILE")"
+(( (8#$runtime_env_mode & 0077) == 0 )) || \
+    fail "Runtime environment file must not be accessible by group or others"
+for environment_key in Authentication__Google__ClientId Authentication__Google__ClientSecret \
+    Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath; do
+    awk -F= -v key="$environment_key" \
+        '$1 == key && length($0) > length(key) + 1 { count++ } END { exit count == 1 ? 0 : 1 }' \
+        "$RUNTIME_ENV_FILE" || \
+        fail "Runtime environment file must contain exactly one non-empty $environment_key value"
+done
+grep -Fqx "DataProtection__KeysPath=$DATA_PROTECTION_KEYS_DIR" "$RUNTIME_ENV_FILE" || \
+    fail "DataProtection__KeysPath must equal configured DATA_PROTECTION_KEYS_DIR"
+[[ -d "$DATA_PROTECTION_KEYS_DIR" && ! -L "$DATA_PROTECTION_KEYS_DIR" ]] || \
+    fail "Data-Protection keys directory is missing or is a symlink: $DATA_PROTECTION_KEYS_DIR"
+[[ "$(stat --format '%u' "$DATA_PROTECTION_KEYS_DIR")" == "$(id -u "$RUNTIME_USER")" ]] || \
+    fail "Data-Protection keys directory must be owned by $RUNTIME_USER"
+data_protection_mode="$(stat --format '%a' "$DATA_PROTECTION_KEYS_DIR")"
+(( (8#$data_protection_mode & 0077) == 0 )) || \
+    fail "Data-Protection keys directory must not be accessible by group or others"
 
 staging_dir=""
 backup_dir=""

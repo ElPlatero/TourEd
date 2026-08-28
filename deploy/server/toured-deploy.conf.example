@@ -10,4 +10,6 @@ SERVICE_NAME=toured-api.service
 DOTNET_PATH=/usr/bin/dotnet
 LISTEN_URL=http://127.0.0.1:5000
 HEALTH_URL=http://127.0.0.1:5000/health
+RUNTIME_ENV_FILE=/etc/toured-api.env
+DATA_PROTECTION_KEYS_DIR=/srv/toured/data-protection-keys
 KEEP_BACKUPS=5
