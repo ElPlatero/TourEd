@@ -33,13 +33,4 @@
       <Folder Include="wwwroot\js\" />
     </ItemGroup>
 
-    <ItemGroup>
-      <None Update="toured-api.service">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
-    </ItemGroup>
-
-
-
-
 </Project>

@@ -1,0 +1,13 @@
+# Installed as /etc/toured-deploy.conf by setup-toured-deployment.
+DEPLOY_USER=toured-deploy
+DEPLOY_HOME=/home/toured-deploy
+RUNTIME_USER=toured
+RUNTIME_GROUP=toured
+APP_DIR=/srv/toured/app
+BACKUP_ROOT=/srv/toured/backups
+DATABASE_FILE=toured.db
+SERVICE_NAME=toured-api.service
+DOTNET_PATH=/usr/bin/dotnet
+LISTEN_URL=http://127.0.0.1:5000
+HEALTH_URL=http://127.0.0.1:5000/api/points
+KEEP_BACKUPS=5

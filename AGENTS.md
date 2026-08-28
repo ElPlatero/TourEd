@@ -10,10 +10,7 @@ Stamping points and future provider-specific data are anchored by `StampingProvi
 
 ## External Consumer
 
-The user-facing consumer is intentionally not part of this repository.
-
-Current static map:
-https://baelgun.de/toured/index.html
+The user-facing consumer is intentionally not part of this repository. Its production URL is configured outside the repository.
 
 It is a plain HTML page using jQuery and OpenLayers. It loads OpenStreetMap tiles and displays stamping points as map markers.
 
@@ -173,10 +170,24 @@ Current verification baseline:
 - `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
 - `dotnet test --no-restore` runs provider-aware persistence and import tests after a fresh restore with the .NET 10 SDK.
 
+## Deployment
+
+Production deployment is manual through `.github/workflows/deploy.yml` and only accepts runs from `master`.
+
+- GitHub `production` environment variables configure the SSH target, deployment account/home, public URL, and Linux runtime architecture.
+- Root-owned `/etc/toured-deploy.conf` configures runtime accounts, application/database/backup paths, service, .NET/listen settings, healthcheck, and retention.
+- `deploy/server/toured-deploy.conf.example` records the current production values without embedding them in deployment logic.
+- `deploy/server/toured-api.service.template` is rendered by the server setup from that configuration.
+
+The workflow builds and tests the solution, publishes the API, creates the configured Linux EF migration bundle, and uploads a checksummed release. The root-owned server command stops the service, backs up the application and SQLite database, applies migrations as the configured runtime user, restarts the service, and restores both application and database if deployment or health checking fails.
+
+Server bootstrap and operational details are documented in `docs/deployment.md`. The GitHub secrets are `TOURED_DEPLOY_SSH_PRIVATE_KEY` and `TOURED_DEPLOY_KNOWN_HOSTS`.
+
 Line endings:
 
 - Keep repository text files on CRLF line endings.
 - `.gitattributes` declares CRLF for common project text files so Git does not emit LF-to-CRLF replacement warnings during diffs/status operations.
+- Executable and shell-sourced files under `deploy/server` are the exception and use LF for Linux execution.
 - When adding new tracked text file types, update `.gitattributes` if Git starts warning about line-ending normalization.
 
 ## Working Preferences
