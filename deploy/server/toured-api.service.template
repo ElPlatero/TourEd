@@ -1,0 +1,19 @@
+[Unit]
+Description=TourEd API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=@@DOTNET_PATH@@ @@APP_DIR@@/Api.dll --urls @@LISTEN_URL@@
+WorkingDirectory=@@APP_DIR@@
+SyslogIdentifier=TouredApi
+User=@@RUNTIME_USER@@
+Group=@@RUNTIME_GROUP@@
+UMask=0007
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

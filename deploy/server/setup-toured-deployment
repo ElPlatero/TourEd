@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+    printf 'Run this setup with sudo.\n' >&2
+    exit 1
+fi
+
+if [[ $# -ne 2 || ! -f "$1" || ! -f "$2" ]]; then
+    printf 'Usage: sudo %s /path/to/toured-github-actions.pub /path/to/toured-deploy.conf\n' "$0" >&2
+    exit 1
+fi
+
+readonly PUBLIC_KEY_FILE="$1"
+readonly INPUT_CONFIG_FILE="$2"
+readonly INSTALLED_CONFIG_FILE="/etc/toured-deploy.conf"
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+deploy_script="$script_dir/deploy-toured"
+service_template="$script_dir/toured-api.service.template"
+
+[[ -f "$deploy_script" ]] || { printf 'Missing %s\n' "$deploy_script" >&2; exit 1; }
+[[ -f "$service_template" ]] || { printf 'Missing %s\n' "$service_template" >&2; exit 1; }
+
+# This setup is run explicitly by an administrator; the supplied file becomes the root-owned config.
+# shellcheck source=/dev/null
+source "$INPUT_CONFIG_FILE"
+
+for variable_name in DEPLOY_USER DEPLOY_HOME RUNTIME_USER RUNTIME_GROUP APP_DIR \
+    BACKUP_ROOT DATABASE_FILE SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL KEEP_BACKUPS; do
+    if [[ ! -v "$variable_name" ]]; then
+        printf 'Missing configuration value: %s\n' "$variable_name" >&2
+        exit 1
+    fi
+    if [[ -z "${!variable_name}" ]]; then
+        printf 'Empty configuration value: %s\n' "$variable_name" >&2
+        exit 1
+    fi
+done
+
+if [[ ! "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] ||
+    [[ ! "$RUNTIME_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] ||
+    [[ ! "$RUNTIME_GROUP" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+    printf 'Invalid deployment or runtime account name.\n' >&2
+    exit 1
+fi
+
+for configured_path in "$DEPLOY_HOME" "$APP_DIR" "$BACKUP_ROOT" "$DOTNET_PATH"; do
+    if [[ ! "$configured_path" =~ ^/[A-Za-z0-9._/-]+$ || "$configured_path" == */ ]]; then
+        printf 'Invalid configured path: %s\n' "$configured_path" >&2
+        exit 1
+    fi
+done
+
+if [[ ! "$DATABASE_FILE" =~ ^[A-Za-z0-9._-]+$ ]] ||
+    [[ ! "$SERVICE_NAME" =~ ^[A-Za-z0-9_.@-]+\.service$ ]] ||
+    [[ ! "$LISTEN_URL" =~ ^https?://[A-Za-z0-9.:-]+$ ]] ||
+    [[ ! "$HEALTH_URL" =~ ^https?://[^[:space:]]+$ ]] ||
+    [[ ! "$KEEP_BACKUPS" =~ ^[0-9]+$ ]] ||
+    ((KEEP_BACKUPS < 1 || KEEP_BACKUPS > 50)); then
+    printf 'Invalid database, service, URL, or retention configuration.\n' >&2
+    exit 1
+fi
+
+apps_root="$(dirname "$APP_DIR")"
+if [[ "$BACKUP_ROOT" != "$apps_root/"* || "$BACKUP_ROOT" == "$APP_DIR" ]]; then
+    printf 'BACKUP_ROOT must be a separate directory below %s.\n' "$apps_root" >&2
+    exit 1
+fi
+
+id "$RUNTIME_USER" >/dev/null 2>&1 || { printf 'Runtime user %s does not exist.\n' "$RUNTIME_USER" >&2; exit 1; }
+[[ -x "$DOTNET_PATH" ]] || { printf 'dotnet executable %s does not exist.\n' "$DOTNET_PATH" >&2; exit 1; }
+[[ -d "$APP_DIR" ]] || { printf 'Application directory %s does not exist.\n' "$APP_DIR" >&2; exit 1; }
+[[ -f "$APP_DIR/$DATABASE_FILE" ]] || { printf 'Database %s/%s does not exist.\n' "$APP_DIR" "$DATABASE_FILE" >&2; exit 1; }
+
+mapfile -t public_key_lines < <(sed 's/\r$//' "$PUBLIC_KEY_FILE")
+if [[ ${#public_key_lines[@]} -ne 1 ]] ||
+    [[ ! "${public_key_lines[0]-}" =~ ^(ssh-ed25519|sk-ssh-ed25519@openssh.com)[[:space:]] ]] ||
+    ! ssh-keygen -l -f "$PUBLIC_KEY_FILE" >/dev/null; then
+    printf 'The public key file must contain exactly one valid Ed25519 public key.\n' >&2
+    exit 1
+fi
+public_key="${public_key_lines[0]}"
+authorized_key="restrict $public_key"
+
+getent group "$RUNTIME_GROUP" >/dev/null || groupadd --system "$RUNTIME_GROUP"
+
+if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
+    useradd --create-home --home-dir "$DEPLOY_HOME" --shell /bin/bash "$DEPLOY_USER"
+else
+    actual_deploy_home="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
+    [[ "$actual_deploy_home" == "$DEPLOY_HOME" ]] || {
+        printf 'Existing user %s has home %s, expected %s.\n' "$DEPLOY_USER" "$actual_deploy_home" "$DEPLOY_HOME" >&2
+        exit 1
+    }
+fi
+passwd --lock "$DEPLOY_USER" >/dev/null
+
+deploy_group="$(id -gn "$DEPLOY_USER")"
+install -d -m 0700 -o "$DEPLOY_USER" -g "$deploy_group" "$DEPLOY_HOME/.ssh"
+printf '%s\n' "$authorized_key" > "$DEPLOY_HOME/.ssh/authorized_keys"
+chown "$DEPLOY_USER:$deploy_group" "$DEPLOY_HOME/.ssh/authorized_keys"
+chmod 0600 "$DEPLOY_HOME/.ssh/authorized_keys"
+
+incoming_dir="$DEPLOY_HOME/incoming"
+install -d -m 0700 -o "$DEPLOY_USER" -g "$deploy_group" "$incoming_dir"
+install -d -m 0700 -o root -g root "$BACKUP_ROOT"
+
+chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$APP_DIR"
+find "$APP_DIR" -type d -exec chmod 2770 {} +
+find "$APP_DIR" -type f -exec chmod g+rw,o-rwx {} +
+chmod 0660 "$APP_DIR/$DATABASE_FILE"
+
+temporary_dir="$(mktemp --directory)"
+trap 'rm -rf "$temporary_dir"' EXIT
+rendered_service="$temporary_dir/$SERVICE_NAME"
+sed \
+    -e "s|@@DOTNET_PATH@@|$DOTNET_PATH|g" \
+    -e "s|@@APP_DIR@@|$APP_DIR|g" \
+    -e "s|@@LISTEN_URL@@|$LISTEN_URL|g" \
+    -e "s|@@RUNTIME_USER@@|$RUNTIME_USER|g" \
+    -e "s|@@RUNTIME_GROUP@@|$RUNTIME_GROUP|g" \
+    "$service_template" > "$rendered_service"
+systemd-analyze verify "$rendered_service"
+
+install -o root -g root -m 0600 "$INPUT_CONFIG_FILE" "$INSTALLED_CONFIG_FILE"
+install -o root -g root -m 0755 "$deploy_script" /usr/local/sbin/deploy-toured
+install -o root -g root -m 0644 "$rendered_service" "/etc/systemd/system/$SERVICE_NAME"
+
+sudoers_tmp="$temporary_dir/toured-deploy.sudoers"
+printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/deploy-toured ""\n' "$DEPLOY_USER" > "$sudoers_tmp"
+chmod 0440 "$sudoers_tmp"
+visudo --check --file "$sudoers_tmp"
+install -o root -g root -m 0440 "$sudoers_tmp" /etc/sudoers.d/toured-deploy
+
+systemctl daemon-reload
+systemctl restart "$SERVICE_NAME"
+systemctl is-active --quiet "$SERVICE_NAME"
+
+printf 'TourEd deployment user and service configured successfully.\n'
+printf 'Configuration installed as %s.\n' "$INSTALLED_CONFIG_FILE"

@@ -1,0 +1,144 @@
+name: Deploy production
+run-name: Deploy ${{ github.sha }} to production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: toured-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.TOURED_PUBLIC_URL }}
+    env:
+      DEPLOY_HOST: ${{ vars.TOURED_DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.TOURED_DEPLOY_PORT }}
+      DEPLOY_USER: ${{ vars.TOURED_DEPLOY_USER }}
+      DEPLOY_HOME: ${{ vars.TOURED_DEPLOY_HOME }}
+      DEPLOY_RUNTIME: ${{ vars.TOURED_DEPLOY_RUNTIME }}
+      PUBLIC_URL: ${{ vars.TOURED_PUBLIC_URL }}
+
+    steps:
+      - name: Validate deployment configuration
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_PORT"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_HOME"
+          test -n "$PUBLIC_URL"
+          [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$DEPLOY_HOME" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$PUBLIC_URL" =~ ^https?://[^[:space:]]+$ ]]
+          case "$DEPLOY_RUNTIME" in
+            linux-x64|linux-arm64) ;;
+            *) printf 'Unsupported TOURED_DEPLOY_RUNTIME: %s\n' "$DEPLOY_RUNTIME" >&2; exit 1 ;;
+          esac
+
+      - name: Check out master
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies and tools
+        run: |
+          dotnet restore TourEd.sln
+          dotnet tool restore
+
+      - name: Build and test
+        run: |
+          dotnet build TourEd.sln --configuration Release --no-restore
+          dotnet test TourEd.sln --configuration Release --no-build --no-restore --verbosity normal
+
+      - name: Publish application
+        run: |
+          mkdir -p artifacts/release/app
+          dotnet publish Api/Api.csproj \
+            --configuration Release \
+            --no-restore \
+            --output artifacts/release/app \
+            -p:UseAppHost=false
+
+      - name: Build migration bundles
+        run: |
+          mkdir -p "artifacts/release/migrations/$DEPLOY_RUNTIME"
+          dotnet ef migrations bundle \
+            --project Api/Api.csproj \
+            --startup-project Api/Api.csproj \
+            --configuration Release \
+            --target-runtime "$DEPLOY_RUNTIME" \
+            --force \
+            --output "artifacts/release/migrations/$DEPLOY_RUNTIME/toured-migrate"
+          chmod 0750 "artifacts/release/migrations/$DEPLOY_RUNTIME/toured-migrate"
+          printf '%s\n' "$GITHUB_SHA" > artifacts/release/git-sha
+
+      - name: Package release
+        working-directory: artifacts
+        run: |
+          tar -czf toured-release.tar.gz -C release .
+          sha256sum toured-release.tar.gz > toured-release.tar.gz.sha256
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.TOURED_DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.TOURED_DEPLOY_KNOWN_HOSTS }}
+          SSH_KEY_FILE: ${{ runner.temp }}/toured-deploy-key
+          SSH_KNOWN_HOSTS_FILE: ${{ runner.temp }}/toured-known-hosts
+        run: |
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -m 0600 /dev/null "$SSH_KEY_FILE"
+          install -m 0600 /dev/null "$SSH_KNOWN_HOSTS_FILE"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$SSH_KEY_FILE"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$SSH_KNOWN_HOSTS_FILE"
+
+      - name: Upload release
+        env:
+          SSH_KEY_FILE: ${{ runner.temp }}/toured-deploy-key
+          SSH_KNOWN_HOSTS_FILE: ${{ runner.temp }}/toured-known-hosts
+        run: |
+          scp \
+            -P "$DEPLOY_PORT" \
+            -i "$SSH_KEY_FILE" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_KNOWN_HOSTS_FILE" \
+            artifacts/toured-release.tar.gz \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_HOME/incoming/toured-release.tar.gz.uploading"
+          scp \
+            -P "$DEPLOY_PORT" \
+            -i "$SSH_KEY_FILE" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_KNOWN_HOSTS_FILE" \
+            artifacts/toured-release.tar.gz.sha256 \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_HOME/incoming/toured-release.tar.gz.sha256.uploading"
+
+      - name: Deploy with backup and rollback
+        env:
+          SSH_KEY_FILE: ${{ runner.temp }}/toured-deploy-key
+          SSH_KNOWN_HOSTS_FILE: ${{ runner.temp }}/toured-known-hosts
+        run: |
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$SSH_KEY_FILE" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_KNOWN_HOSTS_FILE" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -e; cd '$DEPLOY_HOME/incoming'; mv toured-release.tar.gz.uploading toured-release.tar.gz; mv toured-release.tar.gz.sha256.uploading toured-release.tar.gz.sha256; sudo -n /usr/local/sbin/deploy-toured"
