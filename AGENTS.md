@@ -108,8 +108,9 @@ Touringen data import:
 - Fetches `https://www.touringen.de/stempelstellen`.
 - Extracts an embedded JavaScript `dmos` JSON string.
 - Deserializes raw areas, tours, and stamp points.
-- Saves normalized stamping points using provider-scoped external identities and database-generated internal ids.
-- Maps hiking-tour relationships to the generated stamping point ids.
+- Normalizes multiple Touringen source ids for the same provider-scoped stamping point number to one database-generated internal id.
+- Stores the highest source id as the point's current external id and maps every source alias in the import payload to the normalized point.
+- Maps all hiking-tour relationships for those source aliases to the normalized stamping point id.
 - Records import metadata.
 
 User data import:

@@ -47,9 +47,16 @@ public partial class ImportManager : IImportManager
 
         var stampingPoints = _stampingPointsImporter.Import(importData).ToArray();
         var savedStampingPoints = await _repository.SaveStampingPointsAsync(stampingPoints);
-        var stampingPointIdsByExternalId = savedStampingPoints
+        var stampingPointIdsByNumber = savedStampingPoints
             .Where(p => p.ProviderId == StampingProvider.TouringenId)
-            .ToDictionary(p => p.ExternalId, p => p.Id);
+            .ToDictionary(p => p.Number, p => p.Id);
+        var stampingPointIdsByExternalId = importData
+            .SelectMany(p => p.Touren.SelectMany(q => q.StampPoints))
+            .Union(importData.SelectMany(p => p.OrphanedStampPoints))
+            .DistinctBy(p => p.Id)
+            .ToDictionary(
+                p => p.Id.ToString(CultureInfo.InvariantCulture),
+                p => stampingPointIdsByNumber[p.StampPointNumber]);
 
         var hikingTours = _hikingToursImporter.Import(importData).ToArray();
         foreach (var hikingTour in hikingTours)

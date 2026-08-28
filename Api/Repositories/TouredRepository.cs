@@ -115,16 +115,16 @@ public class TouredRepository : IUserService
             return Array.Empty<StampingPoint>();
         }
 
-        var importedPoints = points.ToDictionary(p => (p.ProviderId, p.ExternalId));
+        var importedPoints = points.ToDictionary(p => (p.ProviderId, p.Number));
         var providerIds = importedPoints.Keys.Select(p => p.ProviderId).Distinct().ToArray();
         var existingPoints = await _dbContext.StampingPoints.AsNoTracking()
             .Where(p => providerIds.Contains(p.ProviderId))
-            .ToDictionaryAsync(p => new { p.ProviderId, p.ExternalId });
+            .ToDictionaryAsync(p => new { p.ProviderId, p.Number });
         var savedPoints = new List<StampingPoint>(importedPoints.Count);
 
         foreach (var (key, importedPoint) in importedPoints)
         {
-            var pointToSave = existingPoints.TryGetValue(new { key.ProviderId, key.ExternalId }, out var existingPoint)
+            var pointToSave = existingPoints.TryGetValue(new { key.ProviderId, key.Number }, out var existingPoint)
                 ? importedPoint with { Id = existingPoint.Id }
                 : importedPoint with { Id = default };
 
