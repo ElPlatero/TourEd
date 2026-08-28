@@ -6,4 +6,5 @@ public static class TouredAuthenticationSchemes
     public const string Cookie = "TouredSession";
     public const string GoogleChallenge = "TouredGoogleChallenge";
     public const string Google = "Google";
+    public const string CliBearer = "TouredCliBearer";
 }

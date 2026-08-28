@@ -46,6 +46,9 @@ internal static class AuthenticationServiceCollectionExtensions
             .AddScheme<EmailHeaderAuthenticationOptions, TouredAuthenticationHandler>(
                 EmailHeaderAuthenticationOptions.DefaultScheme,
                 _ => { })
+            .AddScheme<CliBearerAuthenticationOptions, CliBearerAuthenticationHandler>(
+                TouredAuthenticationSchemes.CliBearer,
+                options => configuration.GetSection(CliBearerAuthenticationOptions.ConfigurationSectionName).Bind(options))
             .AddPolicyScheme(
                 TouredAuthenticationSchemes.GoogleChallenge,
                 TouredAuthenticationSchemes.GoogleChallenge,
@@ -73,6 +76,14 @@ internal static class AuthenticationServiceCollectionExtensions
                     }
                 };
             });
+
+        services.AddAuthorization(options => options.AddPolicy(
+            TouredAuthorizationPolicies.CliImport,
+            policy =>
+            {
+                policy.AddAuthenticationSchemes(TouredAuthenticationSchemes.CliBearer);
+                policy.RequireAuthenticatedUser();
+            }));
 
         return services;
     }
