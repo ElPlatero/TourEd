@@ -49,6 +49,7 @@ load_configuration() {
     [[ "$DOTNET_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]] || fail "Invalid DOTNET_PATH"
     [[ "$LISTEN_URL" =~ ^https?://[A-Za-z0-9.:-]+$ ]] || fail "Invalid LISTEN_URL"
     [[ "$HEALTH_URL" =~ ^https?://[^[:space:]]+$ ]] || fail "Invalid HEALTH_URL"
+    [[ "$HEALTH_URL" == */health ]] || fail "HEALTH_URL must end with /health"
     [[ "$KEEP_BACKUPS" =~ ^[0-9]+$ ]] || fail "Invalid KEEP_BACKUPS"
     ((KEEP_BACKUPS >= 1 && KEEP_BACKUPS <= 50)) || fail "KEEP_BACKUPS must be between 1 and 50"
 }
@@ -60,6 +61,9 @@ load_configuration
 
 readonly DEPLOY_USER DEPLOY_HOME RUNTIME_USER RUNTIME_GROUP APP_DIR BACKUP_ROOT DATABASE_FILE
 readonly SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL KEEP_BACKUPS
+readonly PUBLIC_BASE_URL="${HEALTH_URL%/health}"
+readonly API_SMOKE_URL="$PUBLIC_BASE_URL/api/points"
+readonly FRONTEND_SMOKE_URL="$PUBLIC_BASE_URL/index.html"
 readonly APPS_ROOT="$(dirname "$APP_DIR")"
 readonly DB_PATH="$APP_DIR/$DATABASE_FILE"
 readonly INCOMING_DIR="$DEPLOY_HOME/incoming"
@@ -74,11 +78,17 @@ backup_dir=""
 rollback_required=0
 service_stopped=0
 
-healthcheck() {
+check_endpoint() {
+    local url="$1"
+    curl --fail --silent --show-error --output /dev/null \
+        --connect-timeout 5 --max-time 10 "$url"
+}
+
+wait_for_endpoint() {
     local attempt
+    local url="$1"
     for attempt in {1..12}; do
-        if curl --fail --silent --show-error --output /dev/null \
-            --connect-timeout 5 --max-time 10 "$HEALTH_URL"; then
+        if check_endpoint "$url"; then
             return 0
         fi
         sleep 5
@@ -110,11 +120,11 @@ rollback() {
     set_app_permissions
     systemctl start "$SERVICE_NAME"
 
-    if healthcheck; then
-        log "Rollback completed and healthcheck passed"
+    if wait_for_endpoint "$API_SMOKE_URL"; then
+        log "Rollback completed and API smoke check passed"
     else
         journalctl --unit "$SERVICE_NAME" --lines 30 --no-pager >&2 || true
-        fail "Rollback completed, but the healthcheck still fails"
+        fail "Rollback completed, but the API smoke check still fails"
     fi
 }
 
@@ -229,10 +239,16 @@ log "Starting $SERVICE_NAME"
 systemctl start "$SERVICE_NAME"
 
 log "Waiting for production healthcheck"
-if ! healthcheck; then
+if ! wait_for_endpoint "$HEALTH_URL"; then
     journalctl --unit "$SERVICE_NAME" --lines 30 --no-pager >&2 || true
     fail "Production healthcheck failed"
 fi
+
+log "Checking production points API"
+check_endpoint "$API_SMOKE_URL" || fail "Production points API smoke check failed"
+
+log "Checking production frontend"
+check_endpoint "$FRONTEND_SMOKE_URL" || fail "Production frontend smoke check failed"
 
 rollback_required=0
 service_stopped=0

@@ -56,6 +56,7 @@ if [[ ! "$DATABASE_FILE" =~ ^[A-Za-z0-9._-]+$ ]] ||
     [[ ! "$SERVICE_NAME" =~ ^[A-Za-z0-9_.@-]+\.service$ ]] ||
     [[ ! "$LISTEN_URL" =~ ^https?://[A-Za-z0-9.:-]+$ ]] ||
     [[ ! "$HEALTH_URL" =~ ^https?://[^[:space:]]+$ ]] ||
+    [[ "$HEALTH_URL" != */health ]] ||
     [[ ! "$KEEP_BACKUPS" =~ ^[0-9]+$ ]] ||
     ((KEEP_BACKUPS < 1 || KEEP_BACKUPS > 50)); then
     printf 'Invalid database, service, URL, or retention configuration.\n' >&2

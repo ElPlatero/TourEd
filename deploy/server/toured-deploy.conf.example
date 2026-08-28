@@ -9,5 +9,5 @@ DATABASE_FILE=toured.db
 SERVICE_NAME=toured-api.service
 DOTNET_PATH=/usr/bin/dotnet
 LISTEN_URL=http://127.0.0.1:5000
-HEALTH_URL=http://127.0.0.1:5000/api/points
+HEALTH_URL=http://127.0.0.1:5000/health
 KEEP_BACKUPS=5
