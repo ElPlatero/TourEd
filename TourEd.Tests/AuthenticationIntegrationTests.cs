@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Api.Authentication;
@@ -27,6 +28,7 @@ namespace TourEd.Tests;
 
 public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 {
+    private const string RemovedUserHeader = "toured-user";
     private const int VisitedPointNumber = 101;
     private const int UnvisitedPointNumber = 102;
     private const int WritablePointNumber = 103;
@@ -169,17 +171,28 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task LegacyHeaderAndCookieAuthenticationWorkInParallel()
+    public async Task RemovedHeaderAndUserIdQueryCannotAuthenticateWhileCookieStillWorks()
     {
-        using var legacyClient = CreateClient(_factory);
-        legacyClient.DefaultRequestHeaders.Add(EmailHeaderAuthenticationOptions.HeaderName, FakeGoogleHandler.Email);
+        using var removedHeaderClient = CreateClient(_factory);
+        removedHeaderClient.DefaultRequestHeaders.Add(RemovedUserHeader, FakeGoogleHandler.Email);
 
-        var legacySession = await legacyClient.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        var headerSession = await removedHeaderClient.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        var headerFilteredPoints = await removedHeaderClient.GetAsync("/api/points?vis=false");
+        var headerVisit = await removedHeaderClient.GetAsync($"/api/points/{VisitedPointNumber}");
+        var headerWrite = await removedHeaderClient.PutAsJsonAsync(
+            $"/api/points/{WritablePointNumber}",
+            new AddVisitRequest(true, DateTime.UtcNow));
 
-        Assert.NotNull(legacySession);
-        Assert.True(legacySession.Authenticated);
-        Assert.Equal(FakeGoogleHandler.Email, legacySession.Email);
-        Assert.Equal(HttpStatusCode.OK, (await legacyClient.GetAsync("/api/points?vis=false")).StatusCode);
+        using var queryClient = CreateClient(_factory);
+        var queryLogin = await queryClient.GetAsync(
+            $"/api/points?vis=true&userid={Uri.EscapeDataString(FakeGoogleHandler.Email)}");
+
+        Assert.NotNull(headerSession);
+        Assert.False(headerSession.Authenticated);
+        Assert.Equal(HttpStatusCode.Unauthorized, headerFilteredPoints.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, headerVisit.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, headerWrite.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, queryLogin.StatusCode);
 
         using var cookieClient = CreateClient(_factory);
         await LoginAsync(cookieClient);
@@ -189,6 +202,28 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.True(cookieSession.Authenticated);
         Assert.Equal(FakeGoogleHandler.Email, cookieSession.Email);
         Assert.Equal(HttpStatusCode.OK, (await cookieClient.GetAsync("/api/points?vis=false")).StatusCode);
+    }
+
+    [Fact]
+    public async Task AuthenticatedCookieWithoutInternalUserClaimsReturnsUnauthorized()
+    {
+        using var client = CreateClient(_factory, handleCookies: false);
+        client.DefaultRequestHeaders.Add(
+            "Cookie",
+            CreateSessionCookie(_factory.Services, new ClaimsIdentity(authenticationType: TouredAuthenticationSchemes.Cookie)));
+
+        var session = await client.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        var filteredPoints = await client.GetAsync("/api/points?vis=true");
+        var visit = await client.GetAsync($"/api/points/{VisitedPointNumber}");
+        var write = await client.PutAsJsonAsync(
+            $"/api/points/{WritablePointNumber}",
+            new AddVisitRequest(true, DateTime.UtcNow));
+
+        Assert.NotNull(session);
+        Assert.False(session.Authenticated);
+        Assert.Equal(HttpStatusCode.Unauthorized, filteredPoints.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, visit.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, write.StatusCode);
     }
 
     [Fact]
@@ -357,6 +392,14 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             number,
             providerId,
             $"test-{providerId}-{number}");
+
+    private static string CreateSessionCookie(IServiceProvider services, ClaimsIdentity identity)
+    {
+        var options = services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(TouredAuthenticationSchemes.Cookie);
+        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), TouredAuthenticationSchemes.Cookie);
+        return $"{options.Cookie.Name}={options.TicketDataFormat.Protect(ticket)}";
+    }
 
     private static void DeleteFile(string path)
     {

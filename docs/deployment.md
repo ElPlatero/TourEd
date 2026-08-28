@@ -50,7 +50,7 @@ The setup installs this file as root-owned mode `0600` at `/etc/toured-deploy.co
 
 ## Configure CLI authentication for imports
 
-The two import endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or the legacy `toured-user` header cannot authorize these routes.
+The two import endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or arbitrary identity header cannot authorize these routes.
 
 Generate a 256-bit token on the server and install it together with the existing user's email in a root-only environment file. Keep the generated `TOURED_CLI_TOKEN` shell variable in the current trusted administrator session for the first verification call:
 

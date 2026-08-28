@@ -25,6 +25,7 @@ namespace TourEd.Tests;
 
 public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
 {
+    private const string RemovedUserHeader = "toured-user";
     private const string CliToken = "test-only-256-bit-cli-token-0123456789abcdef0123456789abcdef";
     private const string UserEmail = "cli-user@example.test";
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"toured-cli-tests-{Guid.NewGuid():N}.db");
@@ -122,19 +123,32 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CookieAndLegacyHeaderAloneCannotAuthorizeImports()
+    public async Task CookieAndRemovedUserHeaderAloneCannotAuthorizeImports()
     {
         using var cookieClient = CreateClient(_factory);
         cookieClient.DefaultRequestHeaders.Add("Cookie", CreateSessionCookie(_factory.Services, _userId, UserEmail));
         var cookieResponse = await cookieClient.PostAsync("/api/admin/imports/touringen", content: null);
 
         using var legacyClient = CreateClient(_factory);
-        legacyClient.DefaultRequestHeaders.Add(EmailHeaderAuthenticationOptions.HeaderName, UserEmail);
+        legacyClient.DefaultRequestHeaders.Add(RemovedUserHeader, UserEmail);
         var legacyResponse = await legacyClient.PostAsync("/api/admin/imports/touringen", content: null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, cookieResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, legacyResponse.StatusCode);
         Assert.Equal(0, _factory.Services.GetRequiredService<CapturingImportManager>().TouringenImportCount);
+    }
+
+    [Fact]
+    public async Task CliBearerDoesNotAuthorizeBrowserEndpoints()
+    {
+        using var client = CreateClient(_factory);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CliToken);
+
+        var filteredPoints = await client.GetAsync("/api/points?vis=true");
+        var visit = await client.GetAsync("/api/points/1");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, filteredPoints.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, visit.StatusCode);
     }
 
     [Fact]

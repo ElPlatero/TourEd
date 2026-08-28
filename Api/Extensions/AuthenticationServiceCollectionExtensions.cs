@@ -3,8 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.DataProtection;
-using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Services;
+using TourEd.Lib.Extensions;
 
 namespace Api.Extensions;
 
@@ -18,19 +17,12 @@ internal static class AuthenticationServiceCollectionExtensions
 
         services.AddAuthentication(options =>
             {
-                options.DefaultScheme = TouredAuthenticationSchemes.Application;
-                options.DefaultAuthenticateScheme = TouredAuthenticationSchemes.Application;
-                options.DefaultChallengeScheme = TouredAuthenticationSchemes.Application;
-                options.DefaultForbidScheme = TouredAuthenticationSchemes.Application;
+                options.DefaultScheme = TouredAuthenticationSchemes.Cookie;
+                options.DefaultAuthenticateScheme = TouredAuthenticationSchemes.Cookie;
+                options.DefaultChallengeScheme = TouredAuthenticationSchemes.Cookie;
+                options.DefaultForbidScheme = TouredAuthenticationSchemes.Cookie;
                 options.DefaultSignInScheme = TouredAuthenticationSchemes.Cookie;
             })
-            .AddPolicyScheme(
-                TouredAuthenticationSchemes.Application,
-                TouredAuthenticationSchemes.Application,
-                options => options.ForwardDefaultSelector = context =>
-                    context.Request.Headers.ContainsKey(EmailHeaderAuthenticationOptions.HeaderName)
-                        ? EmailHeaderAuthenticationOptions.DefaultScheme
-                        : TouredAuthenticationSchemes.Cookie)
             .AddCookie(TouredAuthenticationSchemes.Cookie, options =>
             {
                 options.Cookie.Name = "toured-session";
@@ -40,12 +32,17 @@ internal static class AuthenticationServiceCollectionExtensions
                 options.LoginPath = "/auth/login";
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.SlidingExpiration = true;
+                options.Events.OnValidatePrincipal = context =>
+                {
+                    if (context.Principal?.TryGetUser(out _) != true)
+                    {
+                        context.RejectPrincipal();
+                    }
+                    return Task.CompletedTask;
+                };
                 options.Events.OnRedirectToLogin = context => SetApiStatusOrRedirect(context, StatusCodes.Status401Unauthorized);
                 options.Events.OnRedirectToAccessDenied = context => SetApiStatusOrRedirect(context, StatusCodes.Status403Forbidden);
             })
-            .AddScheme<EmailHeaderAuthenticationOptions, TouredAuthenticationHandler>(
-                EmailHeaderAuthenticationOptions.DefaultScheme,
-                _ => { })
             .AddScheme<CliBearerAuthenticationOptions, CliBearerAuthenticationHandler>(
                 TouredAuthenticationSchemes.CliBearer,
                 options => configuration.GetSection(CliBearerAuthenticationOptions.ConfigurationSectionName).Bind(options))
