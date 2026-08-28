@@ -16,18 +16,24 @@ It is a plain HTML page using jQuery and OpenLayers. It loads OpenStreetMap tile
 
 The page calls the backend with relative URLs:
 
+- `GET auth/session`
+  - Loaded first to determine whether the browser has a valid TourEd session.
+- `GET auth/login`
+  - Used by the “Mit Google anmelden” link to start the Google challenge.
+- `POST auth/logout`
+  - Ends the TourEd cookie session and returns the map to anonymous mode.
 - `GET api/points`
-  - Used when no user id is present.
+  - Used when the session is anonymous.
   - Uses the anonymous default provider, currently `touringen`.
   - Treats all returned points as unvisited.
 - `GET api/points?vis=false`
-  - Used when `?userid=...` is present in the page URL.
-  - Sends header `toured-user`.
+  - Used when `auth/session` reports an authenticated cookie session.
   - Returns unvisited points for that user.
 - `GET api/points?vis=true`
-  - Used when `?userid=...` is present in the page URL.
-  - Sends header `toured-user`.
+  - Used when `auth/session` reports an authenticated cookie session.
   - Returns visited points for that user.
+
+The frontend never reads or writes user ids, Google subjects, tokens, `toured-user`, local storage, or session storage. A `401` while loading authenticated point data returns the UI to anonymous mode without starting a login redirect.
 
 Optional `provider` query behavior on `GET api/points`:
 
@@ -47,9 +53,10 @@ The current static map does not use the tours endpoint or admin/import endpoints
 Normal user flow:
 
 1. User opens the HTML map served by the TourEd application.
-2. Browser requests stamping points from the backend.
-3. Backend returns points, provider info, optional tour summaries, and user visit state depending on query/header.
-4. Map renders markers and shows a small info card on hover/click.
+2. Browser checks the TourEd session and offers Google login or logout as appropriate.
+3. Browser requests anonymous points once, or visited and unvisited points separately for an authenticated cookie session.
+4. Backend returns points, provider info, optional tour summaries, and user visit state depending on the session.
+5. Map renders markers and shows a small info card on hover/click.
 
 Maintenance/admin flow:
 
@@ -102,7 +109,7 @@ The main runtime composition happens in `Api/Program.cs`.
 
 Authentication is transitional and policy-based:
 
-- Requests with the legacy `TouredUser` / `toured-user` header continue to use `TouredAuthenticationHandler` while the bundled frontend is still unchanged.
+- Requests with the legacy `TouredUser` / `toured-user` header continue to use `TouredAuthenticationHandler` for compatibility, but the bundled frontend no longer sends it.
 - Other requests authenticate through the encrypted `toured-session` cookie, which is `Secure`, `HttpOnly`, `SameSite=Lax`, expires after eight hours, and uses sliding expiration.
 - Google is used only by the explicit `/auth/login` challenge. Its callback binds through `GoogleLoginService`, discards Google claims/tokens, and stores only internal user-id and email claims in the TourEd cookie.
 - Import routes use the separate `TouredCliImport` policy and `TouredCliBearer` scheme. Only the configured bearer token can resolve the configured existing user; cookie and legacy-header identities do not satisfy this policy.
@@ -190,7 +197,7 @@ The configured database connection is:
 Current verification baseline:
 
 - `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
-- `dotnet test --no-restore` runs provider-aware persistence/import, readiness, Google account-binding, browser-session, and CLI-authentication integration tests after a fresh restore with the .NET 10 SDK.
+- `dotnet test --no-restore` runs provider-aware persistence/import, readiness, Google account-binding, browser-session/frontend-contract, and CLI-authentication integration tests after a fresh restore with the .NET 10 SDK.
 
 ## Deployment
 
