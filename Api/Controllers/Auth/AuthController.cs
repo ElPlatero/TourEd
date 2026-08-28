@@ -18,12 +18,11 @@ public sealed class AuthController : ControllerBase
     [HttpGet("session")]
     public ActionResult<AuthSessionResponse> Session()
     {
-        if (User.Identity?.IsAuthenticated != true)
+        if (User.Identity?.IsAuthenticated != true || !User.TryGetUser(out var user))
         {
             return Ok(new AuthSessionResponse(false, null));
         }
 
-        var user = User.GetUser();
         return Ok(new AuthSessionResponse(true, user.Email));
     }
 

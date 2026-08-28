@@ -1,7 +1,5 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Extensions;
 
 namespace Api.Controllers.Points;
 
@@ -29,10 +27,10 @@ public class StampingPointQuery
         return (new Position(longitude, latitude), Radius * 1_000);
     }
 
-    public (int UserId, bool ExcludeVisited)? GetUserFilterOrDefault(ClaimsPrincipal currentUser)
+    public (int UserId, bool ExcludeVisited)? GetUserFilterOrDefault(User? currentUser)
     {
-        return ShowVisited != null
-            ? (currentUser.GetUser().Id, !ShowVisited.Value)
+        return ShowVisited != null && currentUser != null
+            ? (currentUser.Id, !ShowVisited.Value)
             : null;
     }
 }

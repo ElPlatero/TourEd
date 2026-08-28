@@ -33,7 +33,7 @@ The page calls the backend with relative URLs:
   - Used when `auth/session` reports an authenticated cookie session.
   - Returns visited points for that user.
 
-The frontend never reads or writes user ids, Google subjects, tokens, `toured-user`, local storage, or session storage. A `401` while loading authenticated point data returns the UI to anonymous mode without starting a login redirect.
+The frontend never reads or writes user ids, Google subjects, tokens, custom identity headers, local storage, or session storage. A `401` while loading authenticated point data returns the UI to anonymous mode without starting a login redirect.
 
 Optional `provider` query behavior on `GET api/points`:
 
@@ -83,7 +83,6 @@ The solution has three projects:
   - Shared abstractions and interfaces.
   - Import services.
   - HTML parsing service.
-  - Header-based authentication handler.
   - Utility extensions and JSON converters.
 - `TourEd.Tests`
   - xUnit test project.
@@ -107,12 +106,12 @@ The main runtime composition happens in `Api/Program.cs`.
 
 `Api/Program.cs` enables default and static files, so `Api/wwwroot/index.html` and its assets are served by the same application as the API.
 
-Authentication is transitional and policy-based:
+Authentication is scheme-separated:
 
-- Requests with the legacy `TouredUser` / `toured-user` header continue to use `TouredAuthenticationHandler` for compatibility, but the bundled frontend no longer sends it.
-- Other requests authenticate through the encrypted `toured-session` cookie, which is `Secure`, `HttpOnly`, `SameSite=Lax`, expires after eight hours, and uses sliding expiration.
+- Browser requests authenticate only through the encrypted `toured-session` cookie, which is the default scheme, is `Secure`, `HttpOnly`, `SameSite=Lax`, expires after eight hours, and uses sliding expiration.
 - Google is used only by the explicit `/auth/login` challenge. Its callback binds through `GoogleLoginService`, discards Google claims/tokens, and stores only internal user-id and email claims in the TourEd cookie.
-- Import routes use the separate `TouredCliImport` policy and `TouredCliBearer` scheme. Only the configured bearer token can resolve the configured existing user; cookie and legacy-header identities do not satisfy this policy.
+- Import routes use the separate `TouredCliImport` policy and `TouredCliBearer` scheme. Only the configured bearer token can resolve the configured existing user; cookie identities do not satisfy this policy.
+- Arbitrary request headers and URL query parameters never establish a browser identity.
 - Protected API endpoints return `401`/`403` instead of redirecting to Google or returning HTML.
 - Permissive CORS is disabled; browser authentication is intentionally Same-Origin.
 
@@ -156,7 +155,7 @@ Useful query behavior:
 - `provider=all` returns points for all stamping providers.
 - `vis=true` returns visited points for the authenticated user.
 - `vis=false` returns unvisited points for the authenticated user.
-- Requests with `vis=true` or `vis=false` return `401` when no legacy or cookie identity is present.
+- Requests with `vis=true` or `vis=false` return `401` when no valid cookie identity with internal user claims is present.
 - Geo filtering exists via query parameters and is used server-side.
 
 Point DTOs include provider info while preserving the existing number, name, position, visited, and tours fields.
@@ -188,7 +187,7 @@ The API uses:
 - SQLite
 - Swagger in development
 
-`Toured.Lib` uses the shared `Microsoft.AspNetCore.App` framework for authentication types. Do not reintroduce the obsolete `Microsoft.AspNetCore.Identity` 2.2 package dependency.
+`Toured.Lib` has no ASP.NET Core framework dependency. Browser and CLI authentication handlers belong to `Api`; do not introduce ASP.NET Identity or local-password dependencies.
 
 The configured database connection is:
 
@@ -225,7 +224,7 @@ Keep the frontend in `Api/wwwroot` and deploy it together with the API unless ex
 
 Do not assume an admin UI is missing; admin workflows are intentionally handled via `curl`.
 
-When changing API contracts, consider the bundled HTML page as the primary consumer, especially the shape of `GET api/points` responses and the `toured-user` header behavior.
+When changing API contracts, consider the bundled HTML page as the primary consumer, especially the shape of `GET api/points` responses and cookie-session behavior.
 
 Prefer small, pragmatic changes over introducing large framework or frontend build structures.
 
