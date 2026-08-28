@@ -1,6 +1,8 @@
 using Api.Repositories;
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using TourEd.Lib.Abstractions;
 using TourEd.Lib.Abstractions.Exceptions;
 using TourEd.Lib.Abstractions.Models;
 using TourEd.Lib.Services;
@@ -60,6 +62,53 @@ public sealed class GoogleLoginServiceTests : IDisposable
         Assert.Equal(
             "google-subject-1",
             (await context.Users.AsNoTracking().SingleAsync(user => user.Id == existingUser.Id)).GoogleSubject);
+    }
+
+    [Fact]
+    public async Task ValidGoogleClaimsCreateOnlyInternalTouredClaims()
+    {
+        await using var context = await CreateInitializedContextAsync();
+        var existingUser = await AddUserAsync(context, "known@example.test");
+        var service = CreateService(context);
+
+        var principal = await service.CreatePrincipalAsync(
+            new GoogleLoginClaims("google-subject-1", "known@example.test", true));
+
+        Assert.True(principal.Identity?.IsAuthenticated);
+        Assert.Equal(
+            new[]
+            {
+                new Claim(Constants.ClaimsNames.UserEmail, existingUser.Email),
+                new Claim(Constants.ClaimsNames.UserId, existingUser.Id.ToString())
+            }.Select(claim => (claim.Type, claim.Value)).OrderBy(claim => claim.Type),
+            principal.Claims.Select(claim => (claim.Type, claim.Value)).OrderBy(claim => claim.Type));
+    }
+
+    [Fact]
+    public async Task MissingSubjectIsRejected()
+    {
+        await using var context = await CreateInitializedContextAsync();
+        await AddUserAsync(context, "known@example.test");
+        var service = CreateService(context);
+
+        var exception = await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.CreatePrincipalAsync(
+            new GoogleLoginClaims(string.Empty, "known@example.test", true)));
+
+        Assert.Equal(GoogleLoginRejectionReason.InvalidClaims, exception.Reason);
+    }
+
+    [Fact]
+    public async Task UnverifiedEmailIsRejected()
+    {
+        await using var context = await CreateInitializedContextAsync();
+        await AddUserAsync(context, "known@example.test");
+        var service = CreateService(context);
+
+        var exception = await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.CreatePrincipalAsync(
+            new GoogleLoginClaims("google-subject-1", "known@example.test", false)));
+
+        Assert.Equal(GoogleLoginRejectionReason.EmailNotVerified, exception.Reason);
+        Assert.Null((await context.Users.AsNoTracking().SingleAsync()).GoogleSubject);
     }
 
     [Fact]
