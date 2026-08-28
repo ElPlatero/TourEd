@@ -2,15 +2,15 @@
 
 ## Purpose
 
-TourEd is a small .NET 10 backend for Touringen stamping points and hiking tours.
+TourEd is a small .NET 10 application for Touringen stamping points and hiking tours.
 
 It stores Touringen stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
 Stamping points and future provider-specific data are anchored by `StampingProvider`. The initial provider is `touringen`, and users store a `DefaultStampingProviderId` that currently defaults to Touringen.
 
-## External Consumer
+## Frontend
 
-The user-facing consumer is intentionally not part of this repository. Its production URL is configured outside the repository.
+The repository contains one user-facing frontend at `Api/wwwroot/index.html`. It is part of the ASP.NET Core application and is published and deployed together with the API.
 
 It is a plain HTML page using jQuery and OpenLayers. It loads OpenStreetMap tiles and displays stamping points as map markers.
 
@@ -35,7 +35,7 @@ Optional `provider` query behavior on `GET api/points`:
 - Provider slug, for example `provider=touringen`: returns points from that provider.
 - `provider=all`: returns points from all providers.
 
-The map expects red and green pin image assets outside this repo, currently:
+The map uses the red and green pin image assets stored in `Api/wwwroot/img`:
 
 - `img/pin_icon_red.png`
 - `img/pin_icon_green.png`
@@ -46,7 +46,7 @@ The current static map does not use the tours endpoint or admin/import endpoints
 
 Normal user flow:
 
-1. User opens the external HTML map.
+1. User opens the HTML map served by the TourEd application.
 2. Browser requests stamping points from the backend.
 3. Backend returns points, provider info, optional tour summaries, and user visit state depending on query/header.
 4. Map renders markers and shows a small info card on hover/click.
@@ -65,6 +65,7 @@ The solution has three projects:
 
 - `Api`
   - ASP.NET Core REST API.
+  - Static HTML map and image assets under `wwwroot`.
   - Controllers for points, tours, and imports.
   - EF Core SQLite persistence.
   - Repository and manager classes.
@@ -95,10 +96,12 @@ Provider data is represented by `StampingProvider`. Existing users and newly cre
 
 The main runtime composition happens in `Api/Program.cs`.
 
+`Api/Program.cs` enables default and static files, so `Api/wwwroot/index.html` and its assets are served by the same application as the API.
+
 Authentication is custom and header-based:
 
 - Header name: `TouredUser` / `toured-user`
-- The header value is provided by the external static map when a user id is present.
+- The header value is provided by the bundled static map when a user id is present.
 - The authentication handler looks up the user and creates claims for user id and email.
 
 ## Data Import
@@ -140,7 +143,7 @@ Other endpoints:
 
 - `GET /api/tours`
   - Exists for hiking tour queries.
-  - Not currently used by the external HTML map.
+  - Not currently used by the bundled HTML map.
 - `POST /api/admin/imports/touringen`
   - Imports Touringen source data.
   - Intended for manual/admin use.
@@ -150,7 +153,7 @@ Other endpoints:
 
 ## Development Notes
 
-The repository currently has no frontend project and no static HTML consumer. This is intentional.
+The frontend intentionally remains a plain static page under `Api/wwwroot`; there is no separate frontend project or build process.
 
 The API uses:
 
@@ -180,7 +183,7 @@ Production deployment is manual through `.github/workflows/deploy.yml` and only 
 - `deploy/server/toured-deploy.conf.example` records the current production values without embedding them in deployment logic.
 - `deploy/server/toured-api.service.template` is rendered by the server setup from that configuration.
 
-The workflow builds and tests the solution, publishes the API, creates the configured Linux EF migration bundle, and uploads a checksummed release. The root-owned server command stops the service, backs up the application and SQLite database, applies migrations as the configured runtime user, restarts the service, and restores both application and database if deployment or health checking fails.
+The workflow builds and tests the solution, publishes the API together with the bundled frontend, creates the configured Linux EF migration bundle, and uploads a checksummed release. The root-owned server command stops the service, backs up the application and SQLite database, applies migrations as the configured runtime user, restarts the service, and restores both application and database if deployment or health checking fails.
 
 Server bootstrap and operational details are documented in `docs/deployment.md`. The GitHub secrets are `TOURED_DEPLOY_SSH_PRIVATE_KEY` and `TOURED_DEPLOY_KNOWN_HOSTS`.
 
@@ -193,27 +196,27 @@ Line endings:
 
 ## Working Preferences
 
-When changing the project, preserve the split between backend and external static map unless explicitly asked otherwise.
+Keep the frontend in `Api/wwwroot` and deploy it together with the API unless explicitly asked to introduce a separate frontend project or deployment.
 
 Do not assume an admin UI is missing; admin workflows are intentionally handled via `curl`.
 
-When changing API contracts, consider the external HTML page as the primary consumer, especially the shape of `GET api/points` responses and the `toured-user` header behavior.
+When changing API contracts, consider the bundled HTML page as the primary consumer, especially the shape of `GET api/points` responses and the `toured-user` header behavior.
 
-Prefer small, pragmatic backend changes over introducing large framework or frontend structure.
+Prefer small, pragmatic changes over introducing large framework or frontend build structures.
 
 ## Agent Maintenance Rule
 
-When an agent changes project behavior, architecture, API contracts, data flow, operational workflows, external consumer assumptions, or development/testing conventions, it must update this `AGENTS.md` file in the same change.
+When an agent changes project behavior, architecture, API contracts, data flow, operational workflows, frontend assumptions, or development/testing conventions, it must update this `AGENTS.md` file in the same change.
 
 Keep updates concise and factual. Do not rewrite the whole file unless the project shape changed substantially.
 
 Examples of changes that require updating this file:
 
 - New or changed API endpoint behavior.
-- Changed response shapes consumed by the external HTML map.
+- Changed response shapes consumed by the bundled HTML map.
 - Changed authentication/header behavior.
 - New persistence model, migration pattern, or database dependency.
-- New frontend/static consumer location or changed consumer assumptions.
+- New frontend location or changed frontend assumptions.
 - Changed admin/import workflow.
 - Changed build, test, deployment, or verification baseline.
 
