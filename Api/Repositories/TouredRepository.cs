@@ -48,7 +48,7 @@ public class TouredRepository : IUserService
 
     public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
     {
-        IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking().Include(p => p.Provider);
+        IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking();
         if (providerFilter is { IncludesAllProviders: false, ProviderId: { } providerId })
         {
             query = query.Where(p => p.ProviderId == providerId);
@@ -82,7 +82,11 @@ public class TouredRepository : IUserService
         {
             dto = dto.Where(p => Position.GetDistance(p.Point.Position, geoFilter.Value.Centre) < geoFilter.Value.Radius).ToList();
         }
-        return dto.Select(p => (p.Point, p.Tours.Any(q => q != null) ? p.Tours : null, (UserVisit?) p.UserVisit)).ToList();
+        var providers = await GetStampingProvidersAsync(dto.Select(p => p.Point.ProviderId));
+        return dto.Select(p =>
+            (p.Point with { Provider = providers[p.Point.ProviderId] },
+                p.Tours.Any(q => q != null) ? p.Tours : null,
+                (UserVisit?) p.UserVisit)).ToList();
     }
 
     public async Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync((Position Centre, decimal Range)? circularRange = null, params StampingPoint[] stampingPoints)
@@ -96,7 +100,7 @@ public class TouredRepository : IUserService
 
         var result = from tour in query
             join tourPoint in _dbContext.StampingPointsInTours.AsNoTracking() on tour.Id equals tourPoint.Tour.Id
-            join point in _dbContext.StampingPoints.AsNoTracking().Include(p => p.Provider) on tourPoint.StampingPointId equals point.Id
+            join point in _dbContext.StampingPoints.AsNoTracking() on tourPoint.StampingPointId equals point.Id
             group point by tour into groupedStampingPoints
             select new { Tour = groupedStampingPoints.Key, Points = groupedStampingPoints.ToList() };
 
@@ -105,7 +109,17 @@ public class TouredRepository : IUserService
         {
             dto = dto.Where(p => p.Points.Any(point => Position.GetDistance(point.Position, circularRange.Value.Centre) < circularRange.Value.Range)).ToList();
         }
-        return dto.Select(p => (p.Tour, p.Points)).ToList();
+        var providers = await GetStampingProvidersAsync(dto.SelectMany(p => p.Points).Select(p => p.ProviderId));
+        return dto.Select(p =>
+            (p.Tour, p.Points.Select(point => point with { Provider = providers[point.ProviderId] }).ToList())).ToList();
+    }
+
+    private async Task<Dictionary<int, StampingProvider>> GetStampingProvidersAsync(IEnumerable<int> providerIds)
+    {
+        var ids = providerIds.Distinct().ToArray();
+        return await _dbContext.StampingProviders.AsNoTracking()
+            .Where(provider => ids.Contains(provider.Id))
+            .ToDictionaryAsync(provider => provider.Id);
     }
     
     public async Task<IReadOnlyList<StampingPoint>> SaveStampingPointsAsync(params StampingPoint[] points)

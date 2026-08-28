@@ -115,6 +115,29 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task PointAndTourQueriesLoadTheProviderNavigation()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new TouredRepository(context);
+        var point = Assert.Single(await repository.SaveStampingPointsAsync(
+            CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42)));
+        var tour = new HikingTour(7, "Test tour", null, null, null, false, false, false);
+        context.HikingTours.Add(tour);
+        context.StampingPointsInTours.Add(new SortedStampingPoint(1)
+        {
+            StampingPointId = point.Id,
+            Tour = tour
+        });
+        await context.SaveChangesAsync();
+
+        var pointResult = Assert.Single(await repository.GetStampingPointsAsync());
+        var tourResult = Assert.Single(await repository.GetHikingToursAsync());
+
+        Assert.Equal(StampingProvider.TouringenSlug, pointResult.Point.Provider.Slug);
+        Assert.Equal(StampingProvider.TouringenSlug, Assert.Single(tourResult.Points).Provider.Slug);
+    }
+
+    [Fact]
     public void TouringenAdapterUsesProviderScopedExternalId()
     {
         var rawPoint = CreateRawStampPoint(9_001, 42);
