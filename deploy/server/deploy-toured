@@ -217,10 +217,13 @@ install -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" -m 0660 \
 set_app_permissions
 
 log "Applying Entity Framework migrations"
-runuser -u "$RUNTIME_USER" -- env \
-    DOTNET_BUNDLE_EXTRACT_BASE_DIR="$bundle_extract_dir" \
-    "$migration_bundle" \
-    --connection "Data Source=$DB_PATH"
+(
+    cd "$APP_DIR"
+    runuser -u "$RUNTIME_USER" -- env \
+        DOTNET_BUNDLE_EXTRACT_BASE_DIR="$bundle_extract_dir" \
+        "$migration_bundle" \
+        --connection "Data Source=$DB_PATH"
+)
 
 log "Starting $SERVICE_NAME"
 systemctl start "$SERVICE_NAME"
