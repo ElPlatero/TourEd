@@ -22,6 +22,11 @@ public class PointsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetStampingPoints([FromQuery] StampingPointQuery query)
     {
+        if (query.ShowVisited != null && User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
         try
         {
             var result = await _manager.GetStampingPointsAsync(query.Provider, GetCurrentUserIdOrDefault(), query.GetGeoFilterOrDefault(), query.GetUserFilterOrDefault(User));

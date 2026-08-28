@@ -21,7 +21,8 @@ builder.Services
     .AddRepositories()
     .AddTransient<IUnitOfWork, UnitOfWork>()
     .AddTransient<TourDataManager>()
-    .AddAuthentication(EmailHeaderAuthenticationOptions.DefaultScheme).AddScheme<EmailHeaderAuthenticationOptions, TouredAuthenticationHandler>(EmailHeaderAuthenticationOptions.DefaultScheme, options => {}).Services
+    .AddTouredAuthentication(builder.Configuration)
+    .AddTouredDataProtection(builder.Configuration)
     .AddSingleton<IHttpContextAccessor, HttpContextAccessor>()
     .AddEndpointsApiExplorer()
     .AddDbContext<DataContext>(options => options.UseSqlite(builder.Configuration.GetConnectionString("TouredDb")))
@@ -30,8 +31,7 @@ builder.Services
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-    }).Services
-    .AddCors();
+    });
     
 
 var app = builder.Build();
@@ -43,14 +43,24 @@ if (app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor |
+                       ForwardedHeaders.XForwardedHost |
+                       ForwardedHeaders.XForwardedProto
 });
+var configuredPathBase = builder.Configuration["PathBase"];
+if (!string.IsNullOrWhiteSpace(configuredPathBase))
+{
+    app.UsePathBase(configuredPathBase);
+}
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseCors(options => options.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program
+{
+}

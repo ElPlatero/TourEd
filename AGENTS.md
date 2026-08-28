@@ -80,7 +80,7 @@ The solution has three projects:
   - Utility extensions and JSON converters.
 - `TourEd.Tests`
   - xUnit test project.
-  - Covers provider-aware stamping point persistence and import behavior.
+  - Covers provider-aware persistence/import behavior, readiness, Google account binding, and backend authentication integration.
 
 ## Architecture
 
@@ -94,17 +94,27 @@ The backend follows a simple layered structure:
 
 Provider data is represented by `StampingProvider`. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
 
-Users can optionally store a unique Google subject identifier. `GoogleLoginService` resolves an existing binding by subject or atomically binds the first verified Google login to an existing user by normalized email. It never creates users, and no Google login endpoint is exposed yet.
+Users can optionally store a unique Google subject identifier. `GoogleLoginService` resolves an existing binding by subject or atomically binds the first verified Google login to an existing user by normalized email. It never creates users.
 
 The main runtime composition happens in `Api/Program.cs`.
 
 `Api/Program.cs` enables default and static files, so `Api/wwwroot/index.html` and its assets are served by the same application as the API.
 
-Authentication is custom and header-based:
+Authentication is transitional and policy-based:
 
-- Header name: `TouredUser` / `toured-user`
-- The header value is provided by the bundled static map when a user id is present.
-- The authentication handler looks up the user and creates claims for user id and email.
+- Requests with the legacy `TouredUser` / `toured-user` header continue to use `TouredAuthenticationHandler` while the bundled frontend is still unchanged.
+- Other requests authenticate through the encrypted `toured-session` cookie, which is `Secure`, `HttpOnly`, `SameSite=Lax`, expires after eight hours, and uses sliding expiration.
+- Google is used only by the explicit `/auth/login` challenge. Its callback binds through `GoogleLoginService`, discards Google claims/tokens, and stores only internal user-id and email claims in the TourEd cookie.
+- Protected API endpoints return `401`/`403` instead of redirecting to Google or returning HTML.
+- Permissive CORS is disabled; browser authentication is intentionally Same-Origin.
+
+Authentication endpoints:
+
+- `GET /auth/login` starts the Google challenge.
+- `GET /auth/session` returns anonymous/authenticated state and the authenticated email only.
+- `POST /auth/logout` removes the TourEd session cookie.
+
+Runtime authentication configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, optional `PathBase`, and optional `DataProtection__KeysPath`. The default Data-Protection location is the runtime user's local application-data directory; configured paths must be absolute and are restricted to the runtime user on Unix.
 
 ## Data Import
 
@@ -137,6 +147,7 @@ Useful query behavior:
 - `provider=all` returns points for all stamping providers.
 - `vis=true` returns visited points for the authenticated user.
 - `vis=false` returns unvisited points for the authenticated user.
+- Requests with `vis=true` or `vis=false` return `401` when no legacy or cookie identity is present.
 - Geo filtering exists via query parameters and is used server-side.
 
 Point DTOs include provider info while preserving the existing number, name, position, visited, and tours fields.
@@ -177,7 +188,7 @@ The configured database connection is:
 Current verification baseline:
 
 - `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
-- `dotnet test --no-restore` runs provider-aware persistence, import, and readiness health-check tests after a fresh restore with the .NET 10 SDK.
+- `dotnet test --no-restore` runs provider-aware persistence/import, readiness, Google account-binding, and backend authentication-integration tests after a fresh restore with the .NET 10 SDK.
 
 ## Deployment
 

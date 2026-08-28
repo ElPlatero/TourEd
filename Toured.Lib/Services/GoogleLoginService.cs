@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using TourEd.Lib.Abstractions;
 using TourEd.Lib.Abstractions.Exceptions;
 using TourEd.Lib.Abstractions.Interfaces.Services;
 using TourEd.Lib.Abstractions.Models;
@@ -6,6 +8,7 @@ namespace TourEd.Lib.Services;
 
 public sealed class GoogleLoginService : IGoogleLoginService
 {
+    private const string AuthenticationType = "TourEdGoogleLogin";
     private readonly IUserService _userService;
 
     public GoogleLoginService(IUserService userService)
@@ -66,5 +69,19 @@ public sealed class GoogleLoginService : IGoogleLoginService
         }
 
         throw new GoogleLoginRejectedException(GoogleLoginRejectionReason.UserAlreadyBound);
+    }
+
+    public async Task<ClaimsPrincipal> CreatePrincipalAsync(
+        GoogleLoginClaims claims,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await AuthenticateAsync(claims, cancellationToken);
+        var identity = new ClaimsIdentity(
+        [
+            new Claim(Constants.ClaimsNames.UserId, user.Id.ToString()),
+            new Claim(Constants.ClaimsNames.UserEmail, user.Email)
+        ], AuthenticationType);
+
+        return new ClaimsPrincipal(identity);
     }
 }
