@@ -15,6 +15,20 @@
         #content {
             min-height: 100%;
         }
+        #userSession {
+            position: absolute;
+            right: 0;
+            z-index: 100;
+            margin: 0.5em;
+            padding: 0.5em;
+            border: 1px solid #555555;
+            border-radius: 6px;
+            background: white;
+            font-family: sans-serif;
+        }
+        #userSession a, #userSession button {
+            margin-left: 0.5em;
+        }
         #infoCard {
             padding: 0.25em;
             cursor: pointer;
@@ -63,12 +77,10 @@
 </head>
 <body>
 <div id="content">
-    <div id="userIdInput" style="position:absolute;z-index: 100;width:100%;overflow: auto">
-        <div style="float: right;background: white;border:1px solid black;padding:0.5em;font-family: sans-serif" >
-            <label for="userid">Benutzer-ID:</label>
-            <input type="text" id="userid" name="userid">
-            <input type="submit" value="Anmelden" onclick="window.location=`?userid=${$('#userid').val()}`">
-        </div>
+    <div id="userSession">
+        <span id="sessionStatus">Sitzung wird geladen …</span>
+        <a id="loginLink" href="auth/login" hidden>Mit Google anmelden</a>
+        <button id="logoutButton" type="button" hidden>Abmelden</button>
     </div>
     <div id="map" style="width: 100%; height: 100%; position:fixed">
         <div id="infoCard"></div>
@@ -152,28 +164,91 @@
         }
     };
     
-    app.initialize = () => {
-        const params = new Proxy(new URLSearchParams(window.location.search), {
-            get: (searchParams, prop) => searchParams.get(prop),
-        });
-        app.userId = params.userid;
-        app.hasUserId = app.userId !== null && app.userId !== undefined;
-        if (app.hasUserId) {
-            let userIdInput = $('#userIdInput')[0];
-            userIdInput.style.visibility = 'hidden';
-            userIdInput.style.pointerEvents = 'none';
-        }
-    }
-    
-    app.setRequestHeaders = (request) => {
-        if (!app.hasUserId) {
-            return;
-        }
-        request.setRequestHeader('toured-user', app.userId);
-    };
-    
     app.visitedMarkers = app.createMarkersLayer('img/pin_icon_green.png');
     app.unvisitedMarkers = app.createMarkersLayer('img/pin_icon_red.png');
+
+    app.setSession = (session) => {
+        const authenticated = session?.authenticated === true;
+        const status = document.getElementById('sessionStatus');
+        const loginLink = document.getElementById('loginLink');
+        const logoutButton = document.getElementById('logoutButton');
+
+        status.textContent = authenticated ? session.email : 'Nicht angemeldet';
+        loginLink.hidden = authenticated;
+        logoutButton.hidden = !authenticated;
+    };
+
+    app.clearMarkers = () => {
+        app.visitedMarkers.getSource().clear();
+        app.unvisitedMarkers.getSource().clear();
+    };
+
+    app.getJson = async (url) => {
+        const response = await fetch(url, {
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) {
+            throw response;
+        }
+        return await response.json();
+    };
+
+    app.addPoints = (response, isVisited) => {
+        for (const stampingPoint of response.stampingPoints) {
+            const marker = app.createPin(stampingPoint, isVisited);
+            marker.vector.getSource().addFeature(marker);
+        }
+    };
+
+    app.loadAnonymousPoints = async () => {
+        app.clearMarkers();
+        const points = await app.getJson('api/points');
+        app.addPoints(points, false);
+    };
+
+    app.loadAuthenticatedPoints = async () => {
+        app.clearMarkers();
+        try {
+            const [unvisited, visited] = await Promise.all([
+                app.getJson('api/points?vis=false'),
+                app.getJson('api/points?vis=true')
+            ]);
+            app.addPoints(unvisited, false);
+            app.addPoints(visited, true);
+        } catch (response) {
+            if (response.status !== 401) {
+                throw response;
+            }
+            app.setSession({ authenticated: false });
+            await app.loadAnonymousPoints();
+        }
+    };
+
+    app.initialize = async () => {
+        if (window.location.search) {
+            window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`);
+        }
+        try {
+            const session = await app.getJson('auth/session');
+            app.setSession(session);
+            if (session.authenticated === true) {
+                await app.loadAuthenticatedPoints();
+            } else {
+                await app.loadAnonymousPoints();
+            }
+        } catch (response) {
+            app.setSession({ authenticated: false });
+            await app.loadAnonymousPoints();
+        }
+    };
+
+    app.logout = async () => {
+        const response = await fetch('auth/logout', { method: 'POST' });
+        if (!response.ok && response.status !== 401) {
+            return;
+        }
+        await app.initialize();
+    };
 
     app.stampingPointInfo = {
         isVisible: false,
@@ -216,46 +291,8 @@
     app.map.addLayer(app.unvisitedMarkers);
     app.map.on('click', e => app.displayTooltip(e, true))
     app.map.on('pointermove', e => app.displayTooltip(e, false));
+    document.getElementById('logoutButton').addEventListener('click', app.logout);
     app.initialize();
-    
-    if (app.hasUserId) {
-        $.ajax({
-            type: "GET",
-            beforeSend: app.setRequestHeaders,
-            url: "api/points?vis=false",
-        }).then(p => {
-            let points = [];
-            for (const sp of p.stampingPoints) {
-                const stampingPoint = app.createPin(sp)
-                points.push(stampingPoint);
-            }
-            points.forEach(p => p.vector.getSource().addFeature(p))
-        });
-        $.ajax({
-            type: "GET",
-            beforeSend: app.setRequestHeaders,
-            url: "api/points?vis=true",
-        }).then(p => {
-            let points = [];
-            for (const sp of p.stampingPoints) {
-                const stampingPoint = app.createPin(sp, true);
-                points.push(stampingPoint);
-            }
-            points.forEach(p => p.vector.getSource().addFeature(p))
-        });
-    } else {
-        $.ajax({
-            type: "GET",
-            url: "api/points",
-        }).then(p => {
-            let points = [];
-            for (const sp of p.stampingPoints) {
-                const stampingPoint = app.createPin(sp, false);
-                points.push(stampingPoint);
-            }
-            points.forEach(p => p.vector.getSource().addFeature(p))
-        });
-    }
 </script>
 </body>
 </html>

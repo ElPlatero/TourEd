@@ -4,6 +4,8 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Api.Authentication;
 using Api.Controllers.Auth;
+using Api.Controllers.Points;
+using Api.Dto;
 using Api.Repositories;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -25,6 +27,10 @@ namespace TourEd.Tests;
 
 public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 {
+    private const int VisitedPointNumber = 101;
+    private const int UnvisitedPointNumber = 102;
+    private const int WritablePointNumber = 103;
+    private const int OtherProviderPointNumber = 201;
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"toured-auth-tests-{Guid.NewGuid():N}.db");
     private readonly string _keysPath = Path.Combine(Path.GetTempPath(), $"toured-auth-keys-{Guid.NewGuid():N}");
     private TouredWebApplicationFactory _factory = null!;
@@ -35,7 +41,27 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         await using var scope = _factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<DataContext>();
         await context.Database.MigrateAsync();
-        context.Users.Add(new User { Email = FakeGoogleHandler.Email });
+        context.StampingProviders.Add(new StampingProvider
+        {
+            Id = 2,
+            Slug = "other",
+            Name = "Other provider"
+        });
+        var user = new User { Email = FakeGoogleHandler.Email };
+        var visitedPoint = CreatePoint(VisitedPointNumber, StampingProvider.TouringenId);
+        context.Users.Add(user);
+        context.StampingPoints.AddRange(
+            visitedPoint,
+            CreatePoint(UnvisitedPointNumber, StampingProvider.TouringenId),
+            CreatePoint(WritablePointNumber, StampingProvider.TouringenId),
+            CreatePoint(OtherProviderPointNumber, 2));
+        await context.SaveChangesAsync();
+        context.UserVisits.Add(new UserVisit
+        {
+            UserId = user.Id,
+            StampingPointId = visitedPoint.Id,
+            Visited = new DateTime(2026, 8, 28, 12, 0, 0, DateTimeKind.Utc)
+        });
         await context.SaveChangesAsync();
     }
 
@@ -166,6 +192,114 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CookieIdentityControlsDefaultProviderAndVisitedFilters()
+    {
+        using var client = CreateClient(_factory);
+        await LoginAsync(client);
+
+        var visitedResponse = await client.GetFromJsonAsync<GetStampingPointsResponse>("/api/points?vis=true");
+        var unvisitedResponse = await client.GetFromJsonAsync<GetStampingPointsResponse>("/api/points?vis=false");
+
+        Assert.NotNull(visitedResponse);
+        Assert.NotNull(unvisitedResponse);
+        var visitedPoints = visitedResponse.StampingPoints.ToArray();
+        var unvisitedPoints = unvisitedResponse.StampingPoints.ToArray();
+        Assert.Contains(visitedPoints, point => point.Number == VisitedPointNumber && point.Visited is not null);
+        Assert.DoesNotContain(unvisitedPoints, point => point.Number == VisitedPointNumber);
+        Assert.Contains(unvisitedPoints, point => point.Number == UnvisitedPointNumber && point.Visited is null);
+        Assert.DoesNotContain(visitedPoints.Concat(unvisitedPoints), point => point.Number == OtherProviderPointNumber);
+        Assert.All(visitedPoints.Concat(unvisitedPoints), point => Assert.Equal(StampingProvider.TouringenSlug, point.Provider.Slug));
+    }
+
+    [Fact]
+    public async Task AnonymousPointsRemainAvailableWhileBothVisitedFiltersRequireAuthentication()
+    {
+        using var client = CreateClient(_factory);
+
+        var anonymousResponse = await client.GetAsync("/api/points");
+        var visitedResponse = await client.GetAsync("/api/points?vis=true");
+        var unvisitedResponse = await client.GetAsync("/api/points?vis=false");
+
+        Assert.Equal(HttpStatusCode.OK, anonymousResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, visitedResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unvisitedResponse.StatusCode);
+        Assert.Null(visitedResponse.Headers.Location);
+        Assert.Null(unvisitedResponse.Headers.Location);
+    }
+
+    [Fact]
+    public async Task CookieSessionCanWriteVisitWhileAnonymousRequestIsRejected()
+    {
+        var visited = new DateTime(2026, 8, 28, 14, 30, 0, DateTimeKind.Utc);
+        using var anonymousClient = CreateClient(_factory);
+        var anonymousResponse = await anonymousClient.PutAsJsonAsync(
+            $"/api/points/{WritablePointNumber}",
+            new AddVisitRequest(true, visited));
+
+        using var cookieClient = CreateClient(_factory);
+        await LoginAsync(cookieClient);
+        var cookieResponse = await cookieClient.PutAsJsonAsync(
+            $"/api/points/{WritablePointNumber}",
+            new AddVisitRequest(true, visited));
+        var storedVisit = await cookieClient.GetFromJsonAsync<VisitDto>($"/api/points/{WritablePointNumber}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, cookieResponse.StatusCode);
+        Assert.NotNull(storedVisit);
+        Assert.Equal(visited, storedVisit.Visited);
+    }
+
+    [Fact]
+    public async Task BundledFrontendUsesSessionRoutesWithoutUserIdentityOrTokenStorage()
+    {
+        using var client = CreateClient(_factory);
+
+        var html = await client.GetStringAsync("/");
+        var normalizedHtml = html.ToLowerInvariant();
+
+        Assert.Contains("href=\"auth/login\"", normalizedHtml, StringComparison.Ordinal);
+        Assert.Contains("auth/session", normalizedHtml, StringComparison.Ordinal);
+        Assert.Contains("auth/logout", normalizedHtml, StringComparison.Ordinal);
+        Assert.Contains("api/points?vis=false", normalizedHtml, StringComparison.Ordinal);
+        Assert.Contains("api/points?vis=true", normalizedHtml, StringComparison.Ordinal);
+        Assert.Contains("window.history.replacestate", normalizedHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("userid", normalizedHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("toured-user", normalizedHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("localstorage", normalizedHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("sessionstorage", normalizedHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("authorization", normalizedHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("googlesubject", normalizedHtml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FrontendSessionFlowSupportsAnonymousLoginVisitsLogoutAndAnonymousAgain()
+    {
+        using var client = CreateClient(_factory);
+
+        var initialSession = await client.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        var initialPoints = await client.GetAsync("/api/points");
+        await LoginAsync(client);
+        var authenticatedSession = await client.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        var unvisitedPoints = await client.GetAsync("/api/points?vis=false");
+        var visitedPoints = await client.GetAsync("/api/points?vis=true");
+        var logout = await client.PostAsync("/auth/logout", content: null);
+        var finalSession = await client.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        var finalPoints = await client.GetAsync("/api/points");
+
+        Assert.NotNull(initialSession);
+        Assert.False(initialSession.Authenticated);
+        Assert.Equal(HttpStatusCode.OK, initialPoints.StatusCode);
+        Assert.NotNull(authenticatedSession);
+        Assert.True(authenticatedSession.Authenticated);
+        Assert.Equal(HttpStatusCode.OK, unvisitedPoints.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, visitedPoints.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+        Assert.NotNull(finalSession);
+        Assert.False(finalSession.Authenticated);
+        Assert.Equal(HttpStatusCode.OK, finalPoints.StatusCode);
+    }
+
+    [Fact]
     public async Task PublicGoogleCallbackIncludesConfiguredPathBase()
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"toured-path-base-{Guid.NewGuid():N}.db");
@@ -212,6 +346,17 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Redirect, callbackResponse.StatusCode);
         return callbackResponse;
     }
+
+    private static StampingPoint CreatePoint(int number, int providerId)
+        => new(
+            default,
+            $"Point {number}",
+            11.8m,
+            50.9m,
+            number,
+            number,
+            providerId,
+            $"test-{providerId}-{number}");
 
     private static void DeleteFile(string path)
     {
