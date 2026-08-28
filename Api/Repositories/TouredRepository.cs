@@ -208,8 +208,28 @@ public class TouredRepository : IUserService
     }
     
     
-    public Task<User?> GetUserOrDefaultAsync(string userEmail) 
-        => _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(p => p.Email.ToLower() == userEmail.Trim().ToLower());
+    public Task<User?> GetUserOrDefaultAsync(string userEmail, CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = userEmail.Trim().ToLowerInvariant();
+        return _dbContext.Users.AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Email.ToLower() == normalizedEmail, cancellationToken);
+    }
+
+    public Task<User?> GetUserByGoogleSubjectOrDefaultAsync(string googleSubject, CancellationToken cancellationToken = default)
+        => _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(p => p.GoogleSubject == googleSubject, cancellationToken);
+
+    public async Task<bool> TryBindGoogleSubjectAsync(int userId, string googleSubject, CancellationToken cancellationToken = default)
+    {
+        var updatedUsers = await _dbContext.Users
+            .Where(user => user.Id == userId &&
+                           user.GoogleSubject == null &&
+                           !_dbContext.Users.Any(other => other.GoogleSubject == googleSubject))
+            .ExecuteUpdateAsync(
+                properties => properties.SetProperty(user => user.GoogleSubject, googleSubject),
+                cancellationToken);
+
+        return updatedUsers == 1;
+    }
 
     public async Task<UserVisit?> GetUserVisitOrDefaultAsync(User currentUser, int stampingPointId) 
         => await _dbContext.UserVisits.FirstOrDefaultAsync(p => p.StampingPointId == stampingPointId && p.UserId == currentUser.Id);

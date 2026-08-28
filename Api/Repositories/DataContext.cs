@@ -79,6 +79,7 @@ public class DataContext : DbContext
             dto.HasKey(p => p.Id);
             dto.Property(p => p.Id).ValueGeneratedOnAdd();
             dto.Property(p => p.DefaultStampingProviderId).HasDefaultValue(StampingProvider.TouringenId);
+            dto.HasIndex(p => p.GoogleSubject).IsUnique();
             dto.HasOne(p => p.DefaultStampingProvider).WithMany().OnDelete(DeleteBehavior.Restrict);
             dto.HasMany(p => p.VisitedStampingPoints);
         });
