@@ -43,7 +43,7 @@ The file configures:
 - runtime user and group;
 - application, database, and backup paths;
 - systemd service name, .NET executable, and listen URL;
-- the public healthcheck used to decide success or rollback;
+- the public `HEALTH_URL`, which must end in `/health` and is used to decide success or rollback;
 - backup retention.
 
 The setup installs this file as root-owned mode `0600` at `/etc/toured-deploy.conf`. The deployment command refuses a configuration writable by group or others.
@@ -102,7 +102,7 @@ Open **Repository settings → Environments**, create or select the environment 
 - `TOURED_DEPLOY_USER`, matching `DEPLOY_USER` in the server config
 - `TOURED_DEPLOY_HOME`, matching `DEPLOY_HOME` in the server config
 - `TOURED_DEPLOY_RUNTIME`, derived from `uname -m` above
-- `TOURED_PUBLIC_URL`: URL of the externally hosted map
+- `TOURED_PUBLIC_URL`: public URL of the bundled map
 
 In the same `production` environment, add these environment secrets:
 
@@ -126,6 +126,9 @@ The server then:
 3. stops the configured service;
 4. backs up the complete previous application and SQLite database;
 5. installs the new application and applies EF Core migrations as the runtime user;
-6. starts the service and waits for the configured healthcheck.
+6. starts the service and waits for the configured `/health` readiness check;
+7. checks the sibling `/api/points` endpoint and `index.html` once as API and frontend smoke tests.
 
-If migration, startup, or health checking fails, the previous application and database are restored and the old service is restarted. Successful deployments retain the configured number of backups under `BACKUP_ROOT`.
+The API and frontend smoke-test URLs are derived from `HEALTH_URL`, so a value such as `https://server.example/toured/health` checks `https://server.example/toured/api/points` and `https://server.example/toured/index.html`. During rollback, the script waits for the points API instead of `/health`, which keeps rollback compatible with an older application version that does not yet provide the health endpoint.
+
+If migration, startup, readiness, or smoke checking fails, the previous application and database are restored and the old service is restarted. Successful deployments retain the configured number of backups under `BACKUP_ROOT`.

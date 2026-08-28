@@ -141,6 +141,9 @@ Point DTOs include provider info while preserving the existing number, name, pos
 
 Other endpoints:
 
+- `GET /health`
+  - Anonymous ASP.NET Core readiness endpoint.
+  - Returns healthy only when no EF Core migrations are pending and the seeded Touringen provider exists.
 - `GET /api/tours`
   - Exists for hiking tour queries.
   - Not currently used by the bundled HTML map.
@@ -172,18 +175,18 @@ The configured database connection is:
 Current verification baseline:
 
 - `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
-- `dotnet test --no-restore` runs provider-aware persistence and import tests after a fresh restore with the .NET 10 SDK.
+- `dotnet test --no-restore` runs provider-aware persistence, import, and readiness health-check tests after a fresh restore with the .NET 10 SDK.
 
 ## Deployment
 
 Production deployment is manual through `.github/workflows/deploy.yml` and only accepts runs from `master`.
 
 - GitHub `production` environment variables configure the SSH target, deployment account/home, public URL, and Linux runtime architecture.
-- Root-owned `/etc/toured-deploy.conf` configures runtime accounts, application/database/backup paths, service, .NET/listen settings, healthcheck, and retention.
+- Root-owned `/etc/toured-deploy.conf` configures runtime accounts, application/database/backup paths, service, .NET/listen settings, the public `/health` readiness URL, and retention.
 - `deploy/server/toured-deploy.conf.example` records the current production values without embedding them in deployment logic.
 - `deploy/server/toured-api.service.template` is rendered by the server setup from that configuration.
 
-The workflow builds and tests the solution, publishes the API together with the bundled frontend, creates the configured Linux EF migration bundle, and uploads a checksummed release. The root-owned server command stops the service, backs up the application and SQLite database, applies migrations as the configured runtime user, restarts the service, and restores both application and database if deployment or health checking fails.
+The workflow builds and tests the solution, publishes the API together with the bundled frontend, creates the configured Linux EF migration bundle, and uploads a checksummed release. The root-owned server command stops the service, backs up the application and SQLite database, applies migrations as the configured runtime user, restarts the service, waits for `/health`, and checks `/api/points` and `index.html` once as smoke tests. It restores both application and database if deployment, readiness, or smoke checking fails.
 
 Server bootstrap and operational details are documented in `docs/deployment.md`. The GitHub secrets are `TOURED_DEPLOY_SSH_PRIVATE_KEY` and `TOURED_DEPLOY_KNOWN_HOSTS`.
 
