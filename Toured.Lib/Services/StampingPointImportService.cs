@@ -13,7 +13,15 @@ public class StampingPointImportService : IImportService<StampingPoint>
             yield break;
         }
 
-        foreach (var rawStampPoint in inputData.SelectMany(p => p.Touren.SelectMany(q => q.StampPoints)).Union(inputData.SelectMany(p => p.OrphanedStampPoints)).DistinctBy(p => p.Id).OrderBy(p => p.StampPointNumber))
+        var normalizedStampingPoints = inputData
+            .SelectMany(p => p.Touren.SelectMany(q => q.StampPoints))
+            .Union(inputData.SelectMany(p => p.OrphanedStampPoints))
+            .DistinctBy(p => p.Id)
+            .GroupBy(p => p.StampPointNumber)
+            .Select(p => p.MaxBy(q => q.Id)!)
+            .OrderBy(p => p.StampPointNumber);
+
+        foreach (var rawStampPoint in normalizedStampingPoints)
         {
             yield return rawStampPoint.CreateStampingPoint();
         }

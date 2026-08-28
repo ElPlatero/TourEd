@@ -16,6 +16,48 @@ namespace Api.Migrations
         {
             migrationBuilder.Sql("PRAGMA foreign_keys = 0;", suppressTransaction: true);
 
+            migrationBuilder.Sql(
+                "CREATE TEMP TABLE ef_temp_StampingPointAliases AS " +
+                "SELECT source.Id AS SourceId, " +
+                "(SELECT MAX(candidate.Id) FROM StampingPoints AS candidate " +
+                "WHERE candidate.Number = source.Number) AS TargetId " +
+                "FROM StampingPoints AS source " +
+                "WHERE source.Id <> (SELECT MAX(candidate.Id) FROM StampingPoints AS candidate " +
+                "WHERE candidate.Number = source.Number);");
+
+            migrationBuilder.Sql(
+                "UPDATE UserVisit SET StampingPointId = " +
+                "(SELECT TargetId FROM ef_temp_StampingPointAliases " +
+                "WHERE SourceId = UserVisit.StampingPointId) " +
+                "WHERE StampingPointId IN (SELECT SourceId FROM ef_temp_StampingPointAliases);");
+
+            migrationBuilder.Sql(
+                "DELETE FROM UserVisit " +
+                "WHERE StampingPointId IN (SELECT TargetId FROM ef_temp_StampingPointAliases) " +
+                "AND Id NOT IN (SELECT MIN(candidate.Id) FROM UserVisit AS candidate " +
+                "WHERE candidate.StampingPointId = UserVisit.StampingPointId " +
+                "GROUP BY candidate.UserId);");
+
+            migrationBuilder.Sql(
+                "DELETE FROM SortedStampingPoint " +
+                "WHERE StampingPointId IN (SELECT SourceId FROM ef_temp_StampingPointAliases) " +
+                "AND EXISTS (SELECT 1 FROM ef_temp_StampingPointAliases AS alias " +
+                "JOIN SortedStampingPoint AS target " +
+                "ON target.StampingPointId = alias.TargetId " +
+                "AND target.Position = SortedStampingPoint.Position " +
+                "AND target.TourId = SortedStampingPoint.TourId " +
+                "WHERE alias.SourceId = SortedStampingPoint.StampingPointId);");
+
+            migrationBuilder.Sql(
+                "UPDATE SortedStampingPoint SET StampingPointId = " +
+                "(SELECT TargetId FROM ef_temp_StampingPointAliases " +
+                "WHERE SourceId = SortedStampingPoint.StampingPointId) " +
+                "WHERE StampingPointId IN (SELECT SourceId FROM ef_temp_StampingPointAliases);");
+
+            migrationBuilder.Sql(
+                "DELETE FROM StampingPoints " +
+                "WHERE Id IN (SELECT SourceId FROM ef_temp_StampingPointAliases);");
+
             migrationBuilder.CreateTable(
                 name: "ef_temp_StampingPoints",
                 columns: table => new
@@ -52,6 +94,8 @@ namespace Api.Migrations
             migrationBuilder.RenameTable(
                 name: "ef_temp_StampingPoints",
                 newName: "StampingPoints");
+
+            migrationBuilder.Sql("DROP TABLE ef_temp_StampingPointAliases;");
 
             migrationBuilder.Sql("PRAGMA foreign_keys = 1;", suppressTransaction: true);
 
