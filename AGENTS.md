@@ -33,6 +33,8 @@ The page calls the backend with relative URLs:
   - Used when `auth/session` reports an authenticated cookie session.
   - Returns visited points for that user.
 
+The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, and external frontend CDNs. Keep it synchronized whenever these data flows or their retention rules change.
+
 The frontend never reads or writes user ids, Google subjects, tokens, custom identity headers, local storage, or session storage. A `401` while loading authenticated point data returns the UI to anonymous mode without starting a login redirect.
 
 Optional `provider` query behavior on `GET api/points`:

@@ -6,5 +6,7 @@ riderModule.iml
 .idea/
 **/*.db*
 **/wwwroot/
+!Api/wwwroot/
+!Api/wwwroot/**
 */*.service*
 */*appsettings.Development.json

@@ -307,6 +307,22 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PrivacyNoticeIsPublicLinkedAndExcludedFromSearchIndexing()
+    {
+        using var client = CreateClient(_factory);
+
+        var frontend = await client.GetStringAsync("/");
+        var privacyResponse = await client.GetAsync("/datenschutz/");
+        var privacyNotice = await privacyResponse.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
+        Assert.Contains("href=\"datenschutz/\"", frontend, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dsgvo@baelgun.de", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task FrontendSessionFlowSupportsAnonymousLoginVisitsLogoutAndAnonymousAgain()
     {
         using var client = CreateClient(_factory);
@@ -345,8 +361,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             using var client = CreateClient(factory);
 
             var response = await client.GetAsync("/toured/auth/login");
+            var privacyResponse = await client.GetAsync("/toured/datenschutz/");
 
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
             Assert.NotNull(response.Headers.Location);
             var query = QueryHelpers.ParseQuery(response.Headers.Location.Query);
             Assert.Equal("https://localhost/toured/signin-google", query["redirect_uri"]);
