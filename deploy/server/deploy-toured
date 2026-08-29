@@ -92,7 +92,8 @@ runtime_env_mode="$(stat --format '%a' "$RUNTIME_ENV_FILE")"
 (( (8#$runtime_env_mode & 0077) == 0 )) || \
     fail "Runtime environment file must not be accessible by group or others"
 for environment_key in Authentication__Google__ClientId Authentication__Google__ClientSecret \
-    Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath; do
+    Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath \
+    ASPNETCORE_FORWARDEDHEADERS_ENABLED touringen__StempelstellenUri; do
     awk -F= -v key="$environment_key" \
         '$1 == key && length($0) > length(key) + 1 { count++ } END { exit count == 1 ? 0 : 1 }' \
         "$RUNTIME_ENV_FILE" || \
@@ -100,6 +101,10 @@ for environment_key in Authentication__Google__ClientId Authentication__Google__
 done
 grep -Fqx "DataProtection__KeysPath=$DATA_PROTECTION_KEYS_DIR" "$RUNTIME_ENV_FILE" || \
     fail "DataProtection__KeysPath must equal configured DATA_PROTECTION_KEYS_DIR"
+grep -Fqx 'ASPNETCORE_FORWARDEDHEADERS_ENABLED=true' "$RUNTIME_ENV_FILE" || \
+    fail "ASPNETCORE_FORWARDEDHEADERS_ENABLED must be true"
+grep -Fqx 'touringen__StempelstellenUri=https://www.touringen.de/stempelstellen' "$RUNTIME_ENV_FILE" || \
+    fail "touringen__StempelstellenUri must use the supported Touringen source URL"
 [[ -d "$DATA_PROTECTION_KEYS_DIR" && ! -L "$DATA_PROTECTION_KEYS_DIR" ]] || \
     fail "Data-Protection keys directory is missing or is a symlink: $DATA_PROTECTION_KEYS_DIR"
 [[ "$(stat --format '%u' "$DATA_PROTECTION_KEYS_DIR")" == "$(id -u "$RUNTIME_USER")" ]] || \

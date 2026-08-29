@@ -110,7 +110,8 @@ if (( (8#$runtime_env_mode & 0077) != 0 )); then
 fi
 
 for environment_key in Authentication__Google__ClientId Authentication__Google__ClientSecret \
-    Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath; do
+    Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath \
+    ASPNETCORE_FORWARDEDHEADERS_ENABLED touringen__StempelstellenUri; do
     if ! awk -F= -v key="$environment_key" \
         '$1 == key && length($0) > length(key) + 1 { count++ } END { exit count == 1 ? 0 : 1 }' \
         "$RUNTIME_ENV_FILE"; then
@@ -120,6 +121,14 @@ for environment_key in Authentication__Google__ClientId Authentication__Google__
 done
 if ! grep -Fqx "DataProtection__KeysPath=$DATA_PROTECTION_KEYS_DIR" "$RUNTIME_ENV_FILE"; then
     printf 'DataProtection__KeysPath must equal configured DATA_PROTECTION_KEYS_DIR.\n' >&2
+    exit 1
+fi
+if ! grep -Fqx 'ASPNETCORE_FORWARDEDHEADERS_ENABLED=true' "$RUNTIME_ENV_FILE"; then
+    printf 'ASPNETCORE_FORWARDEDHEADERS_ENABLED must be true.\n' >&2
+    exit 1
+fi
+if ! grep -Fqx 'touringen__StempelstellenUri=https://www.touringen.de/stempelstellen' "$RUNTIME_ENV_FILE"; then
+    printf 'touringen__StempelstellenUri must use the supported Touringen source URL.\n' >&2
     exit 1
 fi
 if [[ -e "$DATA_PROTECTION_KEYS_DIR" && ( ! -d "$DATA_PROTECTION_KEYS_DIR" || -L "$DATA_PROTECTION_KEYS_DIR" ) ]]; then

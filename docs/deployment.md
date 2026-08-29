@@ -63,7 +63,7 @@ The Google account must have a verified email matching an existing, unbound Tour
 
 ## Configure the runtime environment
 
-The root-owned runtime environment file contains the Google credentials, CLI identity, public path base, and persistent Data-Protection location. None of these values belongs in the repository, release artifact, visible systemd unit, pull request, issue, or chat.
+The root-owned runtime environment file contains the Google credentials, CLI identity, public path base, persistent Data-Protection location, reverse-proxy forwarding switch, and Touringen import source. None of the secret values belongs in the repository, release artifact, visible systemd unit, pull request, issue, or chat.
 
 Generate a 256-bit CLI token on the server and enter the Google secret without placing either literal in shell history. The CLI email must already exist in the TourEd database:
 
@@ -73,20 +73,35 @@ TOURED_CLI_USER_EMAIL='existing-user@example.com'
 TOURED_CLI_TOKEN="$(openssl rand -hex 32)"
 read -rsp 'Google client secret: ' TOURED_GOOGLE_CLIENT_SECRET
 printf '\n'
-printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecret=%s\nAuthentication__Cli__UserEmail=%s\nAuthentication__Cli__Token=%s\nPathBase=%s\nDataProtection__KeysPath=%s\n' \
+printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecret=%s\nAuthentication__Cli__UserEmail=%s\nAuthentication__Cli__Token=%s\nPathBase=%s\nDataProtection__KeysPath=%s\nASPNETCORE_FORWARDEDHEADERS_ENABLED=%s\ntouringen__StempelstellenUri=%s\n' \
     "$TOURED_GOOGLE_CLIENT_ID" \
     "$TOURED_GOOGLE_CLIENT_SECRET" \
     "$TOURED_CLI_USER_EMAIL" \
     "$TOURED_CLI_TOKEN" \
     '/toured' \
     '/srv/toured/data-protection-keys' \
+    'true' \
+    'https://www.touringen.de/stempelstellen' \
     | sudo tee /etc/toured-api.env >/dev/null
 sudo chown root:root /etc/toured-api.env
 sudo chmod 0600 /etc/toured-api.env
 unset TOURED_GOOGLE_CLIENT_SECRET
 ```
 
-`DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` has no trailing slash. The reverse proxy must preserve the `/toured` prefix and send the original host and HTTPS protocol through forwarded headers.
+`DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` has no trailing slash. `touringen__StempelstellenUri` supplies the source used by the terminal-driven Touringen import.
+
+The reverse proxy must preserve the `/toured` prefix and send the original host and HTTPS protocol through forwarded headers. For nginx, a location with a path base uses `proxy_pass` without a trailing slash:
+
+```nginx
+location /toured/ {
+    proxy_pass http://private-backend:5000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+`ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` lets ASP.NET Core accept those proxy headers when the proxy is not on loopback, such as nginx in Docker. Because this mode accepts forwarded headers from any immediate peer, the configured `LISTEN_URL` must expose Kestrel only to the trusted proxy host or private network and never directly to the public internet.
 
 The server setup validates that the environment file is a regular root-owned file inaccessible to group and others, requires every expected setting exactly once, creates the persistent key directory for the runtime user with mode `0700`, and renders the environment-file path into the systemd unit.
 
