@@ -11,6 +11,7 @@
 *.config text eol=crlf
 *.service text eol=crlf
 *.template text eol=crlf
+.gitignore text eol=crlf
 
 # Executable and sourced server files require Unix line endings.
 deploy/server/deploy-toured text eol=lf
