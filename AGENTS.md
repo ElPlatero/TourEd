@@ -121,7 +121,7 @@ Authentication endpoints:
 - `GET /auth/session` returns anonymous/authenticated state and the authenticated email only.
 - `POST /auth/logout` removes the TourEd session cookie.
 
-Runtime authentication configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, `Authentication__Cli__UserEmail`, `Authentication__Cli__Token`, `PathBase`, and `DataProtection__KeysPath`. Production values belong in the root-protected runtime environment file configured by `RUNTIME_ENV_FILE`, not in appsettings or the visible systemd unit. Server setup validates the required entries and creates the configured persistent Data-Protection directory outside the replaceable application release for the runtime user only.
+Runtime configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, `Authentication__Cli__UserEmail`, `Authentication__Cli__Token`, `PathBase`, `DataProtection__KeysPath`, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, and `touringen__StempelstellenUri=https://www.touringen.de/stempelstellen`. Production values belong in the root-protected runtime environment file configured by `RUNTIME_ENV_FILE`, not in appsettings or the visible systemd unit. Server setup validates the required entries and creates the configured persistent Data-Protection directory outside the replaceable application release for the runtime user only. Kestrel must listen only on the trusted proxy host or private network when forwarded headers are globally enabled.
 
 ## Data Import
 
