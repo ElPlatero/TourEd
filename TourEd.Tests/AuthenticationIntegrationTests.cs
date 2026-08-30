@@ -78,7 +78,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         {
             UserId = user.Id,
             StampingPointId = visitedPoint.Id,
-            Visited = new DateTime(2026, 8, 28, 12, 0, 0, DateTimeKind.Utc)
+            Visited = new DateTime(2026, 8, 28, 12, 0, 0, DateTimeKind.Utc),
+            HasVisitedTime = true
         });
         await context.SaveChangesAsync();
     }
@@ -197,7 +198,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var headerVisit = await removedHeaderClient.GetAsync($"/api/points/{VisitedPointNumber}");
         var headerWrite = await removedHeaderClient.PutAsJsonAsync(
             $"/api/points/{WritablePointNumber}",
-            new AddVisitRequest(true, DateTime.UtcNow));
+            new SaveVisitRequest(null, null));
 
         using var queryClient = CreateClient(_factory);
         var queryLogin = await queryClient.GetAsync(
@@ -233,7 +234,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var visit = await client.GetAsync($"/api/points/{VisitedPointNumber}");
         var write = await client.PutAsJsonAsync(
             $"/api/points/{WritablePointNumber}",
-            new AddVisitRequest(true, DateTime.UtcNow));
+            new SaveVisitRequest(null, null));
 
         Assert.NotNull(session);
         Assert.False(session.Authenticated);
@@ -255,9 +256,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.NotNull(unvisitedResponse);
         var visitedPoints = visitedResponse.StampingPoints.ToArray();
         var unvisitedPoints = unvisitedResponse.StampingPoints.ToArray();
-        Assert.Contains(visitedPoints, point => point.Number == VisitedPointNumber && point.Visited is not null);
+        Assert.Contains(visitedPoints, point => point.Number == VisitedPointNumber && point.IsVisited && point.VisitedAt is not null);
         Assert.DoesNotContain(unvisitedPoints, point => point.Number == VisitedPointNumber);
-        Assert.Contains(unvisitedPoints, point => point.Number == UnvisitedPointNumber && point.Visited is null);
+        Assert.Contains(unvisitedPoints, point => point.Number == UnvisitedPointNumber && !point.IsVisited);
         Assert.DoesNotContain(visitedPoints.Concat(unvisitedPoints), point => point.Number == OtherProviderPointNumber);
         Assert.All(visitedPoints.Concat(unvisitedPoints), point => Assert.Equal(StampingProvider.TouringenSlug, point.Provider.Slug));
     }
@@ -306,13 +307,13 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.NotNull(visitedResponse);
         Assert.NotNull(unvisitedResponse);
         Assert.Contains(visitedResponse.StampingPoints, point =>
-            point.Number == VisitedPointNumber && point.Visited is not null);
+            point.Number == VisitedPointNumber && point.IsVisited && point.VisitedAt is not null);
         Assert.Contains(unvisitedResponse.StampingPoints, point =>
-            point.Provider.Slug == "other" && point.Number == OtherProviderPointNumber && point.Visited is null);
+            point.Provider.Slug == "other" && point.Number == OtherProviderPointNumber && !point.IsVisited);
         Assert.Contains(unvisitedResponse.StampingPoints, point =>
             point.Provider.Slug == StampingProvider.HarzerWandernadelSlug &&
             point.Provider.Abbreviation == "HWN" &&
-            point.Number == RestrictedProviderPointNumber && point.Visited is null);
+            point.Number == RestrictedProviderPointNumber && !point.IsVisited);
         Assert.DoesNotContain(unvisitedResponse.StampingPoints, point => point.Number == VisitedPointNumber);
     }
 
@@ -350,25 +351,82 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CookieSessionCanWriteVisitWhileAnonymousRequestIsRejected()
+    public async Task CookieSessionCanCreateEditAndDeleteVisitWithOptionalTimestamp()
     {
-        var visited = new DateTime(2026, 8, 28, 14, 30, 0, DateTimeKind.Utc);
+        var endpoint = $"/api/points/{WritablePointNumber}?provider={StampingProvider.TouringenSlug}";
         using var anonymousClient = CreateClient(_factory);
         var anonymousResponse = await anonymousClient.PutAsJsonAsync(
-            $"/api/points/{WritablePointNumber}",
-            new AddVisitRequest(true, visited));
+            endpoint,
+            new SaveVisitRequest(null, null));
+        var anonymousPatchResponse = await anonymousClient.PatchAsJsonAsync(
+            endpoint,
+            new SaveVisitRequest(null, null));
+        var anonymousDeleteResponse = await anonymousClient.DeleteAsync(endpoint);
 
         using var cookieClient = CreateClient(_factory);
         await LoginAsync(cookieClient);
-        var cookieResponse = await cookieClient.PutAsJsonAsync(
-            $"/api/points/{WritablePointNumber}",
-            new AddVisitRequest(true, visited));
-        var storedVisit = await cookieClient.GetFromJsonAsync<VisitDto>($"/api/points/{WritablePointNumber}");
+        var createResponse = await cookieClient.PutAsJsonAsync(endpoint, new SaveVisitRequest(null, null));
+        var visitWithoutDate = await cookieClient.GetFromJsonAsync<VisitDto>(endpoint);
+        var visitedPointsWithoutDate = await cookieClient.GetFromJsonAsync<GetStampingPointsResponse>(
+            $"/api/points?provider={StampingProvider.TouringenSlug}&vis=true");
+        var duplicateResponse = await cookieClient.PutAsJsonAsync(endpoint, new SaveVisitRequest(null, null));
+
+        var visitedOn = new DateOnly(2026, 8, 28);
+        var dateOnlyResponse = await cookieClient.PatchAsJsonAsync(endpoint, new SaveVisitRequest(visitedOn, null));
+        var dateOnlyVisit = await cookieClient.GetFromJsonAsync<VisitDto>(endpoint);
+
+        var visitedAt = new TimeOnly(14, 30);
+        var dateAndTimeResponse = await cookieClient.PatchAsJsonAsync(endpoint, new SaveVisitRequest(visitedOn, visitedAt));
+        var datedVisit = await cookieClient.GetFromJsonAsync<VisitDto>(endpoint);
+
+        var deleteResponse = await cookieClient.DeleteAsync(endpoint);
+        var deletedVisit = await cookieClient.GetFromJsonAsync<VisitDto>(endpoint);
+        var repeatedDeleteResponse = await cookieClient.DeleteAsync(endpoint);
 
         Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, cookieResponse.StatusCode);
-        Assert.NotNull(storedVisit);
-        Assert.Equal(visited, storedVisit.Visited);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousPatchResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousDeleteResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, createResponse.StatusCode);
+        Assert.NotNull(visitWithoutDate);
+        Assert.True(visitWithoutDate.IsVisited);
+        Assert.Null(visitWithoutDate.VisitedOn);
+        Assert.Null(visitWithoutDate.VisitedAt);
+        Assert.True(visitWithoutDate.StampingPoint.IsVisited);
+        Assert.NotNull(visitedPointsWithoutDate);
+        Assert.Contains(visitedPointsWithoutDate.StampingPoints, point =>
+            point.Number == WritablePointNumber && point.IsVisited && point.VisitedOn is null && point.VisitedAt is null);
+        Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, dateOnlyResponse.StatusCode);
+        Assert.NotNull(dateOnlyVisit);
+        Assert.True(dateOnlyVisit.IsVisited);
+        Assert.Equal(visitedOn, dateOnlyVisit.VisitedOn);
+        Assert.Null(dateOnlyVisit.VisitedAt);
+        Assert.Equal(HttpStatusCode.NoContent, dateAndTimeResponse.StatusCode);
+        Assert.NotNull(datedVisit);
+        Assert.Equal(visitedOn, datedVisit.VisitedOn);
+        Assert.Equal(visitedAt, datedVisit.VisitedAt);
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+        Assert.NotNull(deletedVisit);
+        Assert.False(deletedVisit.IsVisited);
+        Assert.Null(deletedVisit.VisitedOn);
+        Assert.Null(deletedVisit.VisitedAt);
+        Assert.Equal(HttpStatusCode.NotFound, repeatedDeleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task VisitTimestampValidationRejectsTimeWithoutDateAndFutureValues()
+    {
+        using var client = CreateClient(_factory);
+        await LoginAsync(client);
+        var endpoint = $"/api/points/{WritablePointNumber}?provider={StampingProvider.TouringenSlug}";
+
+        var timeOnlyResponse = await client.PutAsJsonAsync(endpoint, new SaveVisitRequest(null, new TimeOnly(10, 30)));
+        var futureResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SaveVisitRequest(DateOnly.FromDateTime(DateTime.Now.AddDays(2)), null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, timeOnlyResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, futureResponse.StatusCode);
     }
 
     [Fact]
@@ -498,6 +556,41 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BundledFrontendSupportsAccessibleVisitCreationEditingAndConfirmedDeletion()
+    {
+        using var client = CreateClient(_factory);
+
+        var html = await client.GetStringAsync("/");
+        var css = await client.GetStringAsync("/css/toured.css");
+        var script = await client.GetStringAsync("/js/toured.js");
+
+        Assert.Contains("id=\"visitNowButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Jetzt als besucht eintragen", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"openVisitFormButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"editVisitButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Datum und Uhrzeit bearbeiten", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"visitedOnInput\" name=\"visitedOn\" type=\"date\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"visitedAtInput\" name=\"visitedAt\" type=\"time\" disabled", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Ohne Angaben wird nur gespeichert", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"deleteVisitDialog\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Besuch endgültig löschen", html, StringComparison.Ordinal);
+        Assert.Contains("role=\"status\" aria-live=\"polite\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(".visit-controls", css, StringComparison.Ordinal);
+        Assert.Contains("min-height: 2.75rem", css, StringComparison.Ordinal);
+        Assert.Contains("saveVisit(\"PUT\"", script, StringComparison.Ordinal);
+        Assert.Contains("?provider=${provider}", script, StringComparison.Ordinal);
+        Assert.Contains("? \"PATCH\" : \"PUT\"", script, StringComparison.Ordinal);
+        Assert.Contains("sendVisitRequest(\"DELETE\"", script, StringComparison.Ordinal);
+        Assert.Contains("elements.deleteVisitDialog.showModal()", script, StringComparison.Ordinal);
+        Assert.Contains("wirklich gelöscht werden", script, StringComparison.Ordinal);
+        Assert.Contains("stampingPoint.isVisited = isVisited", script, StringComparison.Ordinal);
+        Assert.Contains("stampingPoint.visitedOn = visitedOn", script, StringComparison.Ordinal);
+        Assert.Contains("stampingPoint.visitedAt = visitedAt", script, StringComparison.Ordinal);
+        Assert.Contains("elements.visitLoginLink.hidden", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task PrivacyNoticeIsPublicLinkedAndExcludedFromSearchIndexing()
     {
         using var client = CreateClient(_factory);
@@ -517,6 +610,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("Beim bewussten Öffnen eines externen Anbieterlinks", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("ausschließlich für angemeldete, zuvor freigeschaltete TourEd-Benutzer sichtbar", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("keine Konto- oder Besuchsdaten an den Stempelanbieter übermittelt", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Ein Besuch kann auch ohne Datum und Uhrzeit eingetragen werden", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("den einzelnen Besuch nach einer Bestätigung vollständig löschen", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
     }
 

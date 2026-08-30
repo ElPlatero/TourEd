@@ -2,8 +2,13 @@ using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Dto;
 
-public record VisitDto(DateTime? Visited, StampingPointDto StampingPoint)
+public record VisitDto(bool IsVisited, DateOnly? VisitedOn, TimeOnly? VisitedAt, StampingPointDto StampingPoint)
 {
-    public bool IsVisited => Visited.HasValue;
-    public static VisitDto Create(UserVisit? visit, StampingPointDto stampingPoint) => new(visit?.Visited, stampingPoint);
+    public static VisitDto Create(UserVisit? visit, StampingPointDto stampingPoint) => new(
+        visit is not null,
+        visit?.Visited is { } visited ? DateOnly.FromDateTime(visited) : null,
+        visit is { Visited: { } visitedWithTime, HasVisitedTime: true }
+            ? TimeOnly.FromDateTime(visitedWithTime)
+            : null,
+        stampingPoint);
 }

@@ -105,7 +105,8 @@ public partial class ImportManager : IImportManager
             {
                 StampingPointId = stampingPoint.Id,
                 UserId = user.Id,
-                Visited = visit.Visited
+                Visited = visit.Visited,
+                HasVisitedTime = visit.Visited.HasValue
             });
         }
 

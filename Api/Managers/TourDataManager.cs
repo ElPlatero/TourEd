@@ -43,10 +43,27 @@ public class TourDataManager
         return (stampingPoint, userVisit);
     }
 
-    public async Task AddVisitAsync(User currentUser, int stampingPointNumber, DateTime? visited, string? providerSlug = null)
+    public async Task AddVisitAsync(User currentUser, int stampingPointNumber, DateOnly? visitedOn, TimeOnly? visitedAt, string? providerSlug = null)
     {
         var providerFilter = await _repository.GetStampingProviderFilterAsync(providerSlug, currentUser.Id);
         var stampingPoint = await _repository.GetStampingPointAsync(stampingPointNumber, providerFilter);
-        await _repository.AddUserVisitAsync(currentUser, stampingPoint.Id, visited);
+        await _repository.AddUserVisitAsync(currentUser, stampingPoint.Id, CreateVisited(visitedOn, visitedAt), visitedAt.HasValue);
     }
+
+    public async Task UpdateVisitAsync(User currentUser, int stampingPointNumber, DateOnly? visitedOn, TimeOnly? visitedAt, string? providerSlug = null)
+    {
+        var providerFilter = await _repository.GetStampingProviderFilterAsync(providerSlug, currentUser.Id);
+        var stampingPoint = await _repository.GetStampingPointAsync(stampingPointNumber, providerFilter);
+        await _repository.UpdateUserVisitAsync(currentUser, stampingPoint.Id, CreateVisited(visitedOn, visitedAt), visitedAt.HasValue);
+    }
+
+    public async Task DeleteVisitAsync(User currentUser, int stampingPointNumber, string? providerSlug = null)
+    {
+        var providerFilter = await _repository.GetStampingProviderFilterAsync(providerSlug, currentUser.Id);
+        var stampingPoint = await _repository.GetStampingPointAsync(stampingPointNumber, providerFilter);
+        await _repository.DeleteUserVisitAsync(currentUser, stampingPoint.Id);
+    }
+
+    private static DateTime? CreateVisited(DateOnly? visitedOn, TimeOnly? visitedAt)
+        => visitedOn?.ToDateTime(visitedAt ?? TimeOnly.MinValue);
 }
