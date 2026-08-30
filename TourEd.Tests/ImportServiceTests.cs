@@ -38,6 +38,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("20260626010000_AddProviderFieldsToStampingPoints", migrations);
         Assert.Contains("20260830132352_UpdateStampingProviderMetadata", migrations);
         Assert.Contains("20260830150127_AddHarzerWandernadelProvider", migrations);
+        Assert.Contains("20260830184653_SupportOptionalVisitTimestamps", migrations);
         var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
         Assert.Equal(2, providers.Length);
         Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);
@@ -138,6 +139,7 @@ public sealed class ImportServiceTests : IDisposable
 
         var visit = await context.UserVisits.AsNoTracking().SingleAsync();
         Assert.Equal(99, visit.StampingPointId);
+        Assert.True(visit.HasVisitedTime);
 
         var tourPointIds = await context.StampingPointsInTours.AsNoTracking()
             .Select(p => p.StampingPointId)
@@ -230,6 +232,7 @@ public sealed class ImportServiceTests : IDisposable
         var visit = Assert.Single(await context.UserVisits.AsNoTracking().ToListAsync());
         Assert.Equal(otherPoint.Id, visit.StampingPointId);
         Assert.Equal(new DateTime(2026, 2, 1, 12, 30, 0), visit.Visited);
+        Assert.True(visit.HasVisitedTime);
     }
 
     [Fact]
@@ -244,7 +247,7 @@ public sealed class ImportServiceTests : IDisposable
         var user = new User { Email = "hwn@example.test" };
         context.Users.Add(user);
         await context.SaveChangesAsync();
-        await repository.AddUserVisitAsync(user, existing45.Id, new DateTime(2026, 8, 30, 12, 0, 0));
+        await repository.AddUserVisitAsync(user, existing45.Id, new DateTime(2026, 8, 30, 12, 0, 0), true);
         var updated45 = CreatePoint("Updated 45", StampingProvider.HarzerWandernadelId, "HWN045", 45);
         var manager = CreateImportManager(context, repository, null, null, [updated45]);
 

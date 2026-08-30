@@ -104,6 +104,35 @@
         <p id="pointStatus" class="point-status"></p>
         <div id="pointTours"></div>
         <time id="pointVisited" class="point-visited" hidden></time>
+        <div id="visitControls" class="visit-controls" hidden>
+            <a id="visitLoginLink" class="action" href="auth/login" hidden>Anmelden, um Besuch einzutragen</a>
+            <div id="newVisitActions" class="visit-actions" hidden>
+                <button id="visitNowButton" class="action action--primary" type="button">Jetzt als besucht eintragen</button>
+                <button id="openVisitFormButton" class="action" type="button">Besuch nachtragen</button>
+            </div>
+            <div id="existingVisitActions" class="visit-actions" hidden>
+                <button id="editVisitButton" class="action" type="button">Datum und Uhrzeit bearbeiten</button>
+                <button id="deleteVisitButton" class="action action--danger" type="button">Besuch löschen</button>
+            </div>
+            <form id="visitForm" class="visit-form" hidden novalidate>
+                <div class="visit-fields">
+                    <label for="visitedOnInput">
+                        Datum <span>(optional)</span>
+                        <input id="visitedOnInput" name="visitedOn" type="date" />
+                    </label>
+                    <label for="visitedAtInput">
+                        Uhrzeit <span>(optional)</span>
+                        <input id="visitedAtInput" name="visitedAt" type="time" disabled />
+                    </label>
+                </div>
+                <p class="visit-form__hint">Ohne Angaben wird nur gespeichert, dass du den Stempel besucht hast.</p>
+                <div class="visit-form__actions">
+                    <button id="saveVisitButton" class="action action--primary" type="submit">Besuch speichern</button>
+                    <button id="cancelVisitButton" class="action" type="button">Abbrechen</button>
+                </div>
+            </form>
+            <p id="visitActionStatus" class="visit-action-status" role="status" aria-live="polite"></p>
+        </div>
     </section>
 
     <dialog id="providerInfoDialog" class="provider-info-dialog" aria-labelledby="providerInfoName" aria-describedby="providerInfoDescription providerInfoDisclaimer">
@@ -116,6 +145,18 @@
         <p id="providerInfoDisclaimer" class="provider-disclaimer">
             TourEd ist ein unabhängiges Projekt und steht in keiner geschäftlichen oder organisatorischen Verbindung zu diesem Anbieter.
         </p>
+    </dialog>
+
+    <dialog id="deleteVisitDialog" class="provider-info-dialog delete-visit-dialog" aria-labelledby="deleteVisitTitle" aria-describedby="deleteVisitMessage">
+        <div class="provider-info-dialog__header">
+            <h2 id="deleteVisitTitle">Besuch löschen?</h2>
+            <button id="closeDeleteVisitButton" class="icon-button" type="button" aria-label="Löschen abbrechen">×</button>
+        </div>
+        <p id="deleteVisitMessage"></p>
+        <div class="delete-visit-actions">
+            <button id="confirmDeleteVisitButton" class="action action--danger" type="button">Besuch endgültig löschen</button>
+            <button id="cancelDeleteVisitButton" class="action" type="button">Abbrechen</button>
+        </div>
     </dialog>
 </main>
 </body>

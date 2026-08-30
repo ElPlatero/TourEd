@@ -60,7 +60,7 @@ public class PointsController : ControllerBase
         try
         {
             var (stampingPoint, userVisit) = await _manager.GetVisitAsync(currentUser, stampingPointNumber, provider);
-            return Ok(new GetVisitResult(VisitDto.Create(userVisit, StampingPointDto.Create(stampingPoint))));
+            return Ok(new GetVisitResult(VisitDto.Create(userVisit, StampingPointDto.Create(stampingPoint, userVisit))));
         }
         catch (EntityNotFoundException)
         {
@@ -74,7 +74,7 @@ public class PointsController : ControllerBase
 
     [Authorize]
     [HttpPut("{stampingPointNumber:int:min(1)}")]
-    public async Task<IActionResult> AddVisit(int stampingPointNumber, [FromBody] AddVisitRequest request, [FromQuery] string? provider = null)
+    public async Task<IActionResult> AddVisit(int stampingPointNumber, [FromBody] SaveVisitRequest request, [FromQuery] string? provider = null)
     {
         if (!User.TryGetUser(out var currentUser))
         {
@@ -83,7 +83,7 @@ public class PointsController : ControllerBase
 
         try
         {
-            await _manager.AddVisitAsync(currentUser, stampingPointNumber, request.Visited, provider);
+            await _manager.AddVisitAsync(currentUser, stampingPointNumber, request.VisitedOn, request.VisitedAt, provider);
             return NoContent();
         }
         catch (EntityNotFoundException)
@@ -97,6 +97,54 @@ public class PointsController : ControllerBase
         catch (InvalidOperationException)
         {
             return Conflict();
+        }
+    }
+
+    [Authorize]
+    [HttpPatch("{stampingPointNumber:int:min(1)}")]
+    public async Task<IActionResult> UpdateVisit(int stampingPointNumber, [FromBody] SaveVisitRequest request, [FromQuery] string? provider = null)
+    {
+        if (!User.TryGetUser(out var currentUser))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            await _manager.UpdateVisitAsync(currentUser, stampingPointNumber, request.VisitedOn, request.VisitedAt, provider);
+            return NoContent();
+        }
+        catch (EntityNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (NotSupportedException)
+        {
+            return BadRequest();
+        }
+    }
+
+    [Authorize]
+    [HttpDelete("{stampingPointNumber:int:min(1)}")]
+    public async Task<IActionResult> DeleteVisit(int stampingPointNumber, [FromQuery] string? provider = null)
+    {
+        if (!User.TryGetUser(out var currentUser))
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            await _manager.DeleteVisitAsync(currentUser, stampingPointNumber, provider);
+            return NoContent();
+        }
+        catch (EntityNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (NotSupportedException)
+        {
+            return BadRequest();
         }
     }
     

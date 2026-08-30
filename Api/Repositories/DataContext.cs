@@ -101,6 +101,7 @@ public class DataContext : DbContext
             dto.HasKey(p => p.Id);
             dto.Property(p => p.Id).ValueGeneratedOnAdd();
             dto.Property(p => p.EntryCreated).HasDefaultValueSql("datetime('now')");
+            dto.HasIndex(p => new { p.UserId, p.StampingPointId }).IsUnique();
         });
     }
 }

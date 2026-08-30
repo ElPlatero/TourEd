@@ -4,14 +4,25 @@
     const elements = {
         accountMenuButton: document.getElementById("accountMenuButton"),
         accountPanel: document.getElementById("accountPanel"),
+        cancelDeleteVisitButton: document.getElementById("cancelDeleteVisitButton"),
+        cancelVisitButton: document.getElementById("cancelVisitButton"),
+        closeDeleteVisitButton: document.getElementById("closeDeleteVisitButton"),
         closeInfoButton: document.getElementById("closeInfoButton"),
         closeProviderInfoButton: document.getElementById("closeProviderInfoButton"),
+        confirmDeleteVisitButton: document.getElementById("confirmDeleteVisitButton"),
+        deleteVisitButton: document.getElementById("deleteVisitButton"),
+        deleteVisitDialog: document.getElementById("deleteVisitDialog"),
+        deleteVisitMessage: document.getElementById("deleteVisitMessage"),
+        editVisitButton: document.getElementById("editVisitButton"),
+        existingVisitActions: document.getElementById("existingVisitActions"),
         infoCard: document.getElementById("infoCard"),
         loginLink: document.getElementById("loginLink"),
         logoutButton: document.getElementById("logoutButton"),
         map: document.getElementById("map"),
         mapLegend: document.getElementById("mapLegend"),
         mapStatus: document.getElementById("mapStatus"),
+        newVisitActions: document.getElementById("newVisitActions"),
+        openVisitFormButton: document.getElementById("openVisitFormButton"),
         pointName: document.getElementById("pointName"),
         pointNumber: document.getElementById("pointNumber"),
         pointProvider: document.getElementById("pointProvider"),
@@ -29,7 +40,14 @@
         selectAllProvidersButton: document.getElementById("selectAllProvidersButton"),
         selectNoProvidersButton: document.getElementById("selectNoProvidersButton"),
         sessionStatus: document.getElementById("sessionStatus"),
-        userSession: document.getElementById("userSession")
+        userSession: document.getElementById("userSession"),
+        visitActionStatus: document.getElementById("visitActionStatus"),
+        visitControls: document.getElementById("visitControls"),
+        visitedAtInput: document.getElementById("visitedAtInput"),
+        visitedOnInput: document.getElementById("visitedOnInput"),
+        visitForm: document.getElementById("visitForm"),
+        visitLoginLink: document.getElementById("visitLoginLink"),
+        visitNowButton: document.getElementById("visitNowButton")
     };
 
     if (typeof ol === "undefined") {
@@ -57,6 +75,8 @@
     });
 
     const app = {
+        activeFeature: null,
+        authenticated: false,
         infoLocked: false,
         infoPixel: null,
         loadGeneration: 0,
@@ -108,6 +128,7 @@
 
     const setSession = (session) => {
         const authenticated = session?.authenticated === true;
+        app.authenticated = authenticated;
         elements.sessionStatus.textContent = authenticated ? session.email : "Nicht angemeldet";
         elements.loginLink.hidden = authenticated;
         elements.logoutButton.hidden = !authenticated;
@@ -268,12 +289,14 @@
         return feature;
     };
 
-    const addPoints = (stampingPoints, visitState) => {
-        const layer = visitState === VisitState.visited
+    const getMarkerLayer = visitState => visitState === VisitState.visited
             ? app.visitedMarkers
             : visitState === VisitState.open
                 ? app.unvisitedMarkers
                 : app.neutralMarkers;
+
+    const addPoints = (stampingPoints, visitState) => {
+        const layer = getMarkerLayer(visitState);
         const features = stampingPoints.map(point => createMarker(point, visitState));
         layer.getSource().addFeatures(features);
         return features.length;
@@ -335,6 +358,20 @@
         return await response.json();
     };
 
+    const sendVisitRequest = async (method, stampingPoint, body) => {
+        const provider = encodeURIComponent(stampingPoint.provider.slug);
+        const response = await fetch(`api/points/${stampingPoint.number}?provider=${provider}`, {
+            method,
+            headers: body === undefined
+                ? { "Accept": "application/json" }
+                : { "Accept": "application/json", "Content-Type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body)
+        });
+        if (!response.ok) {
+            throw response;
+        }
+    };
+
     const loadAnonymousPoints = async generation => {
         const points = await getJson("api/points?provider=all");
         if (generation !== app.loadGeneration) {
@@ -374,22 +411,175 @@
             return;
         }
         elements.infoCard.hidden = true;
+        elements.visitForm.hidden = true;
+        elements.visitActionStatus.textContent = "";
+        app.activeFeature = null;
         app.infoLocked = false;
         app.infoPixel = null;
     };
 
-    const formatVisit = (value) => {
-        const visitedDate = new Date(value);
-        if (Number.isNaN(visitedDate.getTime())) {
+    const formatVisit = (stampingPoint) => {
+        if (!stampingPoint.visitedOn) {
             return null;
         }
-        return visitedDate.toLocaleString("de-DE", {
+
+        const dateParts = stampingPoint.visitedOn.split("-").map(Number);
+        if (dateParts.length !== 3 || dateParts.some(Number.isNaN)) {
+            return null;
+        }
+        const visitedDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+        let text = visitedDate.toLocaleDateString("de-DE", {
             year: "numeric",
             month: "long",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit"
-        }) + " Uhr";
+            day: "2-digit"
+        });
+        let dateTime = stampingPoint.visitedOn;
+        if (stampingPoint.visitedAt) {
+            const time = stampingPoint.visitedAt.slice(0, 5);
+            text += ` um ${time} Uhr`;
+            dateTime += `T${stampingPoint.visitedAt}`;
+        }
+        return { text, dateTime };
+    };
+
+    const pointMatches = (left, right) => left.number === right.number
+        && left.provider?.slug === right.provider?.slug;
+
+    const updatePointVisit = (feature, isVisited, visitedOn = null, visitedAt = null) => {
+        const stampingPoint = feature.stampingPoint;
+        for (const visitState of Object.values(VisitState)) {
+            app.pointCache[visitState] = app.pointCache[visitState].filter(point =>
+                !pointMatches(point, stampingPoint));
+        }
+
+        const previousLayer = getMarkerLayer(feature.visitState);
+        previousLayer.getSource().removeFeature(feature);
+        stampingPoint.isVisited = isVisited;
+        stampingPoint.visitedOn = visitedOn;
+        stampingPoint.visitedAt = visitedAt;
+        feature.visitState = isVisited ? VisitState.visited : VisitState.open;
+        app.pointCache[feature.visitState].push(stampingPoint);
+        getMarkerLayer(feature.visitState).getSource().addFeature(feature);
+        showInfo(feature, app.infoPixel, true);
+    };
+
+    const setVisitActionStatus = (message, state) => {
+        elements.visitActionStatus.textContent = message;
+        elements.visitActionStatus.dataset.state = state ?? "ready";
+    };
+
+    const setVisitBusy = busy => {
+        for (const control of [
+            elements.visitNowButton,
+            elements.openVisitFormButton,
+            elements.editVisitButton,
+            elements.deleteVisitButton,
+            elements.visitedOnInput,
+            elements.visitedAtInput,
+            elements.cancelVisitButton,
+            elements.confirmDeleteVisitButton,
+            elements.cancelDeleteVisitButton,
+            elements.closeDeleteVisitButton
+        ]) {
+            control.disabled = busy;
+        }
+        if (!busy) {
+            elements.visitedAtInput.disabled = !elements.visitedOnInput.value;
+        }
+    };
+
+    const toLocalDateInput = date => [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0")
+    ].join("-");
+
+    const toLocalTimeInput = date => [
+        String(date.getHours()).padStart(2, "0"),
+        String(date.getMinutes()).padStart(2, "0")
+    ].join(":");
+
+    const closeVisitForm = (restoreFocus = false) => {
+        elements.visitForm.hidden = true;
+        const visited = app.activeFeature?.visitState === VisitState.visited;
+        elements.newVisitActions.hidden = visited;
+        elements.existingVisitActions.hidden = !visited;
+        if (restoreFocus) {
+            (visited ? elements.editVisitButton : elements.openVisitFormButton).focus({ preventScroll: true });
+        }
+    };
+
+    const openVisitForm = () => {
+        const stampingPoint = app.activeFeature?.stampingPoint;
+        if (!stampingPoint) {
+            return;
+        }
+        elements.visitedOnInput.max = toLocalDateInput(new Date());
+        elements.visitedOnInput.value = stampingPoint.isVisited && stampingPoint.visitedOn
+            ? stampingPoint.visitedOn
+            : "";
+        elements.visitedAtInput.value = stampingPoint.isVisited && stampingPoint.visitedAt
+            ? stampingPoint.visitedAt.slice(0, 5)
+            : "";
+        elements.visitedAtInput.disabled = !elements.visitedOnInput.value;
+        elements.newVisitActions.hidden = true;
+        elements.existingVisitActions.hidden = true;
+        elements.visitForm.hidden = false;
+        setVisitActionStatus("");
+        elements.visitedOnInput.focus({ preventScroll: true });
+    };
+
+    const describeVisitError = response => {
+        if (response?.status === 401) {
+            return "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
+        }
+        if (response?.status === 404) {
+            return "Die Stempelstelle oder der Besuch wurde nicht gefunden.";
+        }
+        if (response?.status === 409) {
+            return "Für diese Stempelstelle ist bereits ein Besuch eingetragen.";
+        }
+        if (response?.status === 400) {
+            return "Datum oder Uhrzeit sind ungültig. Bitte prüfe deine Eingabe.";
+        }
+        return "Der Besuch konnte nicht gespeichert werden. Bitte versuche es erneut.";
+    };
+
+    const saveVisit = async (method, visitedOn, visitedAt) => {
+        const feature = app.activeFeature;
+        if (!feature) {
+            return;
+        }
+        setVisitBusy(true);
+        setVisitActionStatus("Besuch wird gespeichert …");
+        try {
+            await sendVisitRequest(method, feature.stampingPoint, {
+                visitedOn,
+                visitedAt,
+                utcOffsetMinutes: -new Date().getTimezoneOffset()
+            });
+            updatePointVisit(feature, true, visitedOn, visitedAt);
+            setVisitActionStatus("Besuch wurde gespeichert.", "ready");
+        } catch (response) {
+            if (response?.status === 401) {
+                setMapStatus("Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.", "error");
+                await initialize();
+                return;
+            }
+            setVisitActionStatus(describeVisitError(response), "error");
+        } finally {
+            setVisitBusy(false);
+        }
+    };
+
+    const updateVisitControls = (feature, locked) => {
+        const visited = feature.visitState === VisitState.visited;
+        elements.visitControls.hidden = !locked;
+        elements.visitLoginLink.hidden = !locked || app.authenticated;
+        elements.newVisitActions.hidden = !locked || !app.authenticated || visited;
+        elements.existingVisitActions.hidden = !locked || !app.authenticated || !visited;
+        elements.visitForm.hidden = true;
+        setVisitActionStatus("");
     };
 
     const populateTours = (tours) => {
@@ -441,14 +631,16 @@
         elements.pointStatus.dataset.state = visitState;
         populateTours(stampingPoint.tours);
 
-        const formattedVisit = stampingPoint.visited ? formatVisit(stampingPoint.visited) : null;
+        const formattedVisit = formatVisit(stampingPoint);
         elements.pointVisited.hidden = !formattedVisit;
-        elements.pointVisited.textContent = formattedVisit ?? "";
-        elements.pointVisited.dateTime = stampingPoint.visited ?? "";
+        elements.pointVisited.textContent = formattedVisit?.text ?? "";
+        elements.pointVisited.dateTime = formattedVisit?.dateTime ?? "";
 
         elements.infoCard.hidden = false;
+        app.activeFeature = feature;
         app.infoLocked = locked;
         app.infoPixel = pixel;
+        updateVisitControls(feature, locked);
         positionInfo(pixel);
         if (locked) {
             elements.infoCard.focus({ preventScroll: true });
@@ -488,11 +680,104 @@
         elements.map.focus({ preventScroll: true });
     });
 
+    elements.visitNowButton.addEventListener("click", () => {
+        const now = new Date();
+        saveVisit("PUT", toLocalDateInput(now), `${toLocalTimeInput(now)}:00`);
+    });
+
+    elements.openVisitFormButton.addEventListener("click", openVisitForm);
+    elements.editVisitButton.addEventListener("click", openVisitForm);
+    elements.cancelVisitButton.addEventListener("click", () => closeVisitForm(true));
+    elements.visitedOnInput.addEventListener("input", () => {
+        elements.visitedAtInput.disabled = !elements.visitedOnInput.value;
+        if (!elements.visitedOnInput.value) {
+            elements.visitedAtInput.value = "";
+        }
+    });
+    elements.visitForm.addEventListener("submit", event => {
+        event.preventDefault();
+        const visitedOn = elements.visitedOnInput.value || null;
+        const visitedAt = elements.visitedAtInput.value
+            ? `${elements.visitedAtInput.value}:00`
+            : null;
+        if (visitedAt && !visitedOn) {
+            setVisitActionStatus("Eine Uhrzeit benötigt auch ein Datum.", "error");
+            elements.visitedOnInput.focus({ preventScroll: true });
+            return;
+        }
+        if (visitedOn && visitedAt && new Date(`${visitedOn}T${visitedAt}`) > new Date(Date.now() + 300000)) {
+            setVisitActionStatus("Ein Besuch kann nicht in der Zukunft liegen.", "error");
+            return;
+        }
+        saveVisit(app.activeFeature?.visitState === VisitState.visited ? "PATCH" : "PUT", visitedOn, visitedAt);
+    });
+
+    const closeDeleteVisitDialog = () => {
+        if (elements.deleteVisitDialog.open) {
+            elements.deleteVisitDialog.close();
+        }
+    };
+
+    elements.deleteVisitButton.addEventListener("click", () => {
+        const stampingPoint = app.activeFeature?.stampingPoint;
+        if (!stampingPoint) {
+            return;
+        }
+        const label = stampingPoint.provider?.abbreviation
+            ? `${stampingPoint.provider.abbreviation} ${stampingPoint.number}`
+            : `Stempelstelle ${stampingPoint.number}`;
+        elements.deleteVisitMessage.textContent = `Soll dein Besuch bei ${label} – ${stampingPoint.name} wirklich gelöscht werden?`;
+        elements.deleteVisitDialog.showModal();
+        elements.cancelDeleteVisitButton.focus({ preventScroll: true });
+    });
+    elements.closeDeleteVisitButton.addEventListener("click", closeDeleteVisitDialog);
+    elements.cancelDeleteVisitButton.addEventListener("click", closeDeleteVisitDialog);
+    elements.confirmDeleteVisitButton.addEventListener("click", async () => {
+        const feature = app.activeFeature;
+        if (!feature) {
+            closeDeleteVisitDialog();
+            return;
+        }
+        setVisitBusy(true);
+        try {
+            await sendVisitRequest("DELETE", feature.stampingPoint);
+            updatePointVisit(feature, false);
+            closeDeleteVisitDialog();
+            setVisitActionStatus("Besuch wurde gelöscht.", "ready");
+        } catch (response) {
+            closeDeleteVisitDialog();
+            if (response?.status === 401) {
+                setMapStatus("Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.", "error");
+                await initialize();
+                return;
+            }
+            setVisitActionStatus(describeVisitError(response), "error");
+        } finally {
+            setVisitBusy(false);
+        }
+    });
+    elements.deleteVisitDialog.addEventListener("cancel", event => {
+        event.preventDefault();
+        closeDeleteVisitDialog();
+    });
+    elements.deleteVisitDialog.addEventListener("close", () => {
+        if (app.activeFeature?.visitState === VisitState.visited) {
+            elements.deleteVisitButton.focus({ preventScroll: true });
+        } else {
+            elements.infoCard.focus({ preventScroll: true });
+        }
+    });
+    elements.deleteVisitDialog.addEventListener("click", event => {
+        if (event.target === elements.deleteVisitDialog) {
+            closeDeleteVisitDialog();
+        }
+    });
+
     document.addEventListener("keydown", event => {
         if (event.key !== "Escape") {
             return;
         }
-        if (elements.providerInfoDialog.open) {
+        if (elements.providerInfoDialog.open || elements.deleteVisitDialog.open) {
             return;
         }
         if (!elements.providerPanel.hidden) {
@@ -530,7 +815,7 @@
     });
 
     document.addEventListener("pointerdown", event => {
-        if (elements.providerInfoDialog.open || elements.userSession.contains(event.target)) {
+        if (elements.providerInfoDialog.open || elements.deleteVisitDialog.open || elements.userSession.contains(event.target)) {
             return;
         }
         if (!elements.providerPanel.hidden) {

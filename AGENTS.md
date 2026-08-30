@@ -40,6 +40,8 @@ The page calls the backend with relative URLs:
 
 The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All available providers are selected after each page initialization, `Alle` and `Keine` provide bulk selection, and an empty selection renders zero points. Provider names and abbreviations are used in point details because point numbers are provider-scoped. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
 
+Authenticated users can create a visit directly from a locked point-detail dialog, either with the current local date and time or with no timestamp, a date only, or a date plus time. Existing visits allow editing only their optional date/time and can be deleted after a point-specific confirmation. Every visit request includes the provider slug. Successful mutations update the cached point and marker layer without a full page reload; anonymous users see a login link instead of write controls.
+
 The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and the user-initiated navigation to external provider websites. Keep it synchronized whenever these data flows or their retention rules change.
 
 The frontend never reads or writes user ids, Google subjects, tokens, custom identity headers, local storage, or session storage. A `401` while loading authenticated point data returns the UI to anonymous mode without starting a login redirect.
@@ -179,7 +181,9 @@ Useful query behavior:
 - Requests with `vis=true` or `vis=false` return `401` when no valid cookie identity with internal user claims is present.
 - Geo filtering exists via query parameters and is used server-side.
 
-Point DTOs include provider name, slug, and abbreviation while preserving the existing number, name, position, visited, and tours fields.
+Point DTOs include provider name, slug, and abbreviation together with number, name, position, explicit visit state, optional visit date/time, and tours.
+
+Visit state is represented independently from its optional timestamp: `isVisited` reports whether a visit row exists, `visitedOn` is the optional date, and `visitedAt` is the optional time. A time requires a date. The persistence model retains the nullable legacy `Visited` value and uses `HasVisitedTime` to distinguish a date-only value from a precise time; user and stamping-point ids form a unique visit key.
 
 Other endpoints:
 
@@ -193,6 +197,14 @@ Other endpoints:
 - `GET /api/tours`
   - Exists for hiking tour queries.
   - Not currently used by the bundled HTML map.
+- `GET /api/points/{number}?provider={slug}`
+  - Returns the authenticated user's visit details for one provider-scoped point.
+- `PUT /api/points/{number}?provider={slug}`
+  - Creates one visit with optional `visitedOn` and `visitedAt`; duplicates return `409`.
+- `PATCH /api/points/{number}?provider={slug}`
+  - Changes only the optional date/time of an existing visit.
+- `DELETE /api/points/{number}?provider={slug}`
+  - Deletes an existing visit. The bundled frontend asks for confirmation before calling it.
 - `POST /api/admin/imports/touringen`
   - Imports Touringen source data.
   - Requires the dedicated CLI bearer token and is intended for manual/admin use.
@@ -224,7 +236,7 @@ The configured database connection is:
 Current verification baseline:
 
 - `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
-- `dotnet test --no-restore` runs provider-aware persistence/import, readiness, Google account-binding, browser-session/frontend-contract, and CLI-authentication integration tests after a fresh restore with the .NET 10 SDK.
+- `dotnet test --no-restore` runs provider-aware persistence/import, readiness, Google account-binding, browser-session/mobile-visit/frontend-contract, and CLI-authentication integration tests after a fresh restore with the .NET 10 SDK.
 
 ## Deployment
 

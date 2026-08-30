@@ -268,7 +268,7 @@ public class TouredRepository : IUserService
                ?? throw EntityNotFoundException.Create<StampingPoint>(stampingPointNumber);
     }
 
-    public async Task AddUserVisitAsync(User currentUser, int stampingPointId, DateTime? visited)
+    public async Task AddUserVisitAsync(User currentUser, int stampingPointId, DateTime? visited, bool hasVisitedTime)
     {
         var dto = await _dbContext.UserVisits.SingleOrDefaultAsync(p => p.UserId == currentUser.Id && p.StampingPointId == stampingPointId);
         if (dto == null)
@@ -277,14 +277,41 @@ public class TouredRepository : IUserService
             {
                 StampingPointId = stampingPointId,
                 UserId = currentUser.Id,
-                Visited = visited
+                Visited = visited,
+                HasVisitedTime = hasVisitedTime
             };
             await _dbContext.AddAsync(dto);
-            await _dbContext.SaveChangesAsync();
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateException exception)
+            {
+                throw new InvalidOperationException("This stamping point has already been visited.", exception);
+            }
         }
         else
         {
             throw new InvalidOperationException("This stamping point has already been visited.");
         }
+    }
+
+    public async Task UpdateUserVisitAsync(User currentUser, int stampingPointId, DateTime? visited, bool hasVisitedTime)
+    {
+        var userVisit = await _dbContext.UserVisits.SingleOrDefaultAsync(visit =>
+            visit.UserId == currentUser.Id && visit.StampingPointId == stampingPointId)
+            ?? throw EntityNotFoundException.Create<UserVisit>(stampingPointId);
+        userVisit.Visited = visited;
+        userVisit.HasVisitedTime = hasVisitedTime;
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task DeleteUserVisitAsync(User currentUser, int stampingPointId)
+    {
+        var userVisit = await _dbContext.UserVisits.SingleOrDefaultAsync(visit =>
+            visit.UserId == currentUser.Id && visit.StampingPointId == stampingPointId)
+            ?? throw EntityNotFoundException.Create<UserVisit>(stampingPointId);
+        _dbContext.UserVisits.Remove(userVisit);
+        await _dbContext.SaveChangesAsync();
     }
 }
