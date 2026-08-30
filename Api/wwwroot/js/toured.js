@@ -5,6 +5,7 @@
         accountMenuButton: document.getElementById("accountMenuButton"),
         accountPanel: document.getElementById("accountPanel"),
         closeInfoButton: document.getElementById("closeInfoButton"),
+        closeProviderInfoButton: document.getElementById("closeProviderInfoButton"),
         infoCard: document.getElementById("infoCard"),
         loginLink: document.getElementById("loginLink"),
         logoutButton: document.getElementById("logoutButton"),
@@ -13,9 +14,20 @@
         mapStatus: document.getElementById("mapStatus"),
         pointName: document.getElementById("pointName"),
         pointNumber: document.getElementById("pointNumber"),
+        pointProvider: document.getElementById("pointProvider"),
         pointStatus: document.getElementById("pointStatus"),
         pointTours: document.getElementById("pointTours"),
         pointVisited: document.getElementById("pointVisited"),
+        providerInfoDescription: document.getElementById("providerInfoDescription"),
+        providerInfoDialog: document.getElementById("providerInfoDialog"),
+        providerInfoDisclaimer: document.getElementById("providerInfoDisclaimer"),
+        providerInfoName: document.getElementById("providerInfoName"),
+        providerInfoWebsite: document.getElementById("providerInfoWebsite"),
+        providerMenuButton: document.getElementById("providerMenuButton"),
+        providerOptions: document.getElementById("providerOptions"),
+        providerPanel: document.getElementById("providerPanel"),
+        selectAllProvidersButton: document.getElementById("selectAllProvidersButton"),
+        selectNoProvidersButton: document.getElementById("selectNoProvidersButton"),
         sessionStatus: document.getElementById("sessionStatus"),
         userSession: document.getElementById("userSession")
     };
@@ -48,6 +60,7 @@
         infoLocked: false,
         infoPixel: null,
         loadGeneration: 0,
+        providerInfoTrigger: null,
         neutralMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3"),
         pointCache: {
             [VisitState.unknown]: [],
@@ -110,8 +123,20 @@
         }
     };
 
+    const closeProviderMenu = (restoreFocus = false) => {
+        elements.providerPanel.hidden = true;
+        elements.providerMenuButton.setAttribute("aria-expanded", "false");
+        elements.providerMenuButton.setAttribute("aria-label", "Anbieterfilter öffnen");
+        if (restoreFocus) {
+            elements.providerMenuButton.focus({ preventScroll: true });
+        }
+    };
+
     const toggleAccountMenu = () => {
         const opening = elements.accountPanel.hidden;
+        if (opening) {
+            closeProviderMenu();
+        }
         elements.accountPanel.hidden = !opening;
         elements.accountMenuButton.setAttribute("aria-expanded", opening.toString());
         elements.accountMenuButton.setAttribute(
@@ -120,6 +145,21 @@
         if (opening) {
             const action = elements.accountPanel.querySelector("a:not([hidden]), button:not([hidden])");
             action?.focus({ preventScroll: true });
+        }
+    };
+
+    const toggleProviderMenu = () => {
+        const opening = elements.providerPanel.hidden;
+        if (opening) {
+            closeAccountMenu();
+        }
+        elements.providerPanel.hidden = !opening;
+        elements.providerMenuButton.setAttribute("aria-expanded", opening.toString());
+        elements.providerMenuButton.setAttribute(
+            "aria-label",
+            opening ? "Anbieterfilter schließen" : "Anbieterfilter öffnen");
+        if (opening) {
+            elements.providerOptions.querySelector("input")?.focus({ preventScroll: true });
         }
     };
 
@@ -135,11 +175,87 @@
         app.pointCache[VisitState.visited] = [];
     };
 
+    const getSafeExternalUrl = value => {
+        if (typeof value !== "string") {
+            return null;
+        }
+        try {
+            const url = new URL(value);
+            return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+        } catch {
+            return null;
+        }
+    };
+
+    const closeProviderInfo = () => {
+        if (elements.providerInfoDialog.open) {
+            elements.providerInfoDialog.close();
+        }
+    };
+
+    const openProviderInfo = (provider, trigger) => {
+        elements.providerInfoName.textContent = provider.name;
+        elements.providerInfoDescription.textContent = provider.description
+            || "Für diesen Anbieter sind noch keine weiteren Informationen hinterlegt.";
+        const websiteUrl = getSafeExternalUrl(provider.websiteUrl);
+        elements.providerInfoWebsite.hidden = !websiteUrl;
+        if (websiteUrl) {
+            elements.providerInfoWebsite.href = websiteUrl;
+        } else {
+            elements.providerInfoWebsite.removeAttribute("href");
+        }
+        elements.providerInfoTrigger = trigger;
+        elements.providerInfoDialog.showModal();
+        elements.closeProviderInfoButton.focus({ preventScroll: true });
+    };
+
+    const renderProviderOptions = () => {
+        elements.providerOptions.replaceChildren();
+        if (app.providers.length === 0) {
+            const status = document.createElement("p");
+            status.className = "provider-options-status";
+            status.textContent = "Keine Stempelanbieter verfügbar.";
+            elements.providerOptions.appendChild(status);
+            return;
+        }
+
+        app.providers.forEach((provider, index) => {
+            const row = document.createElement("div");
+            row.className = "provider-option";
+
+            const label = document.createElement("label");
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.value = provider.slug;
+            checkbox.id = `provider-${index}`;
+            checkbox.checked = app.selectedProviderSlugs.has(provider.slug);
+            const name = document.createElement("span");
+            name.textContent = provider.name;
+            label.htmlFor = checkbox.id;
+            label.append(checkbox, name);
+
+            const infoButton = document.createElement("button");
+            infoButton.type = "button";
+            infoButton.className = "provider-info-button";
+            infoButton.setAttribute("aria-label", `Informationen zu ${provider.name}`);
+            infoButton.setAttribute("aria-haspopup", "dialog");
+            const questionMark = document.createElement("span");
+            questionMark.setAttribute("aria-hidden", "true");
+            questionMark.textContent = "?";
+            infoButton.appendChild(questionMark);
+            infoButton.addEventListener("click", () => openProviderInfo(provider, infoButton));
+
+            row.append(label, infoButton);
+            elements.providerOptions.appendChild(row);
+        });
+    };
+
     const setProviderCatalog = response => {
         app.providers = Array.isArray(response.stampingProviders)
             ? response.stampingProviders.filter(provider => typeof provider.slug === "string")
             : [];
         app.selectedProviderSlugs = new Set(app.providers.map(provider => provider.slug));
+        renderProviderOptions();
     };
 
     const createMarker = (stampingPoint, visitState) => {
@@ -182,6 +298,31 @@
     const setSelectedProviders = providerSlugs => {
         app.selectedProviderSlugs = new Set(providerSlugs);
         return renderSelectedPoints();
+    };
+
+    const announceFilteredPointCount = pointCount => {
+        setMapStatus(`${pointCount} Stempelstellen angezeigt.`, "ready");
+        if (pointCount > 0) {
+            window.setTimeout(() => {
+                if (elements.mapStatus.textContent === `${pointCount} Stempelstellen angezeigt.`) {
+                    setMapStatus("");
+                }
+            }, 1800);
+        }
+    };
+
+    const applyProviderSelection = () => {
+        const selectedSlugs = Array.from(
+            elements.providerOptions.querySelectorAll('input[type="checkbox"]:checked'),
+            checkbox => checkbox.value);
+        announceFilteredPointCount(setSelectedProviders(selectedSlugs));
+    };
+
+    const selectProviders = selected => {
+        for (const checkbox of elements.providerOptions.querySelectorAll('input[type="checkbox"]')) {
+            checkbox.checked = selected;
+        }
+        applyProviderSelection();
     };
 
     const getJson = async (url) => {
@@ -287,6 +428,9 @@
         const visitState = feature.visitState;
         elements.pointNumber.textContent = `Stempelstelle ${stampingPoint.number}`;
         elements.pointName.textContent = stampingPoint.name;
+        elements.pointProvider.textContent = stampingPoint.provider?.name
+            ? `Anbieter: ${stampingPoint.provider.name}`
+            : "Anbieter nicht angegeben";
         elements.pointStatus.textContent = visitState === VisitState.visited
             ? "✓ Besucht"
             : visitState === VisitState.open
@@ -346,7 +490,12 @@
         if (event.key !== "Escape") {
             return;
         }
-        if (!elements.accountPanel.hidden) {
+        if (elements.providerInfoDialog.open) {
+            return;
+        }
+        if (!elements.providerPanel.hidden) {
+            closeProviderMenu(true);
+        } else if (!elements.accountPanel.hidden) {
             closeAccountMenu(true);
         } else if (!elements.infoCard.hidden) {
             hideInfo(true);
@@ -355,9 +504,36 @@
     });
 
     elements.accountMenuButton.addEventListener("click", toggleAccountMenu);
+    elements.providerMenuButton.addEventListener("click", toggleProviderMenu);
+    elements.providerOptions.addEventListener("change", event => {
+        if (event.target.matches('input[type="checkbox"]')) {
+            applyProviderSelection();
+        }
+    });
+    elements.selectAllProvidersButton.addEventListener("click", () => selectProviders(true));
+    elements.selectNoProvidersButton.addEventListener("click", () => selectProviders(false));
+    elements.closeProviderInfoButton.addEventListener("click", closeProviderInfo);
+    elements.providerInfoDialog.addEventListener("cancel", event => {
+        event.preventDefault();
+        closeProviderInfo();
+    });
+    elements.providerInfoDialog.addEventListener("close", () => {
+        elements.providerInfoTrigger?.focus({ preventScroll: true });
+        elements.providerInfoTrigger = null;
+    });
+    elements.providerInfoDialog.addEventListener("click", event => {
+        if (event.target === elements.providerInfoDialog) {
+            closeProviderInfo();
+        }
+    });
 
     document.addEventListener("pointerdown", event => {
-        if (!elements.accountPanel.hidden && !elements.userSession.contains(event.target)) {
+        if (elements.providerInfoDialog.open || elements.userSession.contains(event.target)) {
+            return;
+        }
+        if (!elements.providerPanel.hidden) {
+            closeProviderMenu();
+        } else if (!elements.accountPanel.hidden) {
             closeAccountMenu();
         }
     });

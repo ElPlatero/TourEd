@@ -110,6 +110,8 @@ a:focus-visible,
     top: max(0.5rem, env(safe-area-inset-top));
     right: max(0.5rem, env(safe-area-inset-right));
     z-index: 250;
+    display: flex;
+    gap: 0.4rem;
 }
 
 .account-menu-button {
@@ -157,6 +159,131 @@ a:focus-visible,
     background: rgb(255 255 255 / 97%);
     box-shadow: var(--shadow);
     animation: account-panel-in 150ms ease-out;
+}
+
+.provider-panel {
+    width: min(24rem, calc(100vw - 1rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
+}
+
+.provider-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.provider-panel__header h2,
+.provider-info-dialog h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.provider-selection-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.provider-selection-actions button {
+    min-height: 2.75rem;
+    padding: 0.35rem 0.55rem;
+    border: 0;
+    border-radius: 0.45rem;
+    color: var(--focus);
+    background: transparent;
+    cursor: pointer;
+    font-weight: 650;
+}
+
+.provider-selection-actions button:hover {
+    background: var(--surface-muted);
+}
+
+.provider-fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+#providerOptions {
+    display: grid;
+    gap: 0.25rem;
+    max-height: min(60dvh, 24rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.provider-option {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2.75rem;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 2.75rem;
+    border-radius: 0.5rem;
+}
+
+.provider-option:hover,
+.provider-option:focus-within {
+    background: var(--surface-muted);
+}
+
+.provider-option label {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: 0.35rem 0.25rem;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.provider-option input {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    accent-color: #123e65;
+}
+
+.provider-option label span {
+    overflow-wrap: anywhere;
+}
+
+.provider-info-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 0;
+    color: var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.provider-info-button span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-size: 0.72rem;
+    font-weight: 750;
+    line-height: 1;
+}
+
+.provider-info-button:hover span {
+    color: var(--text);
+    background: var(--surface);
+}
+
+.provider-options-status {
+    margin: 0;
+    padding: 0.5rem 0.25rem;
+    color: var(--text-muted);
 }
 
 .account-panel .action {
@@ -297,6 +424,7 @@ a:focus-visible,
 }
 
 .point-number,
+.point-provider,
 .point-name,
 .point-status,
 .point-visited {
@@ -304,6 +432,12 @@ a:focus-visible,
 }
 
 .point-number {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.point-provider {
+    margin-top: 0.25rem;
     color: var(--text-muted);
     font-size: 0.875rem;
 }
@@ -339,6 +473,44 @@ a:focus-visible,
     display: block;
     margin-top: 0.85rem;
     color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.provider-info-dialog {
+    width: min(32rem, calc(100vw - 2rem));
+    max-height: min(80dvh, 38rem);
+    padding: 1rem;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    color: var(--text);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.provider-info-dialog::backdrop {
+    background: rgb(0 0 0 / 42%);
+}
+
+.provider-info-dialog__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.provider-info-dialog > p {
+    line-height: 1.5;
+}
+
+.provider-website {
+    width: fit-content;
+}
+
+.provider-disclaimer {
+    padding: 0.75rem;
+    border-left: 0.25rem solid #168bd2;
+    background: var(--surface-muted);
     font-size: 0.875rem;
 }
 
@@ -410,6 +582,7 @@ a:focus-visible,
 @media (prefers-contrast: more) {
     .account-menu-button,
     .account-panel,
+    .provider-info-dialog,
     #mapLegend,
     #infoCard {
         border-width: 2px;
@@ -420,6 +593,7 @@ a:focus-visible,
 @media (prefers-reduced-transparency: reduce) {
     .account-menu-button,
     .account-panel,
+    .provider-info-dialog,
     #mapLegend {
         background: var(--surface);
         backdrop-filter: none;

@@ -435,6 +435,41 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BundledFrontendOffersAccessibleProviderFilteringAndInformation()
+    {
+        using var client = CreateClient(_factory);
+
+        var html = await client.GetStringAsync("/");
+        var css = await client.GetStringAsync("/css/toured.css");
+        var script = await client.GetStringAsync("/js/toured.js");
+
+        Assert.Contains("id=\"providerMenuButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aria-controls=\"providerPanel\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"providerPanel\" class=\"account-panel provider-panel\" hidden", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<fieldset class=\"provider-fieldset\">", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"selectAllProvidersButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"selectNoProvidersButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<dialog id=\"providerInfoDialog\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("target=\"_blank\" rel=\"noopener noreferrer\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TourEd ist ein unabhängiges Projekt", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"pointProvider\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(".provider-info-button", css, StringComparison.Ordinal);
+        Assert.Contains("width: 2.75rem", css, StringComparison.Ordinal);
+        Assert.Contains("aria-haspopup", script, StringComparison.Ordinal);
+        Assert.Contains("renderProviderOptions", script, StringComparison.Ordinal);
+        Assert.Contains("applyProviderSelection", script, StringComparison.Ordinal);
+        Assert.Contains("setSelectedProviders(selectedSlugs)", script, StringComparison.Ordinal);
+        Assert.Contains("closeProviderMenu(true)", script, StringComparison.Ordinal);
+        Assert.Contains("closeAccountMenu()", script, StringComparison.Ordinal);
+        Assert.Contains("elements.providerInfoDialog.showModal()", script, StringComparison.Ordinal);
+        Assert.Contains("elements.providerInfoTrigger?.focus", script, StringComparison.Ordinal);
+        Assert.Contains("stampingPoint.provider?.name", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sessionStorage", script, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task PrivacyNoticeIsPublicLinkedAndExcludedFromSearchIndexing()
     {
         using var client = CreateClient(_factory);
