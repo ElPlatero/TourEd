@@ -42,6 +42,10 @@ public class PointsController : ControllerBase
         {
             return NotFound();
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized();
+        }
     }
 
     [Authorize]

@@ -5,11 +5,13 @@ namespace Api.Dto;
 public sealed record StampingProviderDetailsDto(
     string Slug,
     string Name,
+    string? Abbreviation,
+    bool IsAnonymousAccessAllowed,
     string? Description,
     string? WebsiteUrl)
 {
     public static StampingProviderDetailsDto Create(StampingProvider provider)
-        => new(provider.Slug, provider.Name, provider.Description, GetPublicWebsiteUrl(provider.WebsiteUri));
+        => new(provider.Slug, provider.Name, provider.Abbreviation, provider.IsAnonymousAccessAllowed, provider.Description, GetPublicWebsiteUrl(provider.WebsiteUri));
 
     private static string? GetPublicWebsiteUrl(Uri? websiteUri)
     {

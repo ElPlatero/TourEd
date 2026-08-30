@@ -426,7 +426,9 @@
     const showInfo = (feature, pixel, locked) => {
         const stampingPoint = feature.stampingPoint;
         const visitState = feature.visitState;
-        elements.pointNumber.textContent = `Stempelstelle ${stampingPoint.number}`;
+        elements.pointNumber.textContent = stampingPoint.provider?.abbreviation
+            ? `${stampingPoint.provider.abbreviation} ${stampingPoint.number}`
+            : `Stempelstelle ${stampingPoint.number}`;
         elements.pointName.textContent = stampingPoint.name;
         elements.pointProvider.textContent = stampingPoint.provider?.name
             ? `Anbieter: ${stampingPoint.provider.name}`

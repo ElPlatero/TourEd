@@ -37,9 +37,15 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("20260626000000_AddStampingProvider", migrations);
         Assert.Contains("20260626010000_AddProviderFieldsToStampingPoints", migrations);
         Assert.Contains("20260830132352_UpdateStampingProviderMetadata", migrations);
-        var provider = await context.StampingProviders.SingleAsync();
-        Assert.Equal(StampingProvider.TouringenSlug, provider.Slug);
-        Assert.Contains("430 offizielle Stempelstellen", provider.Description, StringComparison.Ordinal);
+        Assert.Contains("20260830150127_AddHarzerWandernadelProvider", migrations);
+        var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
+        Assert.Equal(2, providers.Length);
+        Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);
+        Assert.True(providers[0].IsAnonymousAccessAllowed);
+        Assert.Contains("430 offizielle Stempelstellen", providers[0].Description, StringComparison.Ordinal);
+        Assert.Equal(StampingProvider.HarzerWandernadelSlug, providers[1].Slug);
+        Assert.Equal("HWN", providers[1].Abbreviation);
+        Assert.False(providers[1].IsAnonymousAccessAllowed);
     }
 
     [Fact]
@@ -179,13 +185,13 @@ public sealed class ImportServiceTests : IDisposable
     public async Task SavingPointsUsesProviderAndNumberAsImportIdentity()
     {
         await using var context = await CreateContextAsync();
-        context.StampingProviders.Add(CreateProvider(2, "other"));
+        context.StampingProviders.Add(CreateProvider(3, "other"));
         await context.SaveChangesAsync();
         var repository = new TouredRepository(context);
 
         var savedPoints = await repository.SaveStampingPointsAsync(
             CreatePoint("Touringen", StampingProvider.TouringenId, "shared", 42),
-            CreatePoint("Other", 2, "shared", 42));
+            CreatePoint("Other", 3, "shared", 42));
 
         Assert.Equal(2, savedPoints.Count);
         Assert.All(savedPoints, point => Assert.True(point.Id > 0));
@@ -204,18 +210,18 @@ public sealed class ImportServiceTests : IDisposable
     public async Task UserImportUsesUsersDefaultProvider()
     {
         await using var context = await CreateContextAsync();
-        context.StampingProviders.Add(CreateProvider(2, "other"));
+        context.StampingProviders.Add(CreateProvider(3, "other"));
         await context.SaveChangesAsync();
 
-        var user = new User { Email = "user@example.test", DefaultStampingProviderId = 2 };
+        var user = new User { Email = "user@example.test", DefaultStampingProviderId = 3 };
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
         var repository = new TouredRepository(context);
         var points = await repository.SaveStampingPointsAsync(
             CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42),
-            CreatePoint("Other", 2, "other-42", 42));
-        var otherPoint = points.Single(p => p.ProviderId == 2);
+            CreatePoint("Other", 3, "other-42", 42));
+        var otherPoint = points.Single(p => p.ProviderId == 3);
         var manager = CreateImportManager(context, repository, user, null);
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
 
@@ -224,6 +230,38 @@ public sealed class ImportServiceTests : IDisposable
         var visit = Assert.Single(await context.UserVisits.AsNoTracking().ToListAsync());
         Assert.Equal(otherPoint.Id, visit.StampingPointId);
         Assert.Equal(new DateTime(2026, 2, 1, 12, 30, 0), visit.Visited);
+    }
+
+    [Fact]
+    public async Task HarzerWandernadelImportUpdatesByNumberWithoutDeletingPointsOrVisits()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new TouredRepository(context);
+        var existingPoints = await repository.SaveStampingPointsAsync(
+            CreatePoint("Existing 44", StampingProvider.HarzerWandernadelId, "HWN044", 44),
+            CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45));
+        var existing45 = existingPoints.Single(point => point.Number == 45);
+        var user = new User { Email = "hwn@example.test" };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        await repository.AddUserVisitAsync(user, existing45.Id, new DateTime(2026, 8, 30, 12, 0, 0));
+        var updated45 = CreatePoint("Updated 45", StampingProvider.HarzerWandernadelId, "HWN045", 45);
+        var manager = CreateImportManager(context, repository, null, null, [updated45]);
+
+        await manager.ImportHarzerWandernadelDataAsync();
+
+        var storedPoints = await context.StampingPoints.AsNoTracking()
+            .Where(point => point.ProviderId == StampingProvider.HarzerWandernadelId)
+            .OrderBy(point => point.Number)
+            .ToArrayAsync();
+        Assert.Equal(2, storedPoints.Length);
+        Assert.Equal("Existing 44", storedPoints[0].Name);
+        Assert.Equal(existing45.Id, storedPoints[1].Id);
+        Assert.Equal("Updated 45", storedPoints[1].Name);
+        Assert.Equal(existing45.Id, Assert.Single(await context.UserVisits.AsNoTracking().ToArrayAsync()).StampingPointId);
+        var import = Assert.Single(await context.Imports.AsNoTracking().ToArrayAsync());
+        Assert.Equal(1, import.StampingPointsCount);
+        Assert.Equal(0, import.HikingToursCount);
     }
 
     [Fact]
@@ -261,7 +299,12 @@ public sealed class ImportServiceTests : IDisposable
         return context;
     }
 
-    private static ImportManager CreateImportManager(DataContext context, TouredRepository repository, User? user, string? rawData)
+    private static ImportManager CreateImportManager(
+        DataContext context,
+        TouredRepository repository,
+        User? user,
+        string? rawData,
+        IReadOnlyList<StampingPoint>? harzerWandernadelPoints = null)
     {
         var httpContext = new DefaultHttpContext();
         if (user != null)
@@ -276,6 +319,7 @@ public sealed class ImportServiceTests : IDisposable
         return new ImportManager(
             new HttpContextAccessor { HttpContext = httpContext },
             new StubHtmlParsingService(rawData),
+            new StubHarzerWandernadelImportService(harzerWandernadelPoints ?? []),
             Options.Create(new TouringenWebsiteConfiguration { StempelstellenUri = new Uri("https://example.test/stamping-points") }),
             new StampingPointImportService(),
             new HikingToursImportService(),
@@ -302,5 +346,11 @@ public sealed class ImportServiceTests : IDisposable
     private sealed class StubHtmlParsingService(string? rawData) : IHtmlParsingService
     {
         public Task<string?> GetRawDmoStringAsync(Uri uri) => Task.FromResult(rawData);
+    }
+
+    private sealed class StubHarzerWandernadelImportService(IReadOnlyList<StampingPoint> points) : IHarzerWandernadelImportService
+    {
+        public Task<IReadOnlyList<StampingPoint>> DownloadStampingPointsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(points);
     }
 }

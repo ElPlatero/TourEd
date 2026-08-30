@@ -15,8 +15,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .Configure<TouringenWebsiteConfiguration>(builder.Configuration.GetSection("touringen"))
+    .Configure<HarzerWandernadelConfiguration>(builder.Configuration.GetSection("harzerWandernadel"))
+    .AddSingleton(serviceProvider => serviceProvider
+        .GetRequiredService<Microsoft.Extensions.Options.IOptions<HarzerWandernadelConfiguration>>().Value)
     .AddOpenApi("toured")
     .AddHttpClient<IHtmlParsingService, HtmlParsingService>().Services
+    .AddHttpClient<IHarzerWandernadelImportService, HarzerWandernadelImportService>(client =>
+    {
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; TourEd/1.0; +https://baelgun.de/toured/)");
+        client.Timeout = TimeSpan.FromSeconds(30);
+    }).Services
     .AddImportServices()
     .AddRepositories()
     .AddTransient<IUnitOfWork, UnitOfWork>()

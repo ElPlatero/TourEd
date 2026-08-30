@@ -12,6 +12,6 @@ public sealed class StampingProviderManager
         _repository = repository;
     }
 
-    public Task<List<StampingProvider>> GetStampingProvidersAsync()
-        => _repository.GetStampingProvidersAsync();
+    public Task<List<StampingProvider>> GetStampingProvidersAsync(bool includeRestrictedProviders)
+        => _repository.GetStampingProvidersAsync(includeRestrictedProviders);
 }

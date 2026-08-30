@@ -20,15 +20,21 @@ public class TouredRepository : IUserService
     {
         if (string.Equals(providerSlug, "all", StringComparison.OrdinalIgnoreCase))
         {
-            return StampingProviderFilter.All;
+            return userId is null ? StampingProviderFilter.Anonymous : StampingProviderFilter.All;
         }
 
         if (!string.IsNullOrWhiteSpace(providerSlug))
         {
             var provider = await _dbContext.StampingProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Slug.ToLower() == providerSlug.Trim().ToLowerInvariant());
-            return provider == null
-                ? throw EntityNotFoundException.Create<StampingProvider>(providerSlug)
-                : StampingProviderFilter.Single(provider.Id);
+            if (provider == null)
+            {
+                throw EntityNotFoundException.Create<StampingProvider>(providerSlug);
+            }
+            if (userId is null && !provider.IsAnonymousAccessAllowed)
+            {
+                throw new UnauthorizedAccessException("This stamping provider requires authentication.");
+            }
+            return StampingProviderFilter.Single(provider.Id);
         }
 
         if (userId != null)
@@ -43,11 +49,18 @@ public class TouredRepository : IUserService
             }
         }
 
-        return StampingProviderFilter.Single(StampingProvider.TouringenId);
+        var anonymousDefaultProvider = await _dbContext.StampingProviders.AsNoTracking()
+            .SingleAsync(provider => provider.Id == StampingProvider.TouringenId);
+        if (!anonymousDefaultProvider.IsAnonymousAccessAllowed)
+        {
+            throw new UnauthorizedAccessException("The default stamping provider requires authentication.");
+        }
+        return StampingProviderFilter.Single(anonymousDefaultProvider.Id);
     }
 
-    public Task<List<StampingProvider>> GetStampingProvidersAsync()
+    public Task<List<StampingProvider>> GetStampingProvidersAsync(bool includeRestrictedProviders = true)
         => _dbContext.StampingProviders.AsNoTracking()
+            .Where(provider => includeRestrictedProviders || provider.IsAnonymousAccessAllowed)
             .OrderBy(provider => provider.Name)
             .ThenBy(provider => provider.Slug)
             .ToListAsync();
@@ -55,7 +68,11 @@ public class TouredRepository : IUserService
     public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
     {
         IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking();
-        if (providerFilter is { IncludesAllProviders: false, ProviderId: { } providerId })
+        if (providerFilter is { IsAnonymousOnly: true })
+        {
+            query = query.Where(point => point.Provider.IsAnonymousAccessAllowed);
+        }
+        else if (providerFilter is { IncludesAllProviders: false, ProviderId: { } providerId })
         {
             query = query.Where(p => p.ProviderId == providerId);
         }
