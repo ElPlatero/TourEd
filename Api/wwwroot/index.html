@@ -17,7 +17,23 @@
     <div class="brand-logo" aria-hidden="true">
         <img src="img/toured-logo-transparent.svg" alt="" />
     </div>
-    <header id="userSession" aria-label="Benutzersitzung">
+    <header id="userSession" aria-label="Kartenoptionen">
+        <button
+            id="providerMenuButton"
+            class="account-menu-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="providerPanel"
+            aria-label="Anbieterfilter öffnen">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                <path d="M4.5 4.5h7v4h-7zM6 8.5v3l-2 2v2h8v-2l-2-2v-3M4.5 19.5h7" />
+                <circle cx="16" cy="6" r="1" />
+                <circle cx="16" cy="12" r="1" />
+                <circle cx="16" cy="18" r="1" />
+                <path d="M19 6h2M19 12h2M19 18h2" />
+            </svg>
+            <span>Anbieter</span>
+        </button>
         <button
             id="accountMenuButton"
             class="account-menu-button"
@@ -30,6 +46,21 @@
             </svg>
             <span>Konto</span>
         </button>
+        <div id="providerPanel" class="account-panel provider-panel" hidden>
+            <div class="provider-panel__header">
+                <h2>Stempelanbieter</h2>
+                <div class="provider-selection-actions" aria-label="Anbieterauswahl">
+                    <button id="selectAllProvidersButton" type="button">Alle</button>
+                    <button id="selectNoProvidersButton" type="button">Keine</button>
+                </div>
+            </div>
+            <fieldset class="provider-fieldset">
+                <legend class="visually-hidden">Angezeigte Stempelanbieter</legend>
+                <div id="providerOptions">
+                    <p class="provider-options-status">Anbieter werden geladen …</p>
+                </div>
+            </fieldset>
+        </div>
         <div id="accountPanel" class="account-panel" hidden>
             <span id="sessionStatus" role="status" aria-live="polite">Sitzung wird geladen …</span>
             <a id="loginLink" class="action" href="auth/login" hidden>Mit Google anmelden</a>
@@ -66,6 +97,7 @@
             <div>
                 <p id="pointNumber" class="point-number"></p>
                 <h2 id="pointName" class="point-name"></h2>
+                <p id="pointProvider" class="point-provider"></p>
             </div>
             <button id="closeInfoButton" class="icon-button" type="button" aria-label="Details schließen">×</button>
         </header>
@@ -73,6 +105,18 @@
         <div id="pointTours"></div>
         <time id="pointVisited" class="point-visited" hidden></time>
     </section>
+
+    <dialog id="providerInfoDialog" class="provider-info-dialog" aria-labelledby="providerInfoName" aria-describedby="providerInfoDescription providerInfoDisclaimer">
+        <div class="provider-info-dialog__header">
+            <h2 id="providerInfoName"></h2>
+            <button id="closeProviderInfoButton" class="icon-button" type="button" aria-label="Anbieterinformationen schließen">×</button>
+        </div>
+        <p id="providerInfoDescription"></p>
+        <a id="providerInfoWebsite" class="action provider-website" target="_blank" rel="noopener noreferrer" hidden>Website des Anbieters öffnen</a>
+        <p id="providerInfoDisclaimer" class="provider-disclaimer">
+            TourEd ist ein unabhängiges Projekt und steht in keiner geschäftlichen oder organisatorischen Verbindung zu diesem Anbieter.
+        </p>
+    </dialog>
 </main>
 </body>
 </html>
