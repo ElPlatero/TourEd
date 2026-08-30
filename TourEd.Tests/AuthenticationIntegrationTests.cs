@@ -6,6 +6,7 @@ using System.Text.Json;
 using Api.Authentication;
 using Api.Controllers.Auth;
 using Api.Controllers.Points;
+using Api.Controllers.Providers;
 using Api.Dto;
 using Api.Repositories;
 using Microsoft.AspNetCore.Authentication;
@@ -47,7 +48,17 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         {
             Id = 2,
             Slug = "other",
-            Name = "Other provider"
+            Name = "Other provider",
+            Description = "Other provider description.",
+            WebsiteUri = new Uri("https://provider.example.test/info")
+        });
+        context.StampingProviders.Add(new StampingProvider
+        {
+            Id = 3,
+            Slug = "unsupported-link",
+            Name = "Unsupported link provider",
+            Description = "Provider with a non-public website scheme.",
+            WebsiteUri = new Uri("ftp://provider.example.test/info")
         });
         var user = new User { Email = FakeGoogleHandler.Email };
         var visitedPoint = CreatePoint(VisitedPointNumber, StampingProvider.TouringenId);
@@ -263,6 +274,28 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ProviderCatalogIsAnonymousSortedCompleteAndExposesOnlyPublicWebsiteUrls()
+    {
+        using var client = CreateClient(_factory);
+
+        var response = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
+
+        Assert.NotNull(response);
+        Assert.Equal(3, response.OverallCount);
+        var providers = response.StampingProviders.ToArray();
+        Assert.Equal(["Other provider", "Touringen", "Unsupported link provider"], providers.Select(p => p.Name));
+
+        var touringen = providers[1];
+        Assert.Equal(StampingProvider.TouringenSlug, touringen.Slug);
+        Assert.Contains("430 offizielle Stempelstellen", touringen.Description, StringComparison.Ordinal);
+        Assert.Equal("https://www.touringen.de/", touringen.WebsiteUrl);
+
+        var other = providers[0];
+        Assert.Equal("https://provider.example.test/info", other.WebsiteUrl);
+        Assert.Null(providers[2].WebsiteUrl);
+    }
+
+    [Fact]
     public async Task CookieSessionCanWriteVisitWhileAnonymousRequestIsRejected()
     {
         var visited = new DateTime(2026, 8, 28, 14, 30, 0, DateTimeKind.Utc);
@@ -418,6 +451,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         await using var factory = new TouredWebApplicationFactory(databasePath, keysPath, useFakeGoogle: false, pathBase: "/toured");
         try
         {
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<DataContext>().Database.MigrateAsync();
+            }
             using var client = CreateClient(factory);
 
             var response = await client.GetAsync("/toured/auth/login");
@@ -427,6 +464,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             var neutralPinResponse = await client.GetAsync("/toured/img/pin_icon_neutral.svg");
             var visitedPinResponse = await client.GetAsync("/toured/img/pin_icon_visited.svg");
             var logoResponse = await client.GetAsync("/toured/img/toured-logo-transparent.svg");
+            var providersResponse = await client.GetAsync("/toured/api/providers");
 
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
             Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
@@ -435,6 +473,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.OK, neutralPinResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, visitedPinResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, logoResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, providersResponse.StatusCode);
             Assert.NotNull(response.Headers.Location);
             var query = QueryHelpers.ParseQuery(response.Headers.Location.Query);
             Assert.Equal("https://localhost/toured/signin-google", query["redirect_uri"]);
