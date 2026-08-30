@@ -256,13 +256,15 @@ a:focus-visible,
 }
 
 .legend-pin--open {
-    color: #a2181c;
-    background: #ffffff;
+    border-color: #168bd2;
+    color: #ffffff;
+    background: #168bd2;
 }
 
 .legend-pin--visited {
+    border-color: #123e65;
     color: #ffffff;
-    background: #25633e;
+    background: #123e65;
     font-size: 0.68rem;
 }
 

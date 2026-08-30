@@ -317,7 +317,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var script = await client.GetStringAsync("/js/toured.js");
         var neutralPinResponse = await client.GetAsync("/img/pin_icon_neutral.svg");
         var neutralPin = await neutralPinResponse.Content.ReadAsStringAsync();
-        var logoResponse = await client.GetAsync("/img/toured-logo.svg");
+        var visitedPinResponse = await client.GetAsync("/img/pin_icon_visited.svg");
+        var visitedPin = await visitedPinResponse.Content.ReadAsStringAsync();
+        var logoResponse = await client.GetAsync("/img/toured-logo-transparent.svg");
 
         Assert.Contains("<html lang=\"de\">", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("viewport-fit=cover", html, StringComparison.OrdinalIgnoreCase);
@@ -325,7 +327,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("aria-live=\"polite\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-label=\"Details schließen\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("class=\"brand-logo\" aria-hidden=\"true\"", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("src=\"img/toured-logo.svg\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("src=\"img/toured-logo-transparent.svg\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("id=\"accountMenuButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-controls=\"accountPanel\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("id=\"accountPanel\" class=\"account-panel\" hidden", html, StringComparison.OrdinalIgnoreCase);
@@ -341,15 +343,24 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("event.key !== \"Escape\"", script, StringComparison.Ordinal);
         Assert.Contains("hitTolerance", script, StringComparison.Ordinal);
         Assert.Contains("scale: 0.32", script, StringComparison.Ordinal);
-        Assert.Contains("img/pin_icon_neutral.svg?v=2", script, StringComparison.Ordinal);
+        Assert.Contains("img/pin_icon_neutral.svg?v=3", script, StringComparison.Ordinal);
+        Assert.Contains("img/pin_icon_visited.svg?v=3", script, StringComparison.Ordinal);
+        Assert.Contains("attribution: false, zoom: false", script, StringComparison.Ordinal);
         Assert.Contains("VisitState.unknown", script, StringComparison.Ordinal);
         Assert.Contains("elements.mapLegend.hidden = !authenticated", script, StringComparison.Ordinal);
         Assert.Contains("closeAccountMenu(true)", script, StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.OK, neutralPinResponse.StatusCode);
         Assert.Equal("image/svg+xml", neutralPinResponse.Content.Headers.ContentType?.MediaType);
         Assert.Contains("width=\"94\" height=\"128\"", neutralPin, StringComparison.Ordinal);
+        Assert.Contains("#168BD2", neutralPin, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, visitedPinResponse.StatusCode);
+        Assert.Equal("image/svg+xml", visitedPinResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("#123E65", visitedPin, StringComparison.Ordinal);
+        Assert.Contains("stroke=\"#fff\"", visitedPin, StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.OK, logoResponse.StatusCode);
         Assert.Equal("image/svg+xml", logoResponse.Content.Headers.ContentType?.MediaType);
+        Assert.DoesNotContain("pin_icon_red.png", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("pin_icon_green.png", script, StringComparison.Ordinal);
         Assert.DoesNotContain("jquery", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
     }
@@ -414,13 +425,15 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             var styleResponse = await client.GetAsync("/toured/css/toured.css");
             var scriptResponse = await client.GetAsync("/toured/js/toured.js");
             var neutralPinResponse = await client.GetAsync("/toured/img/pin_icon_neutral.svg");
-            var logoResponse = await client.GetAsync("/toured/img/toured-logo.svg");
+            var visitedPinResponse = await client.GetAsync("/toured/img/pin_icon_visited.svg");
+            var logoResponse = await client.GetAsync("/toured/img/toured-logo-transparent.svg");
 
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
             Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, styleResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, scriptResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, neutralPinResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, visitedPinResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, logoResponse.StatusCode);
             Assert.NotNull(response.Headers.Location);
             var query = QueryHelpers.ParseQuery(response.Headers.Location.Query);

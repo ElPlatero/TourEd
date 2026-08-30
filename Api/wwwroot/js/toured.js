@@ -33,34 +33,27 @@
         visited: "visited"
     });
 
-    const createMarkerLayer = (iconSource, visited) => new ol.layer.Vector({
+    const createMarkerLayer = iconSource => new ol.layer.Vector({
         source: new ol.source.Vector(),
         style: new ol.style.Style({
             image: new ol.style.Icon({
                 anchor: [0.5, 1],
                 src: iconSource,
                 scale: 0.32
-            }),
-            text: visited ? new ol.style.Text({
-                text: "✓",
-                offsetY: -16,
-                font: "bold 12px sans-serif",
-                fill: new ol.style.Fill({ color: "#ffffff" }),
-                stroke: new ol.style.Stroke({ color: "#245a3b", width: 2 })
-            }) : undefined
+            })
         })
     });
 
     const app = {
         infoLocked: false,
         infoPixel: null,
-        neutralMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=2", false),
-        visitedMarkers: createMarkerLayer("img/pin_icon_green.png", true),
-        unvisitedMarkers: createMarkerLayer("img/pin_icon_red.png", false)
+        neutralMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3"),
+        visitedMarkers: createMarkerLayer("img/pin_icon_visited.svg?v=3"),
+        unvisitedMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3")
     };
 
     app.map = new ol.Map({
-        controls: ol.control.defaults({ attribution: false }).extend([new ol.control.Attribution({
+        controls: ol.control.defaults({ attribution: false, zoom: false }).extend([new ol.control.Attribution({
             collapsible: false
         })]),
         layers: [
