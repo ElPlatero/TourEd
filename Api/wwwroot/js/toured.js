@@ -47,7 +47,15 @@
     const app = {
         infoLocked: false,
         infoPixel: null,
+        loadGeneration: 0,
         neutralMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3"),
+        pointCache: {
+            [VisitState.unknown]: [],
+            [VisitState.open]: [],
+            [VisitState.visited]: []
+        },
+        providers: [],
+        selectedProviderSlugs: new Set(),
         visitedMarkers: createMarkerLayer("img/pin_icon_visited.svg?v=3"),
         unvisitedMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3")
     };
@@ -121,6 +129,19 @@
         app.unvisitedMarkers.getSource().clear();
     };
 
+    const resetPointCache = () => {
+        app.pointCache[VisitState.unknown] = [];
+        app.pointCache[VisitState.open] = [];
+        app.pointCache[VisitState.visited] = [];
+    };
+
+    const setProviderCatalog = response => {
+        app.providers = Array.isArray(response.stampingProviders)
+            ? response.stampingProviders.filter(provider => typeof provider.slug === "string")
+            : [];
+        app.selectedProviderSlugs = new Set(app.providers.map(provider => provider.slug));
+    };
+
     const createMarker = (stampingPoint, visitState) => {
         const feature = new ol.Feature(new ol.geom.Point(ol.proj.fromLonLat([
             stampingPoint.position.longitude,
@@ -131,15 +152,36 @@
         return feature;
     };
 
-    const addPoints = (response, visitState) => {
+    const addPoints = (stampingPoints, visitState) => {
         const layer = visitState === VisitState.visited
             ? app.visitedMarkers
             : visitState === VisitState.open
                 ? app.unvisitedMarkers
                 : app.neutralMarkers;
-        const features = response.stampingPoints.map(point => createMarker(point, visitState));
+        const features = stampingPoints.map(point => createMarker(point, visitState));
         layer.getSource().addFeatures(features);
         return features.length;
+    };
+
+    const cachePoints = (response, visitState) => {
+        app.pointCache[visitState] = Array.isArray(response.stampingPoints)
+            ? response.stampingPoints
+            : [];
+    };
+
+    const renderSelectedPoints = () => {
+        hideInfo(true);
+        clearMarkers();
+        return Object.values(VisitState).reduce((count, visitState) => {
+            const selectedPoints = app.pointCache[visitState].filter(point =>
+                app.selectedProviderSlugs.has(point.provider?.slug));
+            return count + addPoints(selectedPoints, visitState);
+        }, 0);
+    };
+
+    const setSelectedProviders = providerSlugs => {
+        app.selectedProviderSlugs = new Set(providerSlugs);
+        return renderSelectedPoints();
     };
 
     const getJson = async (url) => {
@@ -152,26 +194,37 @@
         return await response.json();
     };
 
-    const loadAnonymousPoints = async () => {
-        clearMarkers();
-        const points = await getJson("api/points");
-        return addPoints(points, VisitState.unknown);
+    const loadAnonymousPoints = async generation => {
+        const points = await getJson("api/points?provider=all");
+        if (generation !== app.loadGeneration) {
+            return null;
+        }
+        cachePoints(points, VisitState.unknown);
+        return renderSelectedPoints();
     };
 
-    const loadAuthenticatedPoints = async () => {
-        clearMarkers();
+    const loadAuthenticatedPoints = async generation => {
         try {
             const [unvisited, visited] = await Promise.all([
-                getJson("api/points?vis=false"),
-                getJson("api/points?vis=true")
+                getJson("api/points?provider=all&vis=false"),
+                getJson("api/points?provider=all&vis=true")
             ]);
-            return addPoints(unvisited, VisitState.open) + addPoints(visited, VisitState.visited);
+            if (generation !== app.loadGeneration) {
+                return null;
+            }
+            cachePoints(unvisited, VisitState.open);
+            cachePoints(visited, VisitState.visited);
+            return renderSelectedPoints();
         } catch (response) {
+            if (generation !== app.loadGeneration) {
+                return null;
+            }
             if (response.status !== 401) {
                 throw response;
             }
             setSession({ authenticated: false });
-            return await loadAnonymousPoints();
+            resetPointCache();
+            return await loadAnonymousPoints(generation);
         }
     };
 
@@ -319,31 +372,48 @@
     window.addEventListener("resize", refreshInfoPosition);
 
     const initialize = async () => {
+        const generation = ++app.loadGeneration;
         if (window.location.search) {
             window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
         }
 
         setMapStatus("Karte wird geladen …", "loading");
+        hideInfo(true);
+        clearMarkers();
+        resetPointCache();
         let session = { authenticated: false };
         try {
             session = await getJson("auth/session");
         } catch {
             // Anonymous map use remains available when the session check fails.
         }
+        if (generation !== app.loadGeneration) {
+            return;
+        }
         setSession(session);
 
         try {
+            const providers = await getJson("api/providers");
+            if (generation !== app.loadGeneration) {
+                return;
+            }
+            setProviderCatalog(providers);
             const pointCount = session.authenticated === true
-                ? await loadAuthenticatedPoints()
-                : await loadAnonymousPoints();
+                ? await loadAuthenticatedPoints(generation)
+                : await loadAnonymousPoints(generation);
+            if (pointCount === null || generation !== app.loadGeneration) {
+                return;
+            }
             setMapStatus(`${pointCount} Stempelstellen geladen.`, "ready");
             window.setTimeout(() => {
-                if (elements.mapStatus.dataset.state === "ready") {
+                if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {
                     setMapStatus("");
                 }
             }, 1800);
         } catch {
-            setMapStatus("Die Stempelstellen konnten nicht geladen werden.", "error");
+            if (generation === app.loadGeneration) {
+                setMapStatus("Anbieter und Stempelstellen konnten nicht geladen werden.", "error");
+            }
         }
     };
 

@@ -24,16 +24,21 @@ The page calls the backend with relative URLs:
   - Used by the “Mit Google anmelden” link to start the Google challenge.
 - `POST auth/logout`
   - Ends the TourEd cookie session and returns the map to anonymous mode.
-- `GET api/points`
+- `GET api/providers`
+  - Loads the integrated provider catalog before point data.
+  - All returned provider slugs are selected internally by default.
+- `GET api/points?provider=all`
   - Used when the session is anonymous.
-  - Uses the anonymous default provider, currently `touringen`.
+  - Loads points from every integrated provider into the in-memory frontend cache.
   - Renders all returned points with a neutral marker because personal visit state is unavailable.
-- `GET api/points?vis=false`
+- `GET api/points?provider=all&vis=false`
   - Used when `auth/session` reports an authenticated cookie session.
-  - Returns unvisited points for that user.
-- `GET api/points?vis=true`
+  - Loads unvisited points from every integrated provider into the in-memory frontend cache.
+- `GET api/points?provider=all&vis=true`
   - Used when `auth/session` reports an authenticated cookie session.
-  - Returns visited points for that user.
+  - Loads visited points from every integrated provider into the in-memory frontend cache.
+
+The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing that selection does not require another point request. An empty selection renders zero points. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
 
 The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, and external OpenLayers CDN. Keep it synchronized whenever these data flows or their retention rules change.
 
@@ -61,7 +66,7 @@ Normal user flow:
 
 1. User opens the HTML map served by the TourEd application.
 2. Browser checks the TourEd session and offers Google login or logout as appropriate.
-3. Browser requests anonymous points once, or visited and unvisited points separately for an authenticated cookie session.
+3. Browser loads the provider catalog and requests all-provider anonymous points once, or all-provider visited and unvisited points separately for an authenticated cookie session.
 4. Backend returns points, provider info, optional tour summaries, and user visit state depending on the session.
 5. Map renders markers and shows a responsive detail dialog on selection, with optional pointer hover on suitable desktop devices.
 
