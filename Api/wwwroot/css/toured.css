@@ -82,6 +82,29 @@ a:focus-visible,
     touch-action: none;
 }
 
+.brand-logo {
+    position: fixed;
+    top: max(0.5rem, env(safe-area-inset-top));
+    left: max(0.5rem, env(safe-area-inset-left));
+    z-index: 180;
+    width: 3.5rem;
+    height: 3.5rem;
+    padding: 0.25rem;
+    overflow: hidden;
+    border: 1px solid rgb(37 37 34 / 25%);
+    border-radius: 0.85rem;
+    background: rgb(255 255 255 / 92%);
+    box-shadow: var(--shadow);
+    pointer-events: none;
+}
+
+.brand-logo img {
+    display: block;
+    width: auto;
+    max-width: none;
+    height: 3rem;
+}
+
 #userSession {
     position: fixed;
     top: max(0.5rem, env(safe-area-inset-top));
@@ -335,6 +358,22 @@ a:focus-visible,
 }
 
 @media (min-width: 45rem) and (hover: hover) and (pointer: fine) {
+    .brand-logo {
+        width: 20rem;
+        height: auto;
+        padding: 0.4rem 0.6rem;
+        overflow: visible;
+    }
+
+    .brand-logo img {
+        width: 100%;
+        height: auto;
+    }
+
+    .map-status {
+        top: max(6.5rem, calc(env(safe-area-inset-top) + 6.5rem));
+    }
+
     #infoCard {
         right: auto;
         bottom: auto;

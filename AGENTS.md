@@ -14,7 +14,7 @@ The repository contains one user-facing frontend rooted at `Api/wwwroot/index.ht
 
 It is a plain HTML, CSS, and vanilla-JavaScript application using OpenLayers. It has no frontend build process. It loads OpenStreetMap tiles and displays stamping points as map markers.
 
-The frontend is mobile-first and fluid. On touch-oriented or narrow displays, stamping-point details appear as a bottom sheet; fine-pointer desktop displays position the same accessible dialog near the selected marker. Selection works by click or touch, the dialog has an explicit close button and Escape handling, interactive controls have touch-sized targets, safe-area insets are respected, and visited markers add a check symbol so visit state is not conveyed by color alone. Pointer hover remains an optional desktop enhancement. Session details and login/logout actions live in an accessible account flyout so they remain usable on narrow screens.
+The frontend is mobile-first and fluid. On touch-oriented or narrow displays, stamping-point details appear as a bottom sheet; fine-pointer desktop displays position the same accessible dialog near the selected marker. Selection works by click or touch, the dialog has an explicit close button and Escape handling, interactive controls have touch-sized targets, safe-area insets are respected, and visited markers add a check symbol so visit state is not conveyed by color alone. Pointer hover remains an optional desktop enhancement. Session details and login/logout actions live in an accessible account flyout so they remain usable on narrow screens. The TourEd logo appears as its compact round signet on narrow displays and as the full wordmark on desktop displays.
 
 The page calls the backend with relative URLs:
 
@@ -50,6 +50,7 @@ The map uses red, green, and neutral pin image assets stored in `Api/wwwroot/img
 - `img/pin_icon_red.png`
 - `img/pin_icon_green.png`
 - `img/pin_icon_neutral.svg`
+- `img/toured-logo.svg`
 
 The anonymous map hides the visit-state legend. Authenticated maps show red as open and green-with-check as visited.
 

@@ -54,7 +54,7 @@
     const app = {
         infoLocked: false,
         infoPixel: null,
-        neutralMarkers: createMarkerLayer("img/pin_icon_neutral.svg", false),
+        neutralMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=2", false),
         visitedMarkers: createMarkerLayer("img/pin_icon_green.png", true),
         unvisitedMarkers: createMarkerLayer("img/pin_icon_red.png", false)
     };
