@@ -30,6 +30,16 @@
         #userSession a, #userSession button {
             margin-left: 0.5em;
         }
+        .ol-attribution .privacy-link {
+            color: inherit;
+            opacity: 0.65;
+            text-decoration: none;
+        }
+        .ol-attribution .privacy-link:hover,
+        .ol-attribution .privacy-link:focus {
+            opacity: 1;
+            text-decoration: underline;
+        }
         #infoCard {
             padding: 0.25em;
             cursor: pointer;
@@ -80,7 +90,6 @@
 <div id="content">
     <div id="userSession">
         <span id="sessionStatus">Sitzung wird geladen …</span>
-        <a href="datenschutz/">Datenschutz</a>
         <a id="loginLink" href="auth/login" hidden>Mit Google anmelden</a>
         <button id="logoutButton" type="button" hidden>Abmelden</button>
     </div>
@@ -113,7 +122,7 @@
                 new ol.layer.Tile({
                     source: new ol.source.OSM({
                         url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        attributions: [ol.source.OSM.ATTRIBUTION, '&copy; TourEd 2023'],
+                        attributions: [ol.source.OSM.ATTRIBUTION, '&copy; TourEd 2023 · <a class="privacy-link" href="datenschutz/">Datenschutz</a>'],
                         maxZoom: 18
                     })
                 })

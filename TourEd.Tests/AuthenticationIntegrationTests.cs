@@ -316,9 +316,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var privacyNotice = await privacyResponse.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
-        Assert.Contains("href=\"datenschutz/\"", frontend, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("&copy; TourEd 2023 · <a class=\"privacy-link\" href=\"datenschutz/\">Datenschutz</a>", frontend, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("dsgvo@baelgun.de", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("tino@schuettpelz.org", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);
     }
 
