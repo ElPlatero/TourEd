@@ -274,6 +274,35 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AllProviderPointQueriesWorkForAnonymousAndAuthenticatedSessions()
+    {
+        using var anonymousClient = CreateClient(_factory);
+        var anonymousResponse = await anonymousClient.GetFromJsonAsync<GetStampingPointsResponse>(
+            "/api/points?provider=all");
+
+        using var authenticatedClient = CreateClient(_factory);
+        await LoginAsync(authenticatedClient);
+        var visitedResponse = await authenticatedClient.GetFromJsonAsync<GetStampingPointsResponse>(
+            "/api/points?provider=all&vis=true");
+        var unvisitedResponse = await authenticatedClient.GetFromJsonAsync<GetStampingPointsResponse>(
+            "/api/points?provider=all&vis=false");
+
+        Assert.NotNull(anonymousResponse);
+        Assert.Contains(anonymousResponse.StampingPoints, point =>
+            point.Provider.Slug == StampingProvider.TouringenSlug);
+        Assert.Contains(anonymousResponse.StampingPoints, point =>
+            point.Provider.Slug == "other" && point.Number == OtherProviderPointNumber);
+
+        Assert.NotNull(visitedResponse);
+        Assert.NotNull(unvisitedResponse);
+        Assert.Contains(visitedResponse.StampingPoints, point =>
+            point.Number == VisitedPointNumber && point.Visited is not null);
+        Assert.Contains(unvisitedResponse.StampingPoints, point =>
+            point.Provider.Slug == "other" && point.Number == OtherProviderPointNumber && point.Visited is null);
+        Assert.DoesNotContain(unvisitedResponse.StampingPoints, point => point.Number == VisitedPointNumber);
+    }
+
+    [Fact]
     public async Task ProviderCatalogIsAnonymousSortedCompleteAndExposesOnlyPublicWebsiteUrls()
     {
         using var client = CreateClient(_factory);
@@ -329,8 +358,15 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("href=\"auth/login\"", normalizedFrontend, StringComparison.Ordinal);
         Assert.Contains("auth/session", normalizedFrontend, StringComparison.Ordinal);
         Assert.Contains("auth/logout", normalizedFrontend, StringComparison.Ordinal);
-        Assert.Contains("api/points?vis=false", normalizedFrontend, StringComparison.Ordinal);
-        Assert.Contains("api/points?vis=true", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("api/providers", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("api/points?provider=all", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("api/points?provider=all&vis=false", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("api/points?provider=all&vis=true", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("pointcache", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("selectedproviderslugs", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("renderselectedpoints", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("setselectedproviders", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("loadgeneration", normalizedFrontend, StringComparison.Ordinal);
         Assert.Contains("window.history.replacestate", normalizedFrontend, StringComparison.Ordinal);
         Assert.DoesNotContain("userid", normalizedFrontend, StringComparison.Ordinal);
         Assert.DoesNotContain("toured-user", normalizedFrontend, StringComparison.Ordinal);
