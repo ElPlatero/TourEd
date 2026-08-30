@@ -45,14 +45,13 @@ Optional `provider` query behavior on `GET api/points`:
 - Provider slug, for example `provider=touringen`: returns points from that provider.
 - `provider=all`: returns points from all providers.
 
-The map uses red, green, and neutral pin image assets stored in `Api/wwwroot/img`:
+The map uses logo-colored SVG pin assets stored in `Api/wwwroot/img`:
 
-- `img/pin_icon_red.png`
-- `img/pin_icon_green.png`
 - `img/pin_icon_neutral.svg`
-- `img/toured-logo.svg`
+- `img/pin_icon_visited.svg`
+- `img/toured-logo-transparent.svg`
 
-The anonymous map hides the visit-state legend. Authenticated maps show red as open and green-with-check as visited.
+The anonymous map hides the visit-state legend. Anonymous and authenticated open points use the logo's light blue; authenticated visited points use its dark blue and carry a white check matching the logo. The bundled map omits OpenLayers' on-map zoom buttons while retaining its touch, mouse, and keyboard zoom interactions.
 
 The current static map does not use the tours endpoint or admin/import endpoints.
 

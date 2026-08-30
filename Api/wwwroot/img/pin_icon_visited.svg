@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="94" height="128" viewBox="0 0 94 128" role="img" aria-label="Besuchter Kartenpin">
+  <path fill="#123E65" d="M47 0C21.04 0 0 21.04 0 47c0 35.25 47 81 47 81s47-45.75 47-81C94 21.04 72.96 0 47 0Z"/>
+  <circle cx="47" cy="47" r="34" fill="#174F78"/>
+  <circle cx="47" cy="47" r="22" fill="#123E65"/>
+  <path d="M31 47l11 11 22-24" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
