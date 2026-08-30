@@ -2,11 +2,11 @@
 
 ## Purpose
 
-TourEd is a small .NET 10 application for Touringen stamping points and hiking tours.
+TourEd is a small .NET 10 application for stamping points and hiking tours from multiple providers.
 
-It stores Touringen stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
+It stores Touringen and Harzer Wandernadel (HWN) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
-Stamping points and future provider-specific data are anchored by `StampingProvider`. The initial provider is `touringen`, and users store a `DefaultStampingProviderId` that currently defaults to Touringen.
+Stamping points are anchored by `StampingProvider`. Each provider declares an abbreviation and whether its data is available anonymously. Touringen allows anonymous access; Harzer Wandernadel does not. Users store a `DefaultStampingProviderId` that currently defaults to Touringen.
 
 ## Frontend
 
@@ -25,11 +25,11 @@ The page calls the backend with relative URLs:
 - `POST auth/logout`
   - Ends the TourEd cookie session and returns the map to anonymous mode.
 - `GET api/providers`
-  - Loads the integrated provider catalog before point data.
+  - Loads the providers available to the current anonymous or authenticated session before point data.
   - All returned provider slugs are selected internally by default.
 - `GET api/points?provider=all`
   - Used when the session is anonymous.
-  - Loads points from every integrated provider into the in-memory frontend cache.
+  - Loads points only from providers that permit anonymous access into the in-memory frontend cache.
   - Renders all returned points with a neutral marker because personal visit state is unavailable.
 - `GET api/points?provider=all&vis=false`
   - Used when `auth/session` reports an authenticated cookie session.
@@ -38,7 +38,7 @@ The page calls the backend with relative URLs:
   - Used when `auth/session` reports an authenticated cookie session.
   - Loads visited points from every integrated provider into the in-memory frontend cache.
 
-The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All providers are selected after each page initialization, `Alle` and `Keine` provide bulk selection, and an empty selection renders zero points. Provider names are also shown in point details because point numbers are provider-scoped. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
+The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All available providers are selected after each page initialization, `Alle` and `Keine` provide bulk selection, and an empty selection renders zero points. Provider names and abbreviations are used in point details because point numbers are provider-scoped. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
 
 The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and the user-initiated navigation to external provider websites. Keep it synchronized whenever these data flows or their retention rules change.
 
@@ -47,8 +47,8 @@ The frontend never reads or writes user ids, Google subjects, tokens, custom ide
 Optional `provider` query behavior on `GET api/points`:
 
 - Omitted: uses the authenticated user's default provider, or `touringen` for anonymous requests.
-- Provider slug, for example `provider=touringen`: returns points from that provider.
-- `provider=all`: returns points from all providers.
+- Provider slug, for example `provider=touringen`: returns points from that provider if it is available to the current session; otherwise an anonymous request receives `401`.
+- `provider=all`: returns points from every provider for authenticated users and only anonymously enabled providers for anonymous users.
 
 The map uses logo-colored SVG pin assets stored in `Api/wwwroot/img`:
 
@@ -112,7 +112,7 @@ The backend follows a simple layered structure:
 
 Provider data is represented by `StampingProvider`. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
 
-`StampingProvider` also stores the public name, description, and optional website used by the provider catalog. Public provider DTOs expose only absolute HTTP(S) website URLs; unsupported URI schemes are omitted.
+`StampingProvider` also stores the public name, abbreviation, description, optional website, and anonymous-access flag used by the provider catalog. Public provider DTOs expose only absolute HTTP(S) website URLs; unsupported URI schemes are omitted. Anonymous catalogs and point queries omit providers whose anonymous-access flag is false.
 
 Users can optionally store a unique Google subject identifier. `GoogleLoginService` resolves an existing binding by subject or atomically binds the first verified Google login to an existing user by normalized email. It never creates users.
 
@@ -135,7 +135,7 @@ Authentication endpoints:
 - `GET /auth/session` returns anonymous/authenticated state and the authenticated email only.
 - `POST /auth/logout` removes the TourEd session cookie.
 
-Runtime configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, `Authentication__Cli__UserEmail`, `Authentication__Cli__Token`, `PathBase`, `DataProtection__KeysPath`, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, and `touringen__StempelstellenUri=https://www.touringen.de/stempelstellen`. Production values belong in the root-protected runtime environment file configured by `RUNTIME_ENV_FILE`, not in appsettings or the visible systemd unit. Server setup validates the required entries and creates the configured persistent Data-Protection directory outside the replaceable application release for the runtime user only. Kestrel must listen only on the trusted proxy host or private network when forwarded headers are globally enabled.
+Runtime configuration uses `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret`, `Authentication__Cli__UserEmail`, `Authentication__Cli__Token`, `PathBase`, `DataProtection__KeysPath`, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, and `touringen__StempelstellenUri=https://www.touringen.de/stempelstellen`. Production values belong in the root-protected runtime environment file configured by `RUNTIME_ENV_FILE`, not in appsettings or the visible systemd unit. The non-secret HWN download-page and overview-table URLs are configured under `harzerWandernadel` in appsettings. Server setup validates the required environment entries and creates the configured persistent Data-Protection directory outside the replaceable application release for the runtime user only. Kestrel must listen only on the trusted proxy host or private network when forwarded headers are globally enabled.
 
 ## Data Import
 
@@ -148,6 +148,13 @@ Touringen data import:
 - Stores the highest source id as the point's current external id and maps every source alias in the import payload to the normalized point.
 - Maps all hiking-tour relationships for those source aliases to the normalized stamping point id.
 - Records import metadata.
+
+Harzer Wandernadel data import:
+
+- Discovers the current official GPX ZIP from the configured HWN download page and combines its coordinates with current names from the configured official overview table.
+- Accepts exactly the 222 regular numbered points HWN 1 through HWN 222; Sonderstempel and temporary points are excluded.
+- Updates points by provider and number while retaining their internal ids and user visits, adds newly numbered points, and never automatically deletes missing stored points.
+- Records import metadata and is started manually through the CLI-protected admin endpoint.
 
 User data import:
 
@@ -165,20 +172,20 @@ Main consumer endpoint:
 
 Useful query behavior:
 
-- `provider=<slug>` returns points for a specific stamping provider.
-- `provider=all` returns points for all stamping providers.
+- `provider=<slug>` returns points for a specific stamping provider when it is available to the current session; anonymous access to a restricted provider returns 401.
+- `provider=all` returns all providers for authenticated users and only anonymously enabled providers for anonymous users.
 - `vis=true` returns visited points for the authenticated user.
 - `vis=false` returns unvisited points for the authenticated user.
 - Requests with `vis=true` or `vis=false` return `401` when no valid cookie identity with internal user claims is present.
 - Geo filtering exists via query parameters and is used server-side.
 
-Point DTOs include provider info while preserving the existing number, name, position, visited, and tours fields.
+Point DTOs include provider name, slug, and abbreviation while preserving the existing number, name, position, visited, and tours fields.
 
 Other endpoints:
 
 - `GET /api/providers`
-  - Anonymous catalog of all integrated stamping providers.
-  - Returns providers ordered by name and slug, including description and an optional validated public website URL.
+  - Session-aware catalog of available stamping providers; restricted providers are omitted for anonymous requests.
+  - Returns providers ordered by name and slug, including abbreviation, description, anonymous-access status, and an optional validated public website URL.
 
 - `GET /health`
   - Anonymous ASP.NET Core readiness endpoint.
@@ -188,6 +195,9 @@ Other endpoints:
   - Not currently used by the bundled HTML map.
 - `POST /api/admin/imports/touringen`
   - Imports Touringen source data.
+  - Requires the dedicated CLI bearer token and is intended for manual/admin use.
+- `POST /api/admin/imports/harzer-wandernadel`
+  - Imports the 222 regular Harzer Wandernadel points from the official GPX download and overview table.
   - Requires the dedicated CLI bearer token and is intended for manual/admin use.
 - `POST /api/admin/imports`
   - Imports user visit data.

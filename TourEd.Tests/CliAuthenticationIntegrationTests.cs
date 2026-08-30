@@ -64,20 +64,23 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ValidTokenCreatesConfiguredUserClaimsAndAllowsBothImports()
+    public async Task ValidTokenCreatesConfiguredUserClaimsAndAllowsAllImports()
     {
         using var client = CreateClient(_factory);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CliToken);
 
         var touringenResponse = await client.PostAsync("/api/admin/imports/touringen", content: null);
+        var harzerWandernadelResponse = await client.PostAsync("/api/admin/imports/harzer-wandernadel", content: null);
         using var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("1;;")), "csvImport", "visits.csv");
         var userResponse = await client.PostAsync("/api/admin/imports", form);
 
         Assert.Equal(HttpStatusCode.OK, touringenResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, harzerWandernadelResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, userResponse.StatusCode);
         var importManager = _factory.Services.GetRequiredService<CapturingImportManager>();
         Assert.Equal(1, importManager.TouringenImportCount);
+        Assert.Equal(1, importManager.HarzerWandernadelImportCount);
         Assert.Equal(1, importManager.UserImportCount);
         Assert.Equal(TouredAuthenticationSchemes.CliBearer, importManager.AuthenticationType);
         Assert.Collection(
@@ -248,9 +251,11 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
     private sealed class CapturingImportManager(IHttpContextAccessor httpContextAccessor) : IImportManager
     {
         private int _touringenImportCount;
+        private int _harzerWandernadelImportCount;
         private int _userImportCount;
 
         public int TouringenImportCount => _touringenImportCount;
+        public int HarzerWandernadelImportCount => _harzerWandernadelImportCount;
         public int UserImportCount => _userImportCount;
         public string? AuthenticationType { get; private set; }
         public Claim[] Claims { get; private set; } = [];
@@ -259,6 +264,13 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
         {
             CapturePrincipal();
             Interlocked.Increment(ref _touringenImportCount);
+            return Task.CompletedTask;
+        }
+
+        public Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default)
+        {
+            CapturePrincipal();
+            Interlocked.Increment(ref _harzerWandernadelImportCount);
             return Task.CompletedTask;
         }
 

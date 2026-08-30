@@ -21,12 +21,12 @@ public sealed class GoogleLoginServiceTests : IDisposable
         await using var context = CreateContext();
         await context.Database.MigrateAsync(PreviousMigration);
         await context.Database.ExecuteSqlRawAsync(
-            "INSERT INTO StampingProviders (Id, Slug, Name) VALUES (2, 'other', 'Other');");
+            "INSERT INTO StampingProviders (Id, Slug, Name) VALUES (3, 'other', 'Other');");
         await context.Database.ExecuteSqlRawAsync(
-            "INSERT INTO Users (Id, Email, DefaultStampingProviderId) VALUES (7, 'existing@example.test', 2);");
+            "INSERT INTO Users (Id, Email, DefaultStampingProviderId) VALUES (7, 'existing@example.test', 3);");
         await context.Database.ExecuteSqlRawAsync(
             "INSERT INTO StampingPoints (Id, Name, Longitude, Latitude, Number, Code, ProviderId, ExternalId) " +
-            "VALUES (42, 'Existing point', '11.5', '50.5', 123, 456, 2, 'other-42');");
+            "VALUES (42, 'Existing point', '11.5', '50.5', 123, 456, 3, 'other-42');");
         await context.Database.ExecuteSqlRawAsync(
             "INSERT INTO UserVisit (Id, UserId, Visited, StampingPointId) " +
             "VALUES (100, 7, '2026-08-28 10:00:00', 42);");
@@ -39,7 +39,7 @@ public sealed class GoogleLoginServiceTests : IDisposable
         Assert.Contains(GoogleSubjectMigration, migrations);
         Assert.Equal(7, user.Id);
         Assert.Equal("existing@example.test", user.Email);
-        Assert.Equal(2, user.DefaultStampingProviderId);
+        Assert.Equal(3, user.DefaultStampingProviderId);
         Assert.Null(user.GoogleSubject);
         Assert.Equal(100, visit.Id);
         Assert.Equal(7, visit.UserId);

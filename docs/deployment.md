@@ -107,7 +107,7 @@ The server setup validates that the environment file is a regular root-owned fil
 
 ## Use CLI authentication for imports
 
-The two import endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or arbitrary identity header cannot authorize these routes.
+The three import endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or arbitrary identity header cannot authorize these routes.
 
 Use the token without writing its literal value into shell history. For the Touringen import:
 
@@ -116,6 +116,16 @@ curl --fail-with-body --request POST \
     --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
     https://server.example/toured/api/admin/imports/touringen
 ```
+
+For the Harzer Wandernadel import:
+
+```bash
+curl --fail-with-body --request POST \
+    --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
+    https://server.example/toured/api/admin/imports/harzer-wandernadel
+```
+
+The HWN import discovers the current official GPX archive, combines its coordinates with the official overview names, and requires exactly the 222 regular numbered points. It updates existing points without changing their internal ids or visits and does not delete stored points that disappear from a later source. The non-secret source URLs and download-size limit are configured in the deployed appsettings under `harzerWandernadel`.
 
 For a user visit import:
 
@@ -128,7 +138,7 @@ curl --fail-with-body --request POST \
 
 Avoid shell tracing and verbose HTTP output while handling the token. In a later administrator session, load it without echoing it by running `read -rsp 'CLI token: ' TOURED_CLI_TOKEN` and pressing Enter.
 
-To rotate the credential, generate a new token, replace only `Authentication__Cli__Token` in `/etc/toured-api.env`, and restart the service. The old token becomes invalid immediately after restart. Verify both import calls with the new value, then run `unset TOURED_CLI_TOKEN` in every shell that held it. Rotate the Google client secret the same way and restart the service after replacing `Authentication__Google__ClientSecret`.
+To rotate the credential, generate a new token, replace only `Authentication__Cli__Token` in `/etc/toured-api.env`, and restart the service. The old token becomes invalid immediately after restart. Verify the required import calls with the new value, then run `unset TOURED_CLI_TOKEN` in every shell that held it. Rotate the Google client secret the same way and restart the service after replacing `Authentication__Google__ClientSecret`.
 
 ## Run the one-time server setup
 

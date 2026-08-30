@@ -16,15 +16,17 @@ public partial class ImportManager : IImportManager
 {
     private readonly Func<User?> _getCurrentUser;
     private readonly IHtmlParsingService _htmlParser;
+    private readonly IHarzerWandernadelImportService _harzerWandernadelImporter;
     private readonly IImportService<StampingPoint> _stampingPointsImporter;
     private readonly IImportService<HikingTour> _hikingToursImporter;
     private readonly TouredRepository _repository;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IOptions<TouringenWebsiteConfiguration> options, IImportService<StampingPoint> stampingPointsImporter, IImportService<HikingTour> hikingToursImporter, TouredRepository repository)
+    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<StampingPoint> stampingPointsImporter, IImportService<HikingTour> hikingToursImporter, TouredRepository repository)
     {
         _getCurrentUser = () => httpContextAccessor.HttpContext?.User.GetUser();
         _htmlParser = htmlParser;
+        _harzerWandernadelImporter = harzerWandernadelImporter;
         _stampingPointsImporter = stampingPointsImporter;
         _hikingToursImporter = hikingToursImporter;
         _repository = repository;
@@ -71,6 +73,13 @@ public partial class ImportManager : IImportManager
         await _repository.SaveHikingToursAsync(hikingTours);
 
         await _repository.SaveImportAsync(stampingPoints.Length, hikingTours.Length);
+    }
+
+    public async Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default)
+    {
+        var stampingPoints = await _harzerWandernadelImporter.DownloadStampingPointsAsync(cancellationToken);
+        await _repository.SaveStampingPointsAsync(stampingPoints.ToArray());
+        await _repository.SaveImportAsync(stampingPoints.Count, 0);
     }
 
     public async Task ImportUserDataAsync(Stream stream)

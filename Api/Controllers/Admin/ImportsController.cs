@@ -34,6 +34,19 @@ public class ImportsController : ControllerBase
         }
     }
 
+    [HttpPost("harzer-wandernadel")]
+    public async Task<IActionResult> CreateNewHarzerWandernadelImport(
+        [FromServices] IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken)
+    {
+        using (unitOfWork)
+        {
+            await _importManager.ImportHarzerWandernadelDataAsync(cancellationToken);
+            await unitOfWork.CommitAsync();
+            return Ok();
+        }
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateNewUserDataImport([FromForm] IFormFileCollection csvImport,[FromServices] IUnitOfWork unitOfWork)
     {

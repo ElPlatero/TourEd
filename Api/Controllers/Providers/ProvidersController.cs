@@ -19,7 +19,7 @@ public sealed class ProvidersController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<GetStampingProvidersResponse>> GetStampingProviders()
     {
-        var providers = await _manager.GetStampingProvidersAsync();
+        var providers = await _manager.GetStampingProvidersAsync(User.Identity?.IsAuthenticated == true);
         return Ok(new GetStampingProvidersResponse(
             providers.Count,
             providers.Select(StampingProviderDetailsDto.Create)));

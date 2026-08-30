@@ -2,7 +2,7 @@ using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Dto;
 
-public record StampingProviderDto(string Slug, string Name)
+public record StampingProviderDto(string Slug, string Name, string? Abbreviation)
 {
-    public static StampingProviderDto Create(StampingProvider provider) => new(provider.Slug, provider.Name);
+    public static StampingProviderDto Create(StampingProvider provider) => new(provider.Slug, provider.Name, provider.Abbreviation);
 }

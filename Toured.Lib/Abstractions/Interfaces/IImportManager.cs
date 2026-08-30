@@ -3,5 +3,6 @@
 public interface IImportManager
 {
     Task ImportTouringenDataAsync();
+    Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default);
     Task ImportUserDataAsync(Stream stream);
 }

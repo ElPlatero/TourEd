@@ -34,6 +34,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     private const int UnvisitedPointNumber = 102;
     private const int WritablePointNumber = 103;
     private const int OtherProviderPointNumber = 201;
+    private const int RestrictedProviderPointNumber = 45;
+    private const int OtherProviderId = 3;
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"toured-auth-tests-{Guid.NewGuid():N}.db");
     private readonly string _keysPath = Path.Combine(Path.GetTempPath(), $"toured-auth-keys-{Guid.NewGuid():N}");
     private TouredWebApplicationFactory _factory = null!;
@@ -46,17 +48,19 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         await context.Database.MigrateAsync();
         context.StampingProviders.Add(new StampingProvider
         {
-            Id = 2,
+            Id = OtherProviderId,
             Slug = "other",
             Name = "Other provider",
+            IsAnonymousAccessAllowed = true,
             Description = "Other provider description.",
             WebsiteUri = new Uri("https://provider.example.test/info")
         });
         context.StampingProviders.Add(new StampingProvider
         {
-            Id = 3,
+            Id = 4,
             Slug = "unsupported-link",
             Name = "Unsupported link provider",
+            IsAnonymousAccessAllowed = true,
             Description = "Provider with a non-public website scheme.",
             WebsiteUri = new Uri("ftp://provider.example.test/info")
         });
@@ -67,7 +71,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             visitedPoint,
             CreatePoint(UnvisitedPointNumber, StampingProvider.TouringenId),
             CreatePoint(WritablePointNumber, StampingProvider.TouringenId),
-            CreatePoint(OtherProviderPointNumber, 2));
+            CreatePoint(OtherProviderPointNumber, OtherProviderId),
+            CreatePoint(RestrictedProviderPointNumber, StampingProvider.HarzerWandernadelId));
         await context.SaveChangesAsync();
         context.UserVisits.Add(new UserVisit
         {
@@ -279,6 +284,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         using var anonymousClient = CreateClient(_factory);
         var anonymousResponse = await anonymousClient.GetFromJsonAsync<GetStampingPointsResponse>(
             "/api/points?provider=all");
+        var restrictedAnonymousResponse = await anonymousClient.GetAsync(
+            $"/api/points?provider={StampingProvider.HarzerWandernadelSlug}");
 
         using var authenticatedClient = CreateClient(_factory);
         await LoginAsync(authenticatedClient);
@@ -292,6 +299,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             point.Provider.Slug == StampingProvider.TouringenSlug);
         Assert.Contains(anonymousResponse.StampingPoints, point =>
             point.Provider.Slug == "other" && point.Number == OtherProviderPointNumber);
+        Assert.DoesNotContain(anonymousResponse.StampingPoints, point =>
+            point.Provider.Slug == StampingProvider.HarzerWandernadelSlug);
+        Assert.Equal(HttpStatusCode.Unauthorized, restrictedAnonymousResponse.StatusCode);
 
         Assert.NotNull(visitedResponse);
         Assert.NotNull(unvisitedResponse);
@@ -299,29 +309,44 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             point.Number == VisitedPointNumber && point.Visited is not null);
         Assert.Contains(unvisitedResponse.StampingPoints, point =>
             point.Provider.Slug == "other" && point.Number == OtherProviderPointNumber && point.Visited is null);
+        Assert.Contains(unvisitedResponse.StampingPoints, point =>
+            point.Provider.Slug == StampingProvider.HarzerWandernadelSlug &&
+            point.Provider.Abbreviation == "HWN" &&
+            point.Number == RestrictedProviderPointNumber && point.Visited is null);
         Assert.DoesNotContain(unvisitedResponse.StampingPoints, point => point.Number == VisitedPointNumber);
     }
 
     [Fact]
-    public async Task ProviderCatalogIsAnonymousSortedCompleteAndExposesOnlyPublicWebsiteUrls()
+    public async Task ProviderCatalogFiltersRestrictedProvidersAndExposesOnlyPublicWebsiteUrls()
     {
         using var client = CreateClient(_factory);
 
-        var response = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
+        var anonymousResponse = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
+        await LoginAsync(client);
+        var authenticatedResponse = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
 
-        Assert.NotNull(response);
-        Assert.Equal(3, response.OverallCount);
-        var providers = response.StampingProviders.ToArray();
+        Assert.NotNull(anonymousResponse);
+        Assert.Equal(3, anonymousResponse.OverallCount);
+        var providers = anonymousResponse.StampingProviders.ToArray();
         Assert.Equal(["Other provider", "Touringen", "Unsupported link provider"], providers.Select(p => p.Name));
 
         var touringen = providers[1];
         Assert.Equal(StampingProvider.TouringenSlug, touringen.Slug);
+        Assert.True(touringen.IsAnonymousAccessAllowed);
         Assert.Contains("430 offizielle Stempelstellen", touringen.Description, StringComparison.Ordinal);
         Assert.Equal("https://www.touringen.de/", touringen.WebsiteUrl);
 
         var other = providers[0];
         Assert.Equal("https://provider.example.test/info", other.WebsiteUrl);
         Assert.Null(providers[2].WebsiteUrl);
+
+        Assert.NotNull(authenticatedResponse);
+        Assert.Equal(4, authenticatedResponse.OverallCount);
+        var harzerWandernadel = Assert.Single(authenticatedResponse.StampingProviders,
+            provider => provider.Slug == StampingProvider.HarzerWandernadelSlug);
+        Assert.Equal("HWN", harzerWandernadel.Abbreviation);
+        Assert.False(harzerWandernadel.IsAnonymousAccessAllowed);
+        Assert.Equal("https://www.harzer-wandernadel.de/", harzerWandernadel.WebsiteUrl);
     }
 
     [Fact]
@@ -466,6 +491,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("elements.providerInfoTrigger?.focus", script, StringComparison.Ordinal);
         Assert.Contains("url.protocol === \"http:\" || url.protocol === \"https:\"", script, StringComparison.Ordinal);
         Assert.Contains("stampingPoint.provider?.name", script, StringComparison.Ordinal);
+        Assert.Contains("stampingPoint.provider?.abbreviation", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
         Assert.DoesNotContain("localStorage", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sessionStorage", script, StringComparison.OrdinalIgnoreCase);
@@ -489,6 +515,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("TourEd übermittelt beim Öffnen eines Anbieterlinks weder die E-Mail-Adresse noch gespeicherte Stempelbesuche", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("TourEd ist ein unabhängiges Projekt", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Beim bewussten Öffnen eines externen Anbieterlinks", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("ausschließlich für angemeldete, zuvor freigeschaltete TourEd-Benutzer sichtbar", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("keine Konto- oder Besuchsdaten an den Stempelanbieter übermittelt", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
     }
 
@@ -542,6 +570,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             var visitedPinResponse = await client.GetAsync("/toured/img/pin_icon_visited.svg");
             var logoResponse = await client.GetAsync("/toured/img/toured-logo-transparent.svg");
             var providersResponse = await client.GetAsync("/toured/api/providers");
+            var restrictedPointsResponse = await client.GetAsync("/toured/api/points?provider=harzer-wandernadel");
 
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
             Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
@@ -551,6 +580,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.OK, visitedPinResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, logoResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, providersResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, restrictedPointsResponse.StatusCode);
             Assert.NotNull(response.Headers.Location);
             var query = QueryHelpers.ParseQuery(response.Headers.Location.Query);
             Assert.Equal("https://localhost/toured/signin-google", query["redirect_uri"]);
