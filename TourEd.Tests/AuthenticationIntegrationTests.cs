@@ -462,7 +462,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("closeProviderMenu(true)", script, StringComparison.Ordinal);
         Assert.Contains("closeAccountMenu()", script, StringComparison.Ordinal);
         Assert.Contains("elements.providerInfoDialog.showModal()", script, StringComparison.Ordinal);
+        Assert.Contains("providerInfoDialog.addEventListener(\"cancel\"", script, StringComparison.Ordinal);
         Assert.Contains("elements.providerInfoTrigger?.focus", script, StringComparison.Ordinal);
+        Assert.Contains("url.protocol === \"http:\" || url.protocol === \"https:\"", script, StringComparison.Ordinal);
         Assert.Contains("stampingPoint.provider?.name", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
         Assert.DoesNotContain("localStorage", script, StringComparison.OrdinalIgnoreCase);
@@ -483,6 +485,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("tino@schuettpelz.org", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Eine Verbindung zu dieser Website wird erst hergestellt, wenn der Link bewusst geöffnet wird", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("TourEd übermittelt beim Öffnen eines Anbieterlinks weder die E-Mail-Adresse noch gespeicherte Stempelbesuche", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("TourEd ist ein unabhängiges Projekt", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Beim bewussten Öffnen eines externen Anbieterlinks", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
     }
 
