@@ -1,309 +1,61 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Toured OpenStreetMaps</title>
-    <link rel="stylesheet" href="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css" type="text/css">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-    <script src="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js"></script>
-    <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-        }
-        #content {
-            min-height: 100%;
-        }
-        #userSession {
-            position: absolute;
-            right: 0;
-            z-index: 100;
-            margin: 0.5em;
-            padding: 0.5em;
-            border: 1px solid #555555;
-            border-radius: 6px;
-            background: white;
-            font-family: sans-serif;
-        }
-        #userSession a, #userSession button {
-            margin-left: 0.5em;
-        }
-        .ol-attribution .privacy-link {
-            color: inherit;
-            opacity: 0.65;
-            text-decoration: none;
-        }
-        .ol-attribution .privacy-link:hover,
-        .ol-attribution .privacy-link:focus {
-            opacity: 1;
-            text-decoration: underline;
-        }
-        #infoCard {
-            padding: 0.25em;
-            cursor: pointer;
-            font-family: sans-serif;
-            position: absolute;
-            display: inline-block;
-            height: auto;
-            width: 400px;
-            text-align: left;
-            font-size:24px;
-            z-index: 100;
-            background-color: #FFFFFF;
-            color: #555555;
-            border: 1px dashed #555555;
-            border-radius: 10px;
-            left: 50%;
-            transform: translateX(3%);
-            visibility: hidden;
-            pointer-events: none;
-        }
-        #infoCard>div {
-            margin-top:0.5em;
-        }
-        #infoCard .number {
-            font-style: italic;
-            font-size: 16px;
-        }
-        #infoCard .name {
-            font-weight: bold;
-            border-top: 1px solid #555555;
-            border-bottom: 1px solid #555555;
-            padding-top: 0.25em;
-            padding-bottom: 0.25em;
-            background-color: #EEEEEE;
-        }
-        #infoCard .tour {
-            font-size: 20px;
-        }
-        
-        #infoCard .visited {
-            color: #AAAAAA;
-            font-style: italic;
-            font-size: 16px;
-        }
-    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f5ef" />
+    <title>TourEd – Stempelstellenkarte</title>
+    <link rel="stylesheet" href="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css" />
+    <link rel="stylesheet" href="css/toured.css" />
+    <script defer src="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js"></script>
+    <script defer src="js/toured.js"></script>
 </head>
 <body>
-<div id="content">
-    <div id="userSession">
-        <span id="sessionStatus">Sitzung wird geladen …</span>
-        <a id="loginLink" href="auth/login" hidden>Mit Google anmelden</a>
-        <button id="logoutButton" type="button" hidden>Abmelden</button>
-    </div>
-    <div id="map" style="width: 100%; height: 100%; position:fixed">
-        <div id="infoCard"></div>
-    </div>
-</div>
-<script>
-    let app = {
-        PinType: {
-            VisitedVanilla: 1,
-            UnvisitedVanilla: 2,
-            VisitedExtended: 3,
-            UnvisitedExtended: 4
-        },
-        getPinType: (stampingPoint, isVisited) => stampingPoint.number
-            ? stampingPoint.number > 221
-                ? isVisited
-                    ? app.PinType.VisitedExtended
-                    : app.PinType.UnvisitedExtended
-                : isVisited
-                    ? app.PinType.VisitedVanilla
-                    : app.PinType.UnvisitedVanilla
-            : undefined,
-        map: new ol.Map({
-            controls: ol.control.defaults({attribution: false}).extend([new ol.control.Attribution({
-                collapsible: false
-            })]),
-            layers: [
-                new ol.layer.Tile({
-                    source: new ol.source.OSM({
-                        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        attributions: [ol.source.OSM.ATTRIBUTION, '&copy; TourEd 2023 · <a class="privacy-link" href="datenschutz/">Datenschutz</a>'],
-                        maxZoom: 18
-                    })
-                })
-            ],
-            target: 'map',
-            view: new ol.View({
-                center: ol.proj.fromLonLat([11.816394330314203, 50.972084944877366]),
-                maxZoom: 18,
-                zoom: 12
-            })
-        })
-    };
+<a class="skip-link" href="#map">Zur Karte springen</a>
+<main id="appShell">
+    <h1 class="visually-hidden">TourEd-Stempelstellenkarte</h1>
+    <header id="userSession" aria-label="Benutzersitzung">
+        <span id="sessionStatus" role="status" aria-live="polite">Sitzung wird geladen …</span>
+        <a id="loginLink" class="action" href="auth/login" hidden>Mit Google anmelden</a>
+        <button id="logoutButton" class="action" type="button" hidden>Abmelden</button>
+    </header>
 
-    app.createPin = function(stampingPoint, isVisited) {
-        const pinType = app.getPinType(stampingPoint, isVisited);
-        let data = {};
+    <p id="mapStatus" class="map-status" role="status" aria-live="polite">Karte wird geladen …</p>
 
-        const webMercatorProjection = new ol.proj.fromLonLat([stampingPoint.position.longitude, stampingPoint.position.latitude]);
-        const point = new ol.geom.Point(webMercatorProjection);
-        const feature = new ol.Feature(point);
-        feature.vector = pinType === app.PinType.VisitedVanilla || pinType === app.PinType.VisitedExtended ? app.visitedMarkers : app.unvisitedMarkers;
-        feature.stampingPoint = stampingPoint;
-        return feature;
-    }
-    
-    app.createMarkersLayer = (iconSrc) => new ol.layer.Vector({
-        source: new ol.source.Vector(),
-        style: new ol.style.Style({
-            image: new ol.style.Icon({
-                anchor: [0.5, 1],
-                src: iconSrc,
-                title: 'huhu',
-                scale: 0.4
-            })
-        })
-    });
+    <section
+        id="map"
+        tabindex="0"
+        aria-label="Interaktive Karte der TourEd-Stempelstellen"
+        aria-describedby="mapInstructions">
+    </section>
+    <p id="mapInstructions" class="visually-hidden">
+        Die Karte kann mit Touch, Maus oder Tastatur bewegt und vergrößert werden.
+        Eine Stempelstelle auswählen, um ihre Details anzuzeigen.
+    </p>
 
-    app.displayTooltip = (e, fixed) => {
-        const features = app.map.getFeaturesAtPixel(e.pixel);
-        if (features?.length > 0 && features[0].stampingPoint) {
-            app.stampingPointInfo.show(features[0].stampingPoint, e.pixel)
-            if (fixed === true) {
-                app.stampingPointInfo.isLocked = true;
-            }
-        } else {
-            if (fixed === true) {
-                app.stampingPointInfo.isLocked = false;
-            }
-            app.stampingPointInfo.hide();
-        }
-    };
-    
-    app.visitedMarkers = app.createMarkersLayer('img/pin_icon_green.png');
-    app.unvisitedMarkers = app.createMarkersLayer('img/pin_icon_red.png');
+    <aside id="mapLegend" aria-label="Kartenlegende">
+        <span><span class="legend-pin legend-pin--open" aria-hidden="true"></span>Offen</span>
+        <span><span class="legend-pin legend-pin--visited" aria-hidden="true"><span>✓</span></span>Besucht</span>
+    </aside>
 
-    app.setSession = (session) => {
-        const authenticated = session?.authenticated === true;
-        const status = document.getElementById('sessionStatus');
-        const loginLink = document.getElementById('loginLink');
-        const logoutButton = document.getElementById('logoutButton');
-
-        status.textContent = authenticated ? session.email : 'Nicht angemeldet';
-        loginLink.hidden = authenticated;
-        logoutButton.hidden = !authenticated;
-    };
-
-    app.clearMarkers = () => {
-        app.visitedMarkers.getSource().clear();
-        app.unvisitedMarkers.getSource().clear();
-    };
-
-    app.getJson = async (url) => {
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) {
-            throw response;
-        }
-        return await response.json();
-    };
-
-    app.addPoints = (response, isVisited) => {
-        for (const stampingPoint of response.stampingPoints) {
-            const marker = app.createPin(stampingPoint, isVisited);
-            marker.vector.getSource().addFeature(marker);
-        }
-    };
-
-    app.loadAnonymousPoints = async () => {
-        app.clearMarkers();
-        const points = await app.getJson('api/points');
-        app.addPoints(points, false);
-    };
-
-    app.loadAuthenticatedPoints = async () => {
-        app.clearMarkers();
-        try {
-            const [unvisited, visited] = await Promise.all([
-                app.getJson('api/points?vis=false'),
-                app.getJson('api/points?vis=true')
-            ]);
-            app.addPoints(unvisited, false);
-            app.addPoints(visited, true);
-        } catch (response) {
-            if (response.status !== 401) {
-                throw response;
-            }
-            app.setSession({ authenticated: false });
-            await app.loadAnonymousPoints();
-        }
-    };
-
-    app.initialize = async () => {
-        if (window.location.search) {
-            window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`);
-        }
-        try {
-            const session = await app.getJson('auth/session');
-            app.setSession(session);
-            if (session.authenticated === true) {
-                await app.loadAuthenticatedPoints();
-            } else {
-                await app.loadAnonymousPoints();
-            }
-        } catch (response) {
-            app.setSession({ authenticated: false });
-            await app.loadAnonymousPoints();
-        }
-    };
-
-    app.logout = async () => {
-        const response = await fetch('auth/logout', { method: 'POST' });
-        if (!response.ok && response.status !== 401) {
-            return;
-        }
-        await app.initialize();
-    };
-
-    app.stampingPointInfo = {
-        isVisible: false,
-        isLocked: false,
-        hide: () => {
-            if (this.isLocked || !this.isVisible) {
-                return;
-            }
-            const tooltipElement = $('#infoCard')[0];
-            tooltipElement.style.visibility = 'hidden';
-            tooltipElement.style.pointerEvents = 'none';
-        },
-        show: (stampingPoint, coordinates) => {
-            const tooltipElement = $('#infoCard')[0];
-            tooltipElement.innerHTML = `
-<div class="number">Stempelstelle ${stampingPoint.number}</div>
-<div class="name">${stampingPoint.name}</div>
-`;
-            if (stampingPoint.tours && Array.isArray(stampingPoint.tours) && stampingPoint.tours.length > 0) {
-                for (const tour of stampingPoint.tours) {
-                    tooltipElement.innerHTML += `<div class="tour">${tour.name}</div>`;
-                }
-            } else {
-                tooltipElement.innerHTML += `<div class="tour">Einzelstempel</div>`;
-            }
-            if (stampingPoint.visited && stampingPoint.visited.length > 0) {
-                const visitedDate = new Date(stampingPoint.visited);
-                tooltipElement.innerHTML += `<div class="visited">${visitedDate.toLocaleString("de-DE", {year: 'numeric', month: 'long', day: '2-digit', hour: '2-digit', minute: '2-digit'})} Uhr</div>`;
-            }
-            tooltipElement.style.visibility = 'visible';
-            tooltipElement.style.pointerEvents = 'auto';
-            tooltipElement.style.left = coordinates[0] + 'px';
-            tooltipElement.style.top = coordinates[1] + 'px';
-            this.isVisible = true;
-        }
-    }
-    
-    
-    app.map.addLayer(app.visitedMarkers);
-    app.map.addLayer(app.unvisitedMarkers);
-    app.map.on('click', e => app.displayTooltip(e, true))
-    app.map.on('pointermove', e => app.displayTooltip(e, false));
-    document.getElementById('logoutButton').addEventListener('click', app.logout);
-    app.initialize();
-</script>
+    <section
+        id="infoCard"
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="pointName"
+        tabindex="-1"
+        hidden>
+        <header class="info-card__header">
+            <div>
+                <p id="pointNumber" class="point-number"></p>
+                <h2 id="pointName" class="point-name"></h2>
+            </div>
+            <button id="closeInfoButton" class="icon-button" type="button" aria-label="Details schließen">×</button>
+        </header>
+        <p id="pointStatus" class="point-status"></p>
+        <div id="pointTours"></div>
+        <time id="pointVisited" class="point-visited" hidden></time>
+    </section>
+</main>
 </body>
 </html>

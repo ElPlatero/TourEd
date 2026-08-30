@@ -290,20 +290,46 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         using var client = CreateClient(_factory);
 
         var html = await client.GetStringAsync("/");
-        var normalizedHtml = html.ToLowerInvariant();
+        var script = await client.GetStringAsync("/js/toured.js");
+        var normalizedFrontend = $"{html}\n{script}".ToLowerInvariant();
 
-        Assert.Contains("href=\"auth/login\"", normalizedHtml, StringComparison.Ordinal);
-        Assert.Contains("auth/session", normalizedHtml, StringComparison.Ordinal);
-        Assert.Contains("auth/logout", normalizedHtml, StringComparison.Ordinal);
-        Assert.Contains("api/points?vis=false", normalizedHtml, StringComparison.Ordinal);
-        Assert.Contains("api/points?vis=true", normalizedHtml, StringComparison.Ordinal);
-        Assert.Contains("window.history.replacestate", normalizedHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("userid", normalizedHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("toured-user", normalizedHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("localstorage", normalizedHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("sessionstorage", normalizedHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("authorization", normalizedHtml, StringComparison.Ordinal);
-        Assert.DoesNotContain("googlesubject", normalizedHtml, StringComparison.Ordinal);
+        Assert.Contains("href=\"auth/login\"", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("auth/session", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("auth/logout", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("api/points?vis=false", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("api/points?vis=true", normalizedFrontend, StringComparison.Ordinal);
+        Assert.Contains("window.history.replacestate", normalizedFrontend, StringComparison.Ordinal);
+        Assert.DoesNotContain("userid", normalizedFrontend, StringComparison.Ordinal);
+        Assert.DoesNotContain("toured-user", normalizedFrontend, StringComparison.Ordinal);
+        Assert.DoesNotContain("localstorage", normalizedFrontend, StringComparison.Ordinal);
+        Assert.DoesNotContain("sessionstorage", normalizedFrontend, StringComparison.Ordinal);
+        Assert.DoesNotContain("authorization", normalizedFrontend, StringComparison.Ordinal);
+        Assert.DoesNotContain("googlesubject", normalizedFrontend, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BundledFrontendIsResponsiveTouchFriendlyAndMoreAccessible()
+    {
+        using var client = CreateClient(_factory);
+
+        var html = await client.GetStringAsync("/");
+        var css = await client.GetStringAsync("/css/toured.css");
+        var script = await client.GetStringAsync("/js/toured.js");
+
+        Assert.Contains("<html lang=\"de\">", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("viewport-fit=cover", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("role=\"dialog\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aria-live=\"polite\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aria-label=\"Details schließen\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("height: 100dvh", css, StringComparison.Ordinal);
+        Assert.Contains("env(safe-area-inset-bottom)", css, StringComparison.Ordinal);
+        Assert.Contains("min-height: 2.75rem", css, StringComparison.Ordinal);
+        Assert.Contains("(hover: hover) and (pointer: fine)", css, StringComparison.Ordinal);
+        Assert.Contains("window.matchMedia(\"(hover: hover) and (pointer: fine)\")", script, StringComparison.Ordinal);
+        Assert.Contains("event.key === \"Escape\"", script, StringComparison.Ordinal);
+        Assert.Contains("hitTolerance", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("jquery", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -311,15 +337,16 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     {
         using var client = CreateClient(_factory);
 
-        var frontend = await client.GetStringAsync("/");
+        var frontendScript = await client.GetStringAsync("/js/toured.js");
         var privacyResponse = await client.GetAsync("/datenschutz/");
         var privacyNotice = await privacyResponse.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
-        Assert.Contains("&copy; TourEd 2023 · <a class=\"privacy-link\" href=\"datenschutz/\">Datenschutz</a>", frontend, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("&copy; TourEd 2023 · <a class=\"privacy-link\" href=\"datenschutz/\">Datenschutz</a>", frontendScript, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("tino@schuettpelz.org", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -362,9 +389,13 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
             var response = await client.GetAsync("/toured/auth/login");
             var privacyResponse = await client.GetAsync("/toured/datenschutz/");
+            var styleResponse = await client.GetAsync("/toured/css/toured.css");
+            var scriptResponse = await client.GetAsync("/toured/js/toured.js");
 
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
             Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, styleResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, scriptResponse.StatusCode);
             Assert.NotNull(response.Headers.Location);
             var query = QueryHelpers.ParseQuery(response.Headers.Location.Query);
             Assert.Equal("https://localhost/toured/signin-google", query["redirect_uri"]);
