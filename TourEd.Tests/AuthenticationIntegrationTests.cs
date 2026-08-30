@@ -556,6 +556,44 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BundledFrontendOffersAccessibleSelectedProviderFullTextSearch()
+    {
+        using var client = CreateClient(_factory);
+
+        var html = await client.GetStringAsync("/");
+        var css = await client.GetStringAsync("/css/toured.css");
+        var script = await client.GetStringAsync("/js/toured.js");
+
+        var searchButtonPosition = html.IndexOf("id=\"searchMenuButton\"", StringComparison.OrdinalIgnoreCase);
+        var providerButtonPosition = html.IndexOf("id=\"providerMenuButton\"", StringComparison.OrdinalIgnoreCase);
+        Assert.True(searchButtonPosition >= 0 && searchButtonPosition < providerButtonPosition);
+        Assert.Contains("aria-controls=\"searchPanel\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aria-label=\"Stempelstellensuche öffnen\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"searchPanel\" class=\"account-panel search-panel\" hidden", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"stampingPointSearchInput\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("type=\"search\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"searchResultsStatus\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("role=\"status\" aria-live=\"polite\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"searchResults\" class=\"search-results\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(".search-panel", css, StringComparison.Ordinal);
+        Assert.Contains(".search-result-button", css, StringComparison.Ordinal);
+        Assert.Contains("min-height: 2.75rem", css, StringComparison.Ordinal);
+        Assert.Contains("const SearchResultLimit = 30", script, StringComparison.Ordinal);
+        Assert.Contains("normalize(\"NFD\")", script, StringComparison.Ordinal);
+        Assert.Contains("app.selectedProviderSlugs.has(point.provider?.slug)", script, StringComparison.Ordinal);
+        Assert.Contains("point.provider?.abbreviation", script, StringComparison.Ordinal);
+        Assert.Contains("queryTokens.every", script, StringComparison.Ordinal);
+        Assert.Contains("renderSearchResults", script, StringComparison.Ordinal);
+        Assert.Contains("closeSearchMenu(true)", script, StringComparison.Ordinal);
+        Assert.Contains("view.animate({ center: coordinate, zoom, duration: 250 }", script, StringComparison.Ordinal);
+        Assert.Contains("showInfo(feature, pixel, true)", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sessionStorage", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task BundledFrontendSupportsAccessibleVisitCreationEditingAndConfirmedDeletion()
     {
         using var client = CreateClient(_factory);

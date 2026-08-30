@@ -37,9 +37,14 @@
         providerMenuButton: document.getElementById("providerMenuButton"),
         providerOptions: document.getElementById("providerOptions"),
         providerPanel: document.getElementById("providerPanel"),
+        searchMenuButton: document.getElementById("searchMenuButton"),
+        searchPanel: document.getElementById("searchPanel"),
+        searchResults: document.getElementById("searchResults"),
+        searchResultsStatus: document.getElementById("searchResultsStatus"),
         selectAllProvidersButton: document.getElementById("selectAllProvidersButton"),
         selectNoProvidersButton: document.getElementById("selectNoProvidersButton"),
         sessionStatus: document.getElementById("sessionStatus"),
+        stampingPointSearchInput: document.getElementById("stampingPointSearchInput"),
         userSession: document.getElementById("userSession"),
         visitActionStatus: document.getElementById("visitActionStatus"),
         visitControls: document.getElementById("visitControls"),
@@ -57,6 +62,8 @@
     }
 
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const SearchResultLimit = 30;
     const VisitState = Object.freeze({
         unknown: "unknown",
         open: "open",
@@ -144,6 +151,15 @@
         }
     };
 
+    const closeSearchMenu = (restoreFocus = false) => {
+        elements.searchPanel.hidden = true;
+        elements.searchMenuButton.setAttribute("aria-expanded", "false");
+        elements.searchMenuButton.setAttribute("aria-label", "Stempelstellensuche öffnen");
+        if (restoreFocus) {
+            elements.searchMenuButton.focus({ preventScroll: true });
+        }
+    };
+
     const closeProviderMenu = (restoreFocus = false) => {
         elements.providerPanel.hidden = true;
         elements.providerMenuButton.setAttribute("aria-expanded", "false");
@@ -156,6 +172,7 @@
     const toggleAccountMenu = () => {
         const opening = elements.accountPanel.hidden;
         if (opening) {
+            closeSearchMenu();
             closeProviderMenu();
         }
         elements.accountPanel.hidden = !opening;
@@ -172,6 +189,7 @@
     const toggleProviderMenu = () => {
         const opening = elements.providerPanel.hidden;
         if (opening) {
+            closeSearchMenu();
             closeAccountMenu();
         }
         elements.providerPanel.hidden = !opening;
@@ -181,6 +199,23 @@
             opening ? "Anbieterfilter schließen" : "Anbieterfilter öffnen");
         if (opening) {
             elements.providerOptions.querySelector("input")?.focus({ preventScroll: true });
+        }
+    };
+
+    const toggleSearchMenu = () => {
+        const opening = elements.searchPanel.hidden;
+        if (opening) {
+            closeProviderMenu();
+            closeAccountMenu();
+        }
+        elements.searchPanel.hidden = !opening;
+        elements.searchMenuButton.setAttribute("aria-expanded", opening.toString());
+        elements.searchMenuButton.setAttribute(
+            "aria-label",
+            opening ? "Stempelstellensuche schließen" : "Stempelstellensuche öffnen");
+        if (opening) {
+            renderSearchResults();
+            elements.stampingPointSearchInput.focus({ preventScroll: true });
         }
     };
 
@@ -308,6 +343,126 @@
             : [];
     };
 
+    const normalizeSearchText = value => String(value ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/ß/g, "ss")
+        .toLocaleLowerCase("de-DE")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const getPointNumberLabel = point => point.provider?.abbreviation
+        ? `${point.provider.abbreviation} ${point.number}`
+        : `Stempelstelle ${point.number}`;
+
+    const getSearchablePoints = () => Object.values(VisitState).flatMap(visitState =>
+        app.pointCache[visitState]
+            .filter(point => app.selectedProviderSlugs.has(point.provider?.slug))
+            .map(point => ({ point, visitState })));
+
+    const findRenderedFeature = result => getMarkerLayer(result.visitState)
+        .getSource()
+        .getFeatures()
+        .find(feature => pointMatches(feature.stampingPoint, result.point));
+
+    const openSearchResult = result => {
+        const feature = findRenderedFeature(result);
+        if (!feature) {
+            elements.searchResultsStatus.textContent = "Der Treffer ist momentan nicht auf der Karte verfügbar.";
+            return;
+        }
+
+        const coordinate = feature.getGeometry().getCoordinates();
+        const view = app.map.getView();
+        const zoom = Math.max(view.getZoom() ?? 0, 15);
+        closeSearchMenu();
+        const showSelectedPoint = () => {
+            const pixel = app.map.getPixelFromCoordinate(coordinate);
+            showInfo(feature, pixel, true);
+        };
+        if (reducedMotion.matches) {
+            view.setCenter(coordinate);
+            view.setZoom(zoom);
+            showSelectedPoint();
+        } else {
+            view.animate({ center: coordinate, zoom, duration: 250 }, completed => {
+                if (completed) {
+                    showSelectedPoint();
+                }
+            });
+        }
+    };
+
+    const renderSearchResults = () => {
+        elements.searchResults.replaceChildren();
+        const query = normalizeSearchText(elements.stampingPointSearchInput.value);
+        if (!query) {
+            elements.searchResultsStatus.textContent = "Suche innerhalb der ausgewählten Anbieter.";
+            return;
+        }
+
+        const searchablePoints = getSearchablePoints();
+        if (searchablePoints.length === 0) {
+            elements.searchResultsStatus.textContent = "In den ausgewählten Anbietern sind keine Stempelstellen verfügbar.";
+            return;
+        }
+
+        const queryTokens = query.split(" ");
+        const matches = searchablePoints
+            .map(result => {
+                const point = result.point;
+                const numberLabel = getPointNumberLabel(point);
+                const compactNumber = `${point.provider?.abbreviation ?? ""}${point.number}`;
+                const haystack = normalizeSearchText([
+                    point.name,
+                    point.number,
+                    numberLabel,
+                    compactNumber,
+                    point.provider?.name,
+                    point.provider?.abbreviation
+                ].join(" "));
+                const normalizedName = normalizeSearchText(point.name);
+                const normalizedNumber = normalizeSearchText(numberLabel);
+                const score = normalizedNumber === query || normalizeSearchText(compactNumber) === query
+                    ? 0
+                    : normalizedName.startsWith(query)
+                        ? 1
+                        : 2;
+                return { ...result, numberLabel, haystack, score };
+            })
+            .filter(result => queryTokens.every(token => result.haystack.includes(token)))
+            .sort((left, right) => left.score - right.score
+                || left.point.name.localeCompare(right.point.name, "de")
+                || left.point.number - right.point.number);
+
+        if (matches.length === 0) {
+            elements.searchResultsStatus.textContent = "Keine passenden Stempelstellen gefunden.";
+            return;
+        }
+
+        const visibleMatches = matches.slice(0, SearchResultLimit);
+        elements.searchResultsStatus.textContent = matches.length > SearchResultLimit
+            ? `${SearchResultLimit} von ${matches.length} Treffern angezeigt. Suche genauer, um die Liste einzugrenzen.`
+            : `${matches.length} Treffer.`;
+        for (const result of visibleMatches) {
+            const item = document.createElement("li");
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "search-result-button";
+            button.setAttribute("aria-label", `${result.numberLabel}: ${result.point.name} auf der Karte anzeigen`);
+            const number = document.createElement("span");
+            number.className = "search-result-number";
+            number.textContent = result.numberLabel;
+            const name = document.createElement("span");
+            name.className = "search-result-name";
+            name.textContent = result.point.name;
+            button.append(number, name);
+            button.addEventListener("click", () => openSearchResult(result));
+            item.appendChild(button);
+            elements.searchResults.appendChild(item);
+        }
+    };
+
     const renderSelectedPoints = () => {
         hideInfo(true);
         clearMarkers();
@@ -339,6 +494,7 @@
             elements.providerOptions.querySelectorAll('input[type="checkbox"]:checked'),
             checkbox => checkbox.value);
         announceFilteredPointCount(setSelectedProviders(selectedSlugs));
+        renderSearchResults();
     };
 
     const selectProviders = selected => {
@@ -460,6 +616,7 @@
         feature.visitState = isVisited ? VisitState.visited : VisitState.open;
         app.pointCache[feature.visitState].push(stampingPoint);
         getMarkerLayer(feature.visitState).getSource().addFeature(feature);
+        renderSearchResults();
         showInfo(feature, app.infoPixel, true);
     };
 
@@ -780,7 +937,9 @@
         if (elements.providerInfoDialog.open || elements.deleteVisitDialog.open) {
             return;
         }
-        if (!elements.providerPanel.hidden) {
+        if (!elements.searchPanel.hidden) {
+            closeSearchMenu(true);
+        } else if (!elements.providerPanel.hidden) {
             closeProviderMenu(true);
         } else if (!elements.accountPanel.hidden) {
             closeAccountMenu(true);
@@ -792,6 +951,8 @@
 
     elements.accountMenuButton.addEventListener("click", toggleAccountMenu);
     elements.providerMenuButton.addEventListener("click", toggleProviderMenu);
+    elements.searchMenuButton.addEventListener("click", toggleSearchMenu);
+    elements.stampingPointSearchInput.addEventListener("input", renderSearchResults);
     elements.providerOptions.addEventListener("change", event => {
         if (event.target.matches('input[type="checkbox"]')) {
             applyProviderSelection();
@@ -818,7 +979,9 @@
         if (elements.providerInfoDialog.open || elements.deleteVisitDialog.open || elements.userSession.contains(event.target)) {
             return;
         }
-        if (!elements.providerPanel.hidden) {
+        if (!elements.searchPanel.hidden) {
+            closeSearchMenu();
+        } else if (!elements.providerPanel.hidden) {
             closeProviderMenu();
         } else if (!elements.accountPanel.hidden) {
             closeAccountMenu();
@@ -844,6 +1007,8 @@
         hideInfo(true);
         clearMarkers();
         resetPointCache();
+        elements.stampingPointSearchInput.value = "";
+        renderSearchResults();
         let session = { authenticated: false };
         try {
             session = await getJson("auth/session");
@@ -867,6 +1032,7 @@
             if (pointCount === null || generation !== app.loadGeneration) {
                 return;
             }
+            renderSearchResults();
             setMapStatus(`${pointCount} Stempelstellen geladen.`, "ready");
             window.setTimeout(() => {
                 if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {

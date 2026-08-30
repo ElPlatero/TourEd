@@ -19,6 +19,19 @@
     </div>
     <header id="userSession" aria-label="Kartenoptionen">
         <button
+            id="searchMenuButton"
+            class="account-menu-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="searchPanel"
+            aria-label="Stempelstellensuche öffnen">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <path d="m15.2 15.2 4.8 4.8" />
+            </svg>
+            <span>Suche</span>
+        </button>
+        <button
             id="providerMenuButton"
             class="account-menu-button"
             type="button"
@@ -46,6 +59,23 @@
             </svg>
             <span>Konto</span>
         </button>
+        <div id="searchPanel" class="account-panel search-panel" hidden>
+            <h2>Stempelstelle suchen</h2>
+            <label class="search-field" for="stampingPointSearchInput">
+                Name, Nummer oder Anbieter
+                <input
+                    id="stampingPointSearchInput"
+                    type="search"
+                    inputmode="search"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-describedby="searchResultsStatus" />
+            </label>
+            <p id="searchResultsStatus" class="search-results-status" role="status" aria-live="polite">
+                Suche innerhalb der ausgewählten Anbieter.
+            </p>
+            <ul id="searchResults" class="search-results" aria-label="Suchergebnisse"></ul>
+        </div>
         <div id="providerPanel" class="account-panel provider-panel" hidden>
             <div class="provider-panel__header">
                 <h2>Stempelanbieter</h2>
