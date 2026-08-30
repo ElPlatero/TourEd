@@ -36,7 +36,33 @@ public sealed class ImportServiceTests : IDisposable
 
         Assert.Contains("20260626000000_AddStampingProvider", migrations);
         Assert.Contains("20260626010000_AddProviderFieldsToStampingPoints", migrations);
-        Assert.Equal(StampingProvider.TouringenSlug, (await context.StampingProviders.SingleAsync()).Slug);
+        Assert.Contains("20260830132352_UpdateStampingProviderMetadata", migrations);
+        var provider = await context.StampingProviders.SingleAsync();
+        Assert.Equal(StampingProvider.TouringenSlug, provider.Slug);
+        Assert.Contains("430 offizielle Stempelstellen", provider.Description, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ProviderMetadataMigrationPreservesCustomizedDescription()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
+            })
+            .Build();
+        await using var context = new DataContext(configuration);
+        await context.Database.MigrateAsync("20260828181042_AddGoogleSubjectToUsers");
+        await context.Database.ExecuteSqlRawAsync(
+            "UPDATE StampingProviders SET Description = 'Locally customized.' WHERE Id = {0};",
+            StampingProvider.TouringenId);
+
+        await context.Database.MigrateAsync();
+
+        Assert.Equal("Locally customized.", await context.StampingProviders
+            .Where(provider => provider.Id == StampingProvider.TouringenId)
+            .Select(provider => provider.Description)
+            .SingleAsync());
     }
 
     [Fact]

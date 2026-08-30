@@ -107,6 +107,8 @@ The backend follows a simple layered structure:
 
 Provider data is represented by `StampingProvider`. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
 
+`StampingProvider` also stores the public name, description, and optional website used by the provider catalog. Public provider DTOs expose only absolute HTTP(S) website URLs; unsupported URI schemes are omitted.
+
 Users can optionally store a unique Google subject identifier. `GoogleLoginService` resolves an existing binding by subject or atomically binds the first verified Google login to an existing user by normalized email. It never creates users.
 
 The main runtime composition happens in `Api/Program.cs`.
@@ -168,6 +170,10 @@ Useful query behavior:
 Point DTOs include provider info while preserving the existing number, name, position, visited, and tours fields.
 
 Other endpoints:
+
+- `GET /api/providers`
+  - Anonymous catalog of all integrated stamping providers.
+  - Returns providers ordered by name and slug, including description and an optional validated public website URL.
 
 - `GET /health`
   - Anonymous ASP.NET Core readiness endpoint.

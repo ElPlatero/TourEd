@@ -46,6 +46,12 @@ public class TouredRepository : IUserService
         return StampingProviderFilter.Single(StampingProvider.TouringenId);
     }
 
+    public Task<List<StampingProvider>> GetStampingProvidersAsync()
+        => _dbContext.StampingProviders.AsNoTracking()
+            .OrderBy(provider => provider.Name)
+            .ThenBy(provider => provider.Slug)
+            .ToListAsync();
+
     public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
     {
         IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking();
