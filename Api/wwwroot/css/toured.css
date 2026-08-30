@@ -1,0 +1,338 @@
+:root {
+    color-scheme: light;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --surface: #ffffff;
+    --surface-muted: #f2f0e9;
+    --text: #252522;
+    --text-muted: #595952;
+    --border: #73736b;
+    --accent: #245a3b;
+    --focus: #005fcc;
+    --shadow: 0 0.25rem 1.25rem rgb(0 0 0 / 18%);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#appShell {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    margin: 0;
+    overflow: hidden;
+}
+
+body {
+    color: var(--text);
+    background: var(--surface-muted);
+}
+
+button,
+a {
+    font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+#map:focus-visible,
+#infoCard:focus-visible {
+    outline: 0.2rem solid var(--focus);
+    outline-offset: 0.15rem;
+}
+
+.skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 1000;
+    padding: 0.65rem 0.85rem;
+    color: #ffffff;
+    background: #000000;
+    transform: translateY(-150%);
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+#map {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+#userSession {
+    position: fixed;
+    top: max(0.5rem, env(safe-area-inset-top));
+    right: max(0.5rem, env(safe-area-inset-right));
+    left: auto;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    width: fit-content;
+    max-width: calc(100vw - 4rem - env(safe-area-inset-left) - env(safe-area-inset-right));
+    min-height: 2.75rem;
+    margin-left: auto;
+    padding: 0.3rem;
+    border: 1px solid rgb(37 37 34 / 35%);
+    border-radius: 0.75rem;
+    background: rgb(255 255 255 / 92%);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(0.35rem);
+}
+
+#sessionStatus {
+    min-width: 0;
+    max-width: min(45vw, 18rem);
+    padding-left: 0.45rem;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.action,
+.icon-button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+    color: var(--text);
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.55rem 0.8rem;
+    font-weight: 600;
+    line-height: 1.15;
+    text-align: center;
+    text-decoration: none;
+}
+
+.action:hover,
+.icon-button:hover {
+    background: var(--surface-muted);
+}
+
+.action:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.map-status {
+    position: fixed;
+    top: max(4rem, calc(env(safe-area-inset-top) + 4rem));
+    left: 50%;
+    z-index: 190;
+    max-width: calc(100vw - 2rem);
+    margin: 0;
+    padding: 0.55rem 0.8rem;
+    border-radius: 0.6rem;
+    color: var(--text);
+    background: rgb(255 255 255 / 94%);
+    box-shadow: var(--shadow);
+    font-size: 0.875rem;
+    transform: translateX(-50%);
+}
+
+.map-status[data-state="error"] {
+    border: 2px solid #9f1d20;
+}
+
+#mapLegend {
+    position: fixed;
+    bottom: max(2rem, calc(env(safe-area-inset-bottom) + 2rem));
+    left: max(0.5rem, env(safe-area-inset-left));
+    z-index: 150;
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid rgb(37 37 34 / 30%);
+    border-radius: 0.5rem;
+    background: rgb(255 255 255 / 88%);
+    box-shadow: 0 0.1rem 0.5rem rgb(0 0 0 / 14%);
+    font-size: 0.75rem;
+}
+
+#mapLegend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.legend-pin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid currentColor;
+    border-radius: 50% 50% 50% 0;
+    line-height: 1;
+    transform: rotate(-45deg);
+}
+
+.legend-pin--open {
+    color: #a2181c;
+    background: #ffffff;
+}
+
+.legend-pin--visited {
+    color: #ffffff;
+    background: #25633e;
+    font-size: 0.68rem;
+}
+
+.legend-pin--visited > span {
+    transform: rotate(45deg);
+}
+
+#infoCard {
+    position: fixed;
+    right: max(0.5rem, env(safe-area-inset-right));
+    bottom: max(1.75rem, calc(env(safe-area-inset-bottom) + 1.75rem));
+    left: max(0.5rem, env(safe-area-inset-left));
+    z-index: 300;
+    max-height: min(65dvh, 32rem);
+    padding: 1rem;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    color: var(--text);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.info-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.point-number,
+.point-name,
+.point-status,
+.point-visited {
+    margin: 0;
+}
+
+.point-number {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.point-name {
+    margin-top: 0.15rem;
+    font-size: clamp(1.25rem, 5vw, 1.65rem);
+    line-height: 1.2;
+}
+
+.point-status {
+    margin-top: 0.85rem;
+    font-weight: 700;
+}
+
+.point-status[data-visited="true"] {
+    color: var(--accent);
+}
+
+.tour-list {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0.85rem 0 0;
+    padding-left: 1.25rem;
+}
+
+.point-visited {
+    display: block;
+    margin-top: 0.85rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.ol-attribution {
+    right: max(0.25rem, env(safe-area-inset-right)) !important;
+    bottom: max(0.25rem, env(safe-area-inset-bottom)) !important;
+}
+
+.ol-attribution .privacy-link {
+    color: inherit;
+    opacity: 0.65;
+    text-decoration: none;
+}
+
+.ol-attribution .privacy-link:hover,
+.ol-attribution .privacy-link:focus {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+@media (min-width: 45rem) and (hover: hover) and (pointer: fine) {
+    #infoCard {
+        right: auto;
+        bottom: auto;
+        left: 1rem;
+        width: min(25rem, calc(100vw - 2rem));
+        max-height: min(70vh, 32rem);
+        border-radius: 0.75rem;
+    }
+}
+
+@media (max-width: 27rem) {
+    #userSession {
+        align-items: stretch;
+    }
+
+    #sessionStatus {
+        max-width: 34vw;
+    }
+
+    .action {
+        max-width: 9.5rem;
+        padding-inline: 0.6rem;
+        font-size: 0.875rem;
+    }
+}
+
+@media (prefers-contrast: more) {
+    #userSession,
+    #mapLegend,
+    #infoCard {
+        border-width: 2px;
+        background: var(--surface);
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    #userSession,
+    #mapLegend {
+        background: var(--surface);
+        backdrop-filter: none;
+    }
+}

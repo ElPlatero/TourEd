@@ -10,9 +10,11 @@ Stamping points and future provider-specific data are anchored by `StampingProvi
 
 ## Frontend
 
-The repository contains one user-facing frontend at `Api/wwwroot/index.html`. It is part of the ASP.NET Core application and is published and deployed together with the API.
+The repository contains one user-facing frontend rooted at `Api/wwwroot/index.html`, with its local CSS and JavaScript in `Api/wwwroot/css/toured.css` and `Api/wwwroot/js/toured.js`. It is part of the ASP.NET Core application and is published and deployed together with the API.
 
-It is a plain HTML page using jQuery and OpenLayers. It loads OpenStreetMap tiles and displays stamping points as map markers.
+It is a plain HTML, CSS, and vanilla-JavaScript application using OpenLayers. It has no frontend build process. It loads OpenStreetMap tiles and displays stamping points as map markers.
+
+The frontend is mobile-first and fluid. On touch-oriented or narrow displays, stamping-point details appear as a bottom sheet; fine-pointer desktop displays position the same accessible dialog near the selected marker. Selection works by click or touch, the dialog has an explicit close button and Escape handling, interactive controls have touch-sized targets, safe-area insets are respected, and visited markers add a check symbol so visit state is not conveyed by color alone. Pointer hover remains an optional desktop enhancement.
 
 The page calls the backend with relative URLs:
 
@@ -33,7 +35,7 @@ The page calls the backend with relative URLs:
   - Used when `auth/session` reports an authenticated cookie session.
   - Returns visited points for that user.
 
-The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, and external frontend CDNs. Keep it synchronized whenever these data flows or their retention rules change.
+The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, and external OpenLayers CDN. Keep it synchronized whenever these data flows or their retention rules change.
 
 The frontend never reads or writes user ids, Google subjects, tokens, custom identity headers, local storage, or session storage. A `401` while loading authenticated point data returns the UI to anonymous mode without starting a login redirect.
 
@@ -58,7 +60,7 @@ Normal user flow:
 2. Browser checks the TourEd session and offers Google login or logout as appropriate.
 3. Browser requests anonymous points once, or visited and unvisited points separately for an authenticated cookie session.
 4. Backend returns points, provider info, optional tour summaries, and user visit state depending on the session.
-5. Map renders markers and shows a small info card on hover/click.
+5. Map renders markers and shows a responsive detail dialog on selection, with optional pointer hover on suitable desktop devices.
 
 Maintenance/admin flow:
 
