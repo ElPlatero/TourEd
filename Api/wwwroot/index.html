@@ -15,9 +15,23 @@
 <main id="appShell">
     <h1 class="visually-hidden">TourEd-Stempelstellenkarte</h1>
     <header id="userSession" aria-label="Benutzersitzung">
-        <span id="sessionStatus" role="status" aria-live="polite">Sitzung wird geladen …</span>
-        <a id="loginLink" class="action" href="auth/login" hidden>Mit Google anmelden</a>
-        <button id="logoutButton" class="action" type="button" hidden>Abmelden</button>
+        <button
+            id="accountMenuButton"
+            class="account-menu-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="accountPanel"
+            aria-label="Kontomenü öffnen">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0" />
+            </svg>
+            <span>Konto</span>
+        </button>
+        <div id="accountPanel" class="account-panel" hidden>
+            <span id="sessionStatus" role="status" aria-live="polite">Sitzung wird geladen …</span>
+            <a id="loginLink" class="action" href="auth/login" hidden>Mit Google anmelden</a>
+            <button id="logoutButton" class="action" type="button" hidden>Abmelden</button>
+        </div>
     </header>
 
     <p id="mapStatus" class="map-status" role="status" aria-live="polite">Karte wird geladen …</p>
@@ -33,7 +47,7 @@
         Eine Stempelstelle auswählen, um ihre Details anzuzeigen.
     </p>
 
-    <aside id="mapLegend" aria-label="Kartenlegende">
+    <aside id="mapLegend" aria-label="Kartenlegende" hidden>
         <span><span class="legend-pin legend-pin--open" aria-hidden="true"></span>Offen</span>
         <span><span class="legend-pin legend-pin--visited" aria-hidden="true"><span>✓</span></span>Besucht</span>
     </aside>

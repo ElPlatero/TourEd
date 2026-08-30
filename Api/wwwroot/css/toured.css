@@ -15,6 +15,10 @@
     box-sizing: border-box;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 html,
 body,
 #appShell {
@@ -82,33 +86,65 @@ a:focus-visible,
     position: fixed;
     top: max(0.5rem, env(safe-area-inset-top));
     right: max(0.5rem, env(safe-area-inset-right));
-    left: auto;
-    z-index: 200;
-    display: flex;
+    z-index: 250;
+}
+
+.account-menu-button {
+    display: inline-flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    width: fit-content;
-    max-width: calc(100vw - 4rem - env(safe-area-inset-left) - env(safe-area-inset-right));
+    justify-content: center;
+    gap: 0.45rem;
+    min-width: 2.75rem;
     min-height: 2.75rem;
-    margin-left: auto;
-    padding: 0.3rem;
+    padding: 0.45rem 0.7rem;
     border: 1px solid rgb(37 37 34 / 35%);
     border-radius: 0.75rem;
-    background: rgb(255 255 255 / 92%);
+    color: var(--text);
+    background: rgb(255 255 255 / 94%);
     box-shadow: var(--shadow);
-    backdrop-filter: blur(0.35rem);
+    cursor: pointer;
+    font-weight: 650;
+}
+
+.account-menu-button:hover,
+.account-menu-button[aria-expanded="true"] {
+    background: var(--surface-muted);
+}
+
+.account-menu-button svg {
+    width: 1.35rem;
+    height: 1.35rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
+.account-panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    display: grid;
+    gap: 0.75rem;
+    width: min(18rem, calc(100vw - 1rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    padding: 0.85rem;
+    border: 1px solid rgb(37 37 34 / 35%);
+    border-radius: 0.75rem;
+    background: rgb(255 255 255 / 97%);
+    box-shadow: var(--shadow);
+    animation: account-panel-in 150ms ease-out;
+}
+
+.account-panel .action {
+    width: 100%;
 }
 
 #sessionStatus {
-    min-width: 0;
-    max-width: min(45vw, 18rem);
-    padding-left: 0.45rem;
-    overflow: hidden;
     color: var(--text-muted);
+    overflow-wrap: anywhere;
     font-size: 0.875rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.35;
 }
 
 .action,
@@ -258,8 +294,13 @@ a:focus-visible,
     font-weight: 700;
 }
 
-.point-status[data-visited="true"] {
+.point-status[data-state="visited"] {
     color: var(--accent);
+}
+
+.point-status[data-state="unknown"] {
+    color: var(--text-muted);
+    font-weight: 500;
 }
 
 .tour-list {
@@ -305,23 +346,29 @@ a:focus-visible,
 }
 
 @media (max-width: 27rem) {
-    #userSession {
-        align-items: stretch;
+    .account-menu-button > span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
+}
 
-    #sessionStatus {
-        max-width: 34vw;
-    }
-
-    .action {
-        max-width: 9.5rem;
-        padding-inline: 0.6rem;
-        font-size: 0.875rem;
+@keyframes account-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(-0.35rem);
     }
 }
 
 @media (prefers-contrast: more) {
-    #userSession,
+    .account-menu-button,
+    .account-panel,
     #mapLegend,
     #infoCard {
         border-width: 2px;
@@ -330,9 +377,16 @@ a:focus-visible,
 }
 
 @media (prefers-reduced-transparency: reduce) {
-    #userSession,
+    .account-menu-button,
+    .account-panel,
     #mapLegend {
         background: var(--surface);
         backdrop-filter: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .account-panel {
+        animation: none;
     }
 }

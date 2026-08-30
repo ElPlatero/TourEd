@@ -315,19 +315,33 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var html = await client.GetStringAsync("/");
         var css = await client.GetStringAsync("/css/toured.css");
         var script = await client.GetStringAsync("/js/toured.js");
+        var neutralPinResponse = await client.GetAsync("/img/pin_icon_neutral.svg");
 
         Assert.Contains("<html lang=\"de\">", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("viewport-fit=cover", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("role=\"dialog\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-live=\"polite\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-label=\"Details schließen\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"accountMenuButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aria-controls=\"accountPanel\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"accountPanel\" class=\"account-panel\" hidden", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"mapLegend\" aria-label=\"Kartenlegende\" hidden", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("height: 100dvh", css, StringComparison.Ordinal);
+        Assert.Contains("[hidden]", css, StringComparison.Ordinal);
         Assert.Contains("env(safe-area-inset-bottom)", css, StringComparison.Ordinal);
         Assert.Contains("min-height: 2.75rem", css, StringComparison.Ordinal);
+        Assert.Contains(".account-panel", css, StringComparison.Ordinal);
         Assert.Contains("(hover: hover) and (pointer: fine)", css, StringComparison.Ordinal);
         Assert.Contains("window.matchMedia(\"(hover: hover) and (pointer: fine)\")", script, StringComparison.Ordinal);
-        Assert.Contains("event.key === \"Escape\"", script, StringComparison.Ordinal);
+        Assert.Contains("event.key !== \"Escape\"", script, StringComparison.Ordinal);
         Assert.Contains("hitTolerance", script, StringComparison.Ordinal);
+        Assert.Contains("scale: 0.32", script, StringComparison.Ordinal);
+        Assert.Contains("img/pin_icon_neutral.svg", script, StringComparison.Ordinal);
+        Assert.Contains("VisitState.unknown", script, StringComparison.Ordinal);
+        Assert.Contains("elements.mapLegend.hidden = !authenticated", script, StringComparison.Ordinal);
+        Assert.Contains("closeAccountMenu(true)", script, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, neutralPinResponse.StatusCode);
+        Assert.Equal("image/svg+xml", neutralPinResponse.Content.Headers.ContentType?.MediaType);
         Assert.DoesNotContain("jquery", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
     }
@@ -391,11 +405,13 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             var privacyResponse = await client.GetAsync("/toured/datenschutz/");
             var styleResponse = await client.GetAsync("/toured/css/toured.css");
             var scriptResponse = await client.GetAsync("/toured/js/toured.js");
+            var neutralPinResponse = await client.GetAsync("/toured/img/pin_icon_neutral.svg");
 
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
             Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, styleResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, scriptResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, neutralPinResponse.StatusCode);
             Assert.NotNull(response.Headers.Location);
             var query = QueryHelpers.ParseQuery(response.Headers.Location.Query);
             Assert.Equal("https://localhost/toured/signin-google", query["redirect_uri"]);

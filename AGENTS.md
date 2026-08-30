@@ -14,7 +14,7 @@ The repository contains one user-facing frontend rooted at `Api/wwwroot/index.ht
 
 It is a plain HTML, CSS, and vanilla-JavaScript application using OpenLayers. It has no frontend build process. It loads OpenStreetMap tiles and displays stamping points as map markers.
 
-The frontend is mobile-first and fluid. On touch-oriented or narrow displays, stamping-point details appear as a bottom sheet; fine-pointer desktop displays position the same accessible dialog near the selected marker. Selection works by click or touch, the dialog has an explicit close button and Escape handling, interactive controls have touch-sized targets, safe-area insets are respected, and visited markers add a check symbol so visit state is not conveyed by color alone. Pointer hover remains an optional desktop enhancement.
+The frontend is mobile-first and fluid. On touch-oriented or narrow displays, stamping-point details appear as a bottom sheet; fine-pointer desktop displays position the same accessible dialog near the selected marker. Selection works by click or touch, the dialog has an explicit close button and Escape handling, interactive controls have touch-sized targets, safe-area insets are respected, and visited markers add a check symbol so visit state is not conveyed by color alone. Pointer hover remains an optional desktop enhancement. Session details and login/logout actions live in an accessible account flyout so they remain usable on narrow screens.
 
 The page calls the backend with relative URLs:
 
@@ -27,7 +27,7 @@ The page calls the backend with relative URLs:
 - `GET api/points`
   - Used when the session is anonymous.
   - Uses the anonymous default provider, currently `touringen`.
-  - Treats all returned points as unvisited.
+  - Renders all returned points with a neutral marker because personal visit state is unavailable.
 - `GET api/points?vis=false`
   - Used when `auth/session` reports an authenticated cookie session.
   - Returns unvisited points for that user.
@@ -45,10 +45,13 @@ Optional `provider` query behavior on `GET api/points`:
 - Provider slug, for example `provider=touringen`: returns points from that provider.
 - `provider=all`: returns points from all providers.
 
-The map uses the red and green pin image assets stored in `Api/wwwroot/img`:
+The map uses red, green, and neutral pin image assets stored in `Api/wwwroot/img`:
 
 - `img/pin_icon_red.png`
 - `img/pin_icon_green.png`
+- `img/pin_icon_neutral.svg`
+
+The anonymous map hides the visit-state legend. Authenticated maps show red as open and green-with-check as visited.
 
 The current static map does not use the tours endpoint or admin/import endpoints.
 
