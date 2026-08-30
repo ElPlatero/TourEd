@@ -2,18 +2,22 @@
     "use strict";
 
     const elements = {
+        accountMenuButton: document.getElementById("accountMenuButton"),
+        accountPanel: document.getElementById("accountPanel"),
         closeInfoButton: document.getElementById("closeInfoButton"),
         infoCard: document.getElementById("infoCard"),
         loginLink: document.getElementById("loginLink"),
         logoutButton: document.getElementById("logoutButton"),
         map: document.getElementById("map"),
+        mapLegend: document.getElementById("mapLegend"),
         mapStatus: document.getElementById("mapStatus"),
         pointName: document.getElementById("pointName"),
         pointNumber: document.getElementById("pointNumber"),
         pointStatus: document.getElementById("pointStatus"),
         pointTours: document.getElementById("pointTours"),
         pointVisited: document.getElementById("pointVisited"),
-        sessionStatus: document.getElementById("sessionStatus")
+        sessionStatus: document.getElementById("sessionStatus"),
+        userSession: document.getElementById("userSession")
     };
 
     if (typeof ol === "undefined") {
@@ -23,6 +27,11 @@
     }
 
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const VisitState = Object.freeze({
+        unknown: "unknown",
+        open: "open",
+        visited: "visited"
+    });
 
     const createMarkerLayer = (iconSource, visited) => new ol.layer.Vector({
         source: new ol.source.Vector(),
@@ -30,12 +39,12 @@
             image: new ol.style.Icon({
                 anchor: [0.5, 1],
                 src: iconSource,
-                scale: 0.4
+                scale: 0.32
             }),
             text: visited ? new ol.style.Text({
                 text: "✓",
-                offsetY: -20,
-                font: "bold 14px sans-serif",
+                offsetY: -16,
+                font: "bold 12px sans-serif",
                 fill: new ol.style.Fill({ color: "#ffffff" }),
                 stroke: new ol.style.Stroke({ color: "#245a3b", width: 2 })
             }) : undefined
@@ -45,6 +54,7 @@
     const app = {
         infoLocked: false,
         infoPixel: null,
+        neutralMarkers: createMarkerLayer("img/pin_icon_neutral.svg", false),
         visitedMarkers: createMarkerLayer("img/pin_icon_green.png", true),
         unvisitedMarkers: createMarkerLayer("img/pin_icon_red.png", false)
     };
@@ -64,6 +74,7 @@
                     maxZoom: 18
                 })
             }),
+            app.neutralMarkers,
             app.unvisitedMarkers,
             app.visitedMarkers
         ],
@@ -86,26 +97,54 @@
         elements.sessionStatus.textContent = authenticated ? session.email : "Nicht angemeldet";
         elements.loginLink.hidden = authenticated;
         elements.logoutButton.hidden = !authenticated;
+        elements.mapLegend.hidden = !authenticated;
+    };
+
+    const closeAccountMenu = (restoreFocus = false) => {
+        elements.accountPanel.hidden = true;
+        elements.accountMenuButton.setAttribute("aria-expanded", "false");
+        elements.accountMenuButton.setAttribute("aria-label", "Kontomenü öffnen");
+        if (restoreFocus) {
+            elements.accountMenuButton.focus({ preventScroll: true });
+        }
+    };
+
+    const toggleAccountMenu = () => {
+        const opening = elements.accountPanel.hidden;
+        elements.accountPanel.hidden = !opening;
+        elements.accountMenuButton.setAttribute("aria-expanded", opening.toString());
+        elements.accountMenuButton.setAttribute(
+            "aria-label",
+            opening ? "Kontomenü schließen" : "Kontomenü öffnen");
+        if (opening) {
+            const action = elements.accountPanel.querySelector("a:not([hidden]), button:not([hidden])");
+            action?.focus({ preventScroll: true });
+        }
     };
 
     const clearMarkers = () => {
+        app.neutralMarkers.getSource().clear();
         app.visitedMarkers.getSource().clear();
         app.unvisitedMarkers.getSource().clear();
     };
 
-    const createMarker = (stampingPoint, visited) => {
+    const createMarker = (stampingPoint, visitState) => {
         const feature = new ol.Feature(new ol.geom.Point(ol.proj.fromLonLat([
             stampingPoint.position.longitude,
             stampingPoint.position.latitude
         ])));
         feature.stampingPoint = stampingPoint;
-        feature.visited = visited;
+        feature.visitState = visitState;
         return feature;
     };
 
-    const addPoints = (response, visited) => {
-        const layer = visited ? app.visitedMarkers : app.unvisitedMarkers;
-        const features = response.stampingPoints.map(point => createMarker(point, visited));
+    const addPoints = (response, visitState) => {
+        const layer = visitState === VisitState.visited
+            ? app.visitedMarkers
+            : visitState === VisitState.open
+                ? app.unvisitedMarkers
+                : app.neutralMarkers;
+        const features = response.stampingPoints.map(point => createMarker(point, visitState));
         layer.getSource().addFeatures(features);
         return features.length;
     };
@@ -123,7 +162,7 @@
     const loadAnonymousPoints = async () => {
         clearMarkers();
         const points = await getJson("api/points");
-        return addPoints(points, false);
+        return addPoints(points, VisitState.unknown);
     };
 
     const loadAuthenticatedPoints = async () => {
@@ -133,7 +172,7 @@
                 getJson("api/points?vis=false"),
                 getJson("api/points?vis=true")
             ]);
-            return addPoints(unvisited, false) + addPoints(visited, true);
+            return addPoints(unvisited, VisitState.open) + addPoints(visited, VisitState.visited);
         } catch (response) {
             if (response.status !== 401) {
                 throw response;
@@ -199,11 +238,15 @@
 
     const showInfo = (feature, pixel, locked) => {
         const stampingPoint = feature.stampingPoint;
-        const visited = feature.visited === true;
+        const visitState = feature.visitState;
         elements.pointNumber.textContent = `Stempelstelle ${stampingPoint.number}`;
         elements.pointName.textContent = stampingPoint.name;
-        elements.pointStatus.textContent = visited ? "✓ Besucht" : "Noch nicht besucht";
-        elements.pointStatus.dataset.visited = visited.toString();
+        elements.pointStatus.textContent = visitState === VisitState.visited
+            ? "✓ Besucht"
+            : visitState === VisitState.open
+                ? "Noch nicht besucht"
+                : "Besuchsstatus nicht verfügbar";
+        elements.pointStatus.dataset.state = visitState;
         populateTours(stampingPoint.tours);
 
         const formattedVisit = stampingPoint.visited ? formatVisit(stampingPoint.visited) : null;
@@ -254,9 +297,22 @@
     });
 
     document.addEventListener("keydown", event => {
-        if (event.key === "Escape" && !elements.infoCard.hidden) {
+        if (event.key !== "Escape") {
+            return;
+        }
+        if (!elements.accountPanel.hidden) {
+            closeAccountMenu(true);
+        } else if (!elements.infoCard.hidden) {
             hideInfo(true);
             elements.map.focus({ preventScroll: true });
+        }
+    });
+
+    elements.accountMenuButton.addEventListener("click", toggleAccountMenu);
+
+    document.addEventListener("pointerdown", event => {
+        if (!elements.accountPanel.hidden && !elements.userSession.contains(event.target)) {
+            closeAccountMenu();
         }
     });
 
@@ -307,6 +363,7 @@
                 return;
             }
             await initialize();
+            closeAccountMenu();
         } catch {
             setMapStatus("Abmelden ist fehlgeschlagen. Bitte erneut versuchen.", "error");
         } finally {
