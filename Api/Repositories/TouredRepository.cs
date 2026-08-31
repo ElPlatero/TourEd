@@ -159,7 +159,13 @@ public class TouredRepository : IUserService
             .Where(series => ids.Contains(series.Id))
             .ToDictionaryAsync(series => series.Id);
     }
-    
+
+    public Task<List<StampingSeries>> GetAllStampingSeriesAsync(CancellationToken cancellationToken = default)
+        => _dbContext.StampingSeries.AsNoTracking()
+            .OrderBy(series => series.ProviderId)
+            .ThenBy(series => series.Slug)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<StampingPoint>> SaveStampingPointsAsync(params StampingPoint[] points)
     {
         if (points.Length == 0)
