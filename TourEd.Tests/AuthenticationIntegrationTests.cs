@@ -691,9 +691,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
         Assert.Contains("href=\"https://github.com/ElPlatero/TourEd\"", frontendScript, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Quellcode (AGPL-3.0)", frontendScript, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"TourEd-Quellcode auf GitHub (AGPL-3.0)\"", frontendScript, StringComparison.Ordinal);
+        Assert.Contains(">&copy; TourEd</a> · <a class=\"footer-link\" href=\"datenschutz/\">Datenschutz</a>", frontendScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TourEd 2023", frontendScript, StringComparison.Ordinal);
         Assert.Contains("rel=\"noopener noreferrer\"", frontendScript, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("<a class=\"footer-link\" href=\"datenschutz/\">Datenschutz</a>", frontendScript, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("tino@schuettpelz.org", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);

@@ -115,7 +115,7 @@
                     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                     attributions: [
                         ol.source.OSM.ATTRIBUTION,
-                        '&copy; TourEd 2023 · <a class="footer-link" href="https://github.com/ElPlatero/TourEd" target="_blank" rel="noopener noreferrer">Quellcode (AGPL-3.0)</a> · <a class="footer-link" href="datenschutz/">Datenschutz</a>'
+                        '<a class="footer-link" href="https://github.com/ElPlatero/TourEd" target="_blank" rel="noopener noreferrer" aria-label="TourEd-Quellcode auf GitHub (AGPL-3.0)" title="TourEd-Quellcode auf GitHub (AGPL-3.0)">&copy; TourEd</a> · <a class="footer-link" href="datenschutz/">Datenschutz</a>'
                     ],
                     maxZoom: 18
                 })
