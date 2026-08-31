@@ -613,9 +613,15 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var css = await client.GetStringAsync("/css/toured.css");
         var script = await client.GetStringAsync("/js/toured.js");
 
+        var locateButtonPosition = html.IndexOf("id=\"locateButton\"", StringComparison.OrdinalIgnoreCase);
         var searchButtonPosition = html.IndexOf("id=\"searchMenuButton\"", StringComparison.OrdinalIgnoreCase);
         var providerButtonPosition = html.IndexOf("id=\"providerMenuButton\"", StringComparison.OrdinalIgnoreCase);
+        Assert.True(locateButtonPosition >= 0 && locateButtonPosition < searchButtonPosition);
         Assert.True(searchButtonPosition >= 0 && searchButtonPosition < providerButtonPosition);
+        Assert.Contains("aria-label=\"Auf meinen Standort zentrieren\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("tracking: false", script, StringComparison.Ordinal);
+        Assert.Contains("geolocation.setTracking(true)", script, StringComparison.Ordinal);
+        Assert.Contains("geolocation.setTracking(false)", script, StringComparison.Ordinal);
         Assert.Contains("aria-controls=\"searchPanel\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-label=\"Stempelstellensuche öffnen\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("<circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"", html, StringComparison.OrdinalIgnoreCase);
@@ -700,6 +706,12 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Eine Verbindung zu dieser Website wird erst hergestellt, wenn der Link bewusst geöffnet wird", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("TourEd übermittelt beim Öffnen eines Anbieterlinks weder die E-Mail-Adresse noch gespeicherte Stempelbesuche", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("erst nach Betätigung der Standort-Schaltfläche aktiviert", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("nicht an das TourEd-Backend", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Die Nutzung ist freiwillig", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("widerrufene Standortberechtigung beeinträchtigt die übrige Kartenfunktion nicht", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("OpenStreetMap-Kacheln für den angezeigten Kartenausschnitt", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("ungefähren angezeigten Standort ableiten", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("TourEd ist ein unabhängiges Projekt", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Beim bewussten Öffnen eines externen Anbieterlinks", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("serverseitig aus OpenStreetMap übernommen", privacyNotice, StringComparison.Ordinal);
