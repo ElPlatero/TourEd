@@ -237,7 +237,7 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task HarzerWandernadelImportPreservesPointIdsAndVisits()
+    public async Task HarzerWandernadelImportWithinUnitOfWorkPreservesPointIdsAndVisits()
     {
         await using var context = await CreateContextAsync();
         var repository = new TouredRepository(context);
@@ -259,7 +259,11 @@ public sealed class ImportServiceTests : IDisposable
             .ToArray();
         var manager = CreateImportManager(context, repository, null, null, importedPoints);
 
-        await manager.ImportHarzerWandernadelDataAsync();
+        using (var unitOfWork = new UnitOfWork(context))
+        {
+            await manager.ImportHarzerWandernadelDataAsync();
+            await unitOfWork.CommitAsync();
+        }
 
         var storedPoints = await context.StampingPoints.AsNoTracking()
             .Where(point => point.ProviderId == StampingProvider.HarzerWandernadelId)
