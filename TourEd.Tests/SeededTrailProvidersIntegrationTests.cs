@@ -43,10 +43,10 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("schluchtensteig", "Schluchtensteig", "SS", 6)]
-    [InlineData("heidschnuckenweg", "Heidschnuckenweg", "HNW", 13)]
-    [InlineData("harzer-klosterwanderweg", "Harzer Klosterwanderweg", "HKW", 16)]
-    public async Task AnonymousUserCanQuerySeededTrailProviderPoints(string slug, string expectedName, string expectedAbbr, int expectedCount)
+    [InlineData("schluchtensteig")]
+    [InlineData("heidschnuckenweg")]
+    [InlineData("harzer-klosterwanderweg")]
+    public async Task AnonymousPointsAndCatalogRequestsAreRejectedWithUnauthorized(string slug)
     {
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -54,6 +54,40 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
             HandleCookies = false,
             BaseAddress = new Uri("https://localhost")
         });
+
+        var pointsResponse = await client.GetAsync($"/api/points?provider={slug}");
+        Assert.Equal(HttpStatusCode.Unauthorized, pointsResponse.StatusCode);
+
+        var geoJsonResponse = await client.GetAsync($"/api/providers/{slug}/points.geojson");
+        Assert.Equal(HttpStatusCode.Unauthorized, geoJsonResponse.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("schluchtensteig", "Schluchtensteig", "SS", 6)]
+    [InlineData("heidschnuckenweg", "Heidschnuckenweg", "HNW", 13)]
+    [InlineData("harzer-klosterwanderweg", "Harzer Klosterwanderweg", "HKW", 16)]
+    public async Task AuthenticatedUserCanQuerySeededTrailProviderPoints(string slug, string expectedName, string expectedAbbr, int expectedCount)
+    {
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            if (!await context.Users.AnyAsync(u => u.Email == FakeGoogleHandler.Email))
+            {
+                context.Users.Add(new User { Email = FakeGoogleHandler.Email });
+                await context.SaveChangesAsync();
+            }
+        }
+
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var challenge = await client.GetAsync("/auth/login");
+        var callback = await client.GetAsync(challenge.Headers.Location);
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
 
         var response = await client.GetAsync($"/api/points?provider={slug}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -74,23 +108,9 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
         Assert.Null(firstPoint.VisitedOn);
         Assert.Null(firstPoint.VisitedAt);
         Assert.Equal("standard", firstPoint.Series.Slug);
-    }
 
-    [Theory]
-    [InlineData("schluchtensteig")]
-    [InlineData("heidschnuckenweg")]
-    [InlineData("harzer-klosterwanderweg")]
-    public async Task GeoJsonReturnsNotFoundWhenProvenanceDataIsNull(string slug)
-    {
-        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false,
-            HandleCookies = false,
-            BaseAddress = new Uri("https://localhost")
-        });
-
-        var response = await client.GetAsync($"/api/providers/{slug}/points.geojson");
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var geoJsonResponse = await client.GetAsync($"/api/providers/{slug}/points.geojson");
+        Assert.Equal(HttpStatusCode.NotFound, geoJsonResponse.StatusCode);
     }
 
     [Theory]
