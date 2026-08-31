@@ -42,8 +42,9 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("20260830203007_AddStampingProviderDataSourceMetadata", migrations);
         Assert.Contains("20260831112919_AddStampingSeries", migrations);
         Assert.Contains("20260831133503_AddMalerwegProvider", migrations);
+        Assert.Contains("20260831143217_AddSeedTrailProviders", migrations);
         var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
-        Assert.Equal(3, providers.Length);
+        Assert.Equal(6, providers.Length);
         Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);
         Assert.True(providers[0].IsAnonymousAccessAllowed);
         Assert.Contains("430 offizielle Stempelstellen", providers[0].Description, StringComparison.Ordinal);
@@ -53,11 +54,23 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(StampingProvider.MalerwegSlug, providers[2].Slug);
         Assert.Equal("MW", providers[2].Abbreviation);
         Assert.True(providers[2].IsAnonymousAccessAllowed);
+        Assert.Equal(StampingProvider.SchluchtensteigSlug, providers[3].Slug);
+        Assert.Equal("SS", providers[3].Abbreviation);
+        Assert.True(providers[3].IsAnonymousAccessAllowed);
+        Assert.Equal(StampingProvider.HeidschnuckenwegSlug, providers[4].Slug);
+        Assert.Equal("HNW", providers[4].Abbreviation);
+        Assert.True(providers[4].IsAnonymousAccessAllowed);
+        Assert.Equal(StampingProvider.HarzerKlosterwanderwegSlug, providers[5].Slug);
+        Assert.Equal("HKW", providers[5].Abbreviation);
+        Assert.True(providers[5].IsAnonymousAccessAllowed);
         var series = await context.StampingSeries.OrderBy(item => item.Id).ToArrayAsync();
-        Assert.Equal(6, series.Length);
+        Assert.Equal(9, series.Length);
         Assert.Equal(430, series.Single(item => item.Id == StampingSeries.TouringenStandardId).ExpectedPointCount);
         Assert.True(series.Single(item => item.Id == StampingSeries.TouringenSpecialStampsId).IsTemporary);
         Assert.Equal(8, series.Single(item => item.Id == StampingSeries.MalerwegStandardId).ExpectedPointCount);
+        Assert.Equal(6, series.Single(item => item.Id == StampingSeries.SchluchtensteigStandardId).ExpectedPointCount);
+        Assert.Equal(13, series.Single(item => item.Id == StampingSeries.HeidschnuckenwegStandardId).ExpectedPointCount);
+        Assert.Equal(16, series.Single(item => item.Id == StampingSeries.HarzerKlosterwanderwegStandardId).ExpectedPointCount);
     }
 
     [Fact]
@@ -562,6 +575,9 @@ public sealed class ImportServiceTests : IDisposable
                 StampingProvider.TouringenId => StampingSeries.TouringenStandardId,
                 StampingProvider.HarzerWandernadelId => StampingSeries.HarzerWandernadelStandardId,
                 StampingProvider.MalerwegId => StampingSeries.MalerwegStandardId,
+                StampingProvider.SchluchtensteigId => StampingSeries.SchluchtensteigStandardId,
+                StampingProvider.HeidschnuckenwegId => StampingSeries.HeidschnuckenwegStandardId,
+                StampingProvider.HarzerKlosterwanderwegId => StampingSeries.HarzerKlosterwanderwegStandardId,
                 _ => 30
             }
         };

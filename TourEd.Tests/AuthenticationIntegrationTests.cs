@@ -335,22 +335,30 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var authenticatedResponse = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
 
         Assert.NotNull(anonymousResponse);
-        Assert.Equal(4, anonymousResponse.OverallCount);
+        Assert.Equal(7, anonymousResponse.OverallCount);
         var providers = anonymousResponse.StampingProviders.ToArray();
-        Assert.Equal(["Malerweg", "Other provider", "Touringen", "Unsupported link provider"], providers.Select(p => p.Name));
+        Assert.Equal([
+            "Harzer Klosterwanderweg",
+            "Heidschnuckenweg",
+            "Malerweg",
+            "Other provider",
+            "Schluchtensteig",
+            "Touringen",
+            "Unsupported link provider"
+        ], providers.Select(p => p.Name));
 
-        var touringen = providers[2];
-        Assert.Equal(StampingProvider.TouringenSlug, touringen.Slug);
+        var touringen = providers.Single(p => p.Slug == StampingProvider.TouringenSlug);
         Assert.True(touringen.IsAnonymousAccessAllowed);
         Assert.Contains("430 offizielle Stempelstellen", touringen.Description, StringComparison.Ordinal);
         Assert.Equal("https://www.touringen.de/", touringen.WebsiteUrl);
 
-        var other = providers[1];
+        var other = providers.Single(p => p.Slug == "other");
         Assert.Equal("https://provider.example.test/info", other.WebsiteUrl);
-        Assert.Null(providers[3].WebsiteUrl);
+        var unsupported = providers.Single(p => p.Slug == "unsupported-link");
+        Assert.Null(unsupported.WebsiteUrl);
 
         Assert.NotNull(authenticatedResponse);
-        Assert.Equal(5, authenticatedResponse.OverallCount);
+        Assert.Equal(8, authenticatedResponse.OverallCount);
         var harzerWandernadel = Assert.Single(authenticatedResponse.StampingProviders,
             provider => provider.Slug == StampingProvider.HarzerWandernadelSlug);
         Assert.Equal("HWN", harzerWandernadel.Abbreviation);
