@@ -41,18 +41,23 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("20260830184653_SupportOptionalVisitTimestamps", migrations);
         Assert.Contains("20260830203007_AddStampingProviderDataSourceMetadata", migrations);
         Assert.Contains("20260831112919_AddStampingSeries", migrations);
+        Assert.Contains("20260831133503_AddMalerwegProvider", migrations);
         var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
-        Assert.Equal(2, providers.Length);
+        Assert.Equal(3, providers.Length);
         Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);
         Assert.True(providers[0].IsAnonymousAccessAllowed);
         Assert.Contains("430 offizielle Stempelstellen", providers[0].Description, StringComparison.Ordinal);
         Assert.Equal(StampingProvider.HarzerWandernadelSlug, providers[1].Slug);
         Assert.Equal("HWN", providers[1].Abbreviation);
         Assert.False(providers[1].IsAnonymousAccessAllowed);
+        Assert.Equal(StampingProvider.MalerwegSlug, providers[2].Slug);
+        Assert.Equal("MW", providers[2].Abbreviation);
+        Assert.True(providers[2].IsAnonymousAccessAllowed);
         var series = await context.StampingSeries.OrderBy(item => item.Id).ToArrayAsync();
-        Assert.Equal(5, series.Length);
+        Assert.Equal(6, series.Length);
         Assert.Equal(430, series.Single(item => item.Id == StampingSeries.TouringenStandardId).ExpectedPointCount);
         Assert.True(series.Single(item => item.Id == StampingSeries.TouringenSpecialStampsId).IsTemporary);
+        Assert.Equal(8, series.Single(item => item.Id == StampingSeries.MalerwegStandardId).ExpectedPointCount);
     }
 
     [Fact]
@@ -98,7 +103,7 @@ public sealed class ImportServiceTests : IDisposable
         await context.Database.MigrateAsync();
 
         var user = await context.Users.AsNoTracking().SingleAsync();
-        var point = await context.StampingPoints.AsNoTracking().SingleAsync();
+        var point = await context.StampingPoints.AsNoTracking().SingleAsync(p => p.Id == 42);
         Assert.Equal(7, user.Id);
         Assert.Equal(StampingProvider.TouringenId, user.DefaultStampingProviderId);
         Assert.Equal(42, point.Id);
@@ -139,7 +144,7 @@ public sealed class ImportServiceTests : IDisposable
 
         await context.Database.MigrateAsync();
 
-        var point = await context.StampingPoints.AsNoTracking().SingleAsync();
+        var point = await context.StampingPoints.AsNoTracking().SingleAsync(p => p.ProviderId == StampingProvider.TouringenId);
         Assert.Equal(99, point.Id);
         Assert.Equal(StampingProvider.TouringenId, point.ProviderId);
         Assert.Equal("99", point.ExternalId);
@@ -171,7 +176,7 @@ public sealed class ImportServiceTests : IDisposable
         });
         await context.SaveChangesAsync();
 
-        var pointResult = Assert.Single(await repository.GetStampingPointsAsync());
+        var pointResult = Assert.Single(await repository.GetStampingPointsAsync(providerFilter: StampingProviderFilter.Single(StampingProvider.TouringenId)));
         var tourResult = Assert.Single(await repository.GetHikingToursAsync());
 
         Assert.Equal(StampingProvider.TouringenSlug, pointResult.Point.Provider.Slug);
@@ -194,8 +199,8 @@ public sealed class ImportServiceTests : IDisposable
     public async Task SavingPointsUsesSeriesAndNumberAsImportIdentity()
     {
         await using var context = await CreateContextAsync();
-        context.StampingProviders.Add(CreateProvider(3, "other"));
-        context.StampingSeries.Add(CreateSeries(30, 3, "standard"));
+        context.StampingProviders.Add(CreateProvider(99, "other"));
+        context.StampingSeries.Add(CreateSeries(30, 99, "standard"));
         await context.SaveChangesAsync();
         var repository = new TouredRepository(context);
 
@@ -205,7 +210,7 @@ public sealed class ImportServiceTests : IDisposable
             {
                 SeriesId = StampingSeries.TouringenNaturalTreasuresId
             },
-            CreatePoint("Other", 3, "shared", 42));
+            CreatePoint("Other", 99, "shared", 42));
 
         Assert.Equal(3, savedPoints.Count);
         Assert.All(savedPoints, point => Assert.True(point.Id > 0));
@@ -215,7 +220,7 @@ public sealed class ImportServiceTests : IDisposable
         var updated = Assert.Single(await repository.SaveStampingPointsAsync(updatedPoint));
 
         Assert.Equal(savedPoints[0].Id, updated.Id);
-        Assert.Equal(3, await context.StampingPoints.CountAsync());
+        Assert.Equal(3, await context.StampingPoints.CountAsync(p => p.ProviderId == StampingProvider.TouringenId || p.ProviderId == 99));
         Assert.Equal("Touringen updated", (await context.StampingPoints.SingleAsync(p => p.Id == updated.Id)).Name);
         Assert.Equal("updated", (await context.StampingPoints.SingleAsync(p => p.Id == updated.Id)).ExternalId);
 
@@ -229,7 +234,7 @@ public sealed class ImportServiceTests : IDisposable
         var updatedTemporary = Assert.Single(await repository.SaveStampingPointsAsync(temporary with { Name = "Updated temporary special" }));
         Assert.Equal(savedTemporary.Id, updatedTemporary.Id);
         Assert.Null(updatedTemporary.Number);
-        Assert.Equal(4, await context.StampingPoints.CountAsync());
+        Assert.Equal(4, await context.StampingPoints.CountAsync(p => p.ProviderId == StampingProvider.TouringenId || p.ProviderId == 99));
     }
 
     [Fact]
@@ -282,7 +287,7 @@ public sealed class ImportServiceTests : IDisposable
         var reimported = await repository.SaveStampingPointsAsync(canonicalStandard.Concat(canonicalNaturschaetze).ToArray());
 
         Assert.Equal(16, reimported.Count);
-        Assert.Equal(16, await context.StampingPoints.CountAsync());
+        Assert.Equal(16, await context.StampingPoints.CountAsync(p => p.ProviderId == StampingProvider.TouringenId));
 
         for (var i = 0; i < 8; i++)
         {
@@ -308,19 +313,19 @@ public sealed class ImportServiceTests : IDisposable
     public async Task UserImportUsesUsersDefaultProvider()
     {
         await using var context = await CreateContextAsync();
-        context.StampingProviders.Add(CreateProvider(3, "other"));
-        context.StampingSeries.Add(CreateSeries(30, 3, "standard"));
+        context.StampingProviders.Add(CreateProvider(99, "other"));
+        context.StampingSeries.Add(CreateSeries(30, 99, "standard"));
         await context.SaveChangesAsync();
 
-        var user = new User { Email = "user@example.test", DefaultStampingProviderId = 3 };
+        var user = new User { Email = "user@example.test", DefaultStampingProviderId = 99 };
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
         var repository = new TouredRepository(context);
         var points = await repository.SaveStampingPointsAsync(
             CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42),
-            CreatePoint("Other", 3, "other-42", 42));
-        var otherPoint = points.Single(p => p.ProviderId == 3);
+            CreatePoint("Other", 99, "other-42", 42));
+        var otherPoint = points.Single(p => p.ProviderId == 99);
         var manager = CreateImportManager(context, repository, user, null);
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
 
@@ -424,7 +429,7 @@ public sealed class ImportServiceTests : IDisposable
 
         await manager.ImportTouringenDataAsync();
 
-        var point = await context.StampingPoints.AsNoTracking().SingleAsync();
+        var point = await context.StampingPoints.AsNoTracking().SingleAsync(p => p.ProviderId == StampingProvider.TouringenId);
         var relations = await context.StampingPointsInTours.AsNoTracking().ToListAsync();
         Assert.NotEqual(secondRawPoint.Id, point.Id);
         Assert.Equal(secondRawPoint.Id.ToString(), point.ExternalId);
@@ -456,7 +461,7 @@ public sealed class ImportServiceTests : IDisposable
 
         await manager.ImportTouringenDataAsync();
 
-        var updated = await context.StampingPoints.AsNoTracking().SingleAsync();
+        var updated = await context.StampingPoints.AsNoTracking().SingleAsync(p => p.ProviderId == StampingProvider.TouringenId);
         Assert.Equal(existing.Id, updated.Id);
         Assert.Equal("Schleifkotengrund", updated.Name);
         Assert.Equal(existing.Id, (await context.UserVisits.AsNoTracking().SingleAsync()).StampingPointId);
@@ -556,6 +561,7 @@ public sealed class ImportServiceTests : IDisposable
             {
                 StampingProvider.TouringenId => StampingSeries.TouringenStandardId,
                 StampingProvider.HarzerWandernadelId => StampingSeries.HarzerWandernadelStandardId,
+                StampingProvider.MalerwegId => StampingSeries.MalerwegStandardId,
                 _ => 30
             }
         };

@@ -35,7 +35,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     private const int WritablePointNumber = 103;
     private const int OtherProviderPointNumber = 201;
     private const int RestrictedProviderPointNumber = 45;
-    private const int OtherProviderId = 3;
+    private const int OtherProviderId = 10;
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"toured-auth-tests-{Guid.NewGuid():N}.db");
     private readonly string _keysPath = Path.Combine(Path.GetTempPath(), $"toured-auth-keys-{Guid.NewGuid():N}");
     private TouredWebApplicationFactory _factory = null!;
@@ -57,7 +57,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         });
         context.StampingProviders.Add(new StampingProvider
         {
-            Id = 4,
+            Id = 11,
             Slug = "unsupported-link",
             Name = "Unsupported link provider",
             IsAnonymousAccessAllowed = true,
@@ -335,22 +335,22 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var authenticatedResponse = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
 
         Assert.NotNull(anonymousResponse);
-        Assert.Equal(3, anonymousResponse.OverallCount);
+        Assert.Equal(4, anonymousResponse.OverallCount);
         var providers = anonymousResponse.StampingProviders.ToArray();
-        Assert.Equal(["Other provider", "Touringen", "Unsupported link provider"], providers.Select(p => p.Name));
+        Assert.Equal(["Malerweg", "Other provider", "Touringen", "Unsupported link provider"], providers.Select(p => p.Name));
 
-        var touringen = providers[1];
+        var touringen = providers[2];
         Assert.Equal(StampingProvider.TouringenSlug, touringen.Slug);
         Assert.True(touringen.IsAnonymousAccessAllowed);
         Assert.Contains("430 offizielle Stempelstellen", touringen.Description, StringComparison.Ordinal);
         Assert.Equal("https://www.touringen.de/", touringen.WebsiteUrl);
 
-        var other = providers[0];
+        var other = providers[1];
         Assert.Equal("https://provider.example.test/info", other.WebsiteUrl);
-        Assert.Null(providers[2].WebsiteUrl);
+        Assert.Null(providers[3].WebsiteUrl);
 
         Assert.NotNull(authenticatedResponse);
-        Assert.Equal(4, authenticatedResponse.OverallCount);
+        Assert.Equal(5, authenticatedResponse.OverallCount);
         var harzerWandernadel = Assert.Single(authenticatedResponse.StampingProviders,
             provider => provider.Slug == StampingProvider.HarzerWandernadelSlug);
         Assert.Equal("HWN", harzerWandernadel.Abbreviation);
