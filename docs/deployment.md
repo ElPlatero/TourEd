@@ -117,6 +117,8 @@ curl --fail-with-body --request POST \
     https://server.example/toured/api/admin/imports/touringen
 ```
 
+The Touringen import reads the 430 standard stamping points directly from OSM relation 14773147, the 8 Naturschätze and 13 Rhön points from the official GPX archives, and hiking tours from the Touringen website. It updates points in place while retaining internal IDs and user visits, records OSM provenance under ODbL 1.0, and makes the public GeoJSON export `GET /api/providers/touringen/points.geojson` available.
+
 For the Harzer Wandernadel import:
 
 ```bash

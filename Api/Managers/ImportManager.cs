@@ -51,11 +51,18 @@ public partial class ImportManager : IImportManager
             throw new SerializationException("no data");
         }
 
-        var stampingPoints = (await stampingPointSnapshotTask).Points.ToArray();
+        var snapshot = await stampingPointSnapshotTask;
         var standardImportData = importData
             .Where(area => !TouringenNaturalTreasureAreaIds.Contains(area.Id))
             .ToArray();
-        var savedStampingPoints = await _repository.SaveStampingPointsAsync(stampingPoints);
+
+        var hikingTours = _hikingToursImporter.Import(standardImportData).ToArray();
+        var savedStampingPoints = await _repository.SaveStampingPointSourceImportAsync(
+            StampingProvider.TouringenId,
+            snapshot,
+            hikingTours.Length,
+            cancellationToken);
+
         var stampingPointIdsByNumber = savedStampingPoints
             .Where(p => p.SeriesId == StampingSeries.TouringenStandardId && p.Number.HasValue)
             .ToDictionary(p => p.Number!.Value, p => p.Id);
@@ -67,7 +74,6 @@ public partial class ImportManager : IImportManager
                 p => p.Id.ToString(CultureInfo.InvariantCulture),
                 p => stampingPointIdsByNumber[p.StampPointNumber]);
 
-        var hikingTours = _hikingToursImporter.Import(standardImportData).ToArray();
         foreach (var hikingTour in hikingTours)
         {
             hikingTour.StampingPoints = hikingTour.StampingPoints.Select(point => new SortedStampingPoint(point.Position)
@@ -78,8 +84,6 @@ public partial class ImportManager : IImportManager
         }
 
         await _repository.SaveHikingToursAsync(hikingTours);
-
-        await _repository.SaveImportAsync(stampingPoints.Length, hikingTours.Length);
     }
 
     public async Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default)
@@ -94,7 +98,7 @@ public partial class ImportManager : IImportManager
         await _repository.SaveStampingPointSourceImportAsync(
             StampingProvider.HarzerWandernadelId,
             snapshot,
-            cancellationToken);
+            cancellationToken: cancellationToken);
     }
 
     public async Task ImportUserDataAsync(Stream stream)

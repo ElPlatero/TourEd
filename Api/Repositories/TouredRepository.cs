@@ -230,9 +230,10 @@ public class TouredRepository : IUserService
         return savedPoints;
     }
 
-    public async Task SaveStampingPointSourceImportAsync(
+    public async Task<IReadOnlyList<StampingPoint>> SaveStampingPointSourceImportAsync(
         int providerId,
         StampingPointSourceSnapshot snapshot,
+        int hikingToursCount = 0,
         CancellationToken cancellationToken = default)
     {
         if (snapshot.Points.Count == 0 || snapshot.Points.Any(point => point.ProviderId != providerId))
@@ -240,7 +241,7 @@ public class TouredRepository : IUserService
             throw new InvalidOperationException("A provider source import must contain points for exactly that provider.");
         }
 
-        await SaveStampingPointsAsync(snapshot.Points.ToArray());
+        var savedPoints = await SaveStampingPointsAsync(snapshot.Points.ToArray());
         var provider = await _dbContext.StampingProviders.SingleAsync(
             item => item.Id == providerId,
             cancellationToken);
@@ -253,9 +254,10 @@ public class TouredRepository : IUserService
         provider.DataImportedAt = DateTime.UtcNow;
         provider.IsAnonymousAccessAllowed = true;
         await _dbContext.AddAsync(
-            new Import(default, default, snapshot.Points.Count, 0),
+            new Import(default, default, snapshot.Points.Count, hikingToursCount),
             cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        return savedPoints;
     }
 
     public async Task<(StampingProvider Provider, List<StampingPoint> Points)?> GetPublicProviderDataAsync(
