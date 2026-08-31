@@ -728,6 +728,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("elements.deleteVisitDialog.showModal()", script, StringComparison.Ordinal);
         Assert.Contains("wirklich entfernt werden", script, StringComparison.Ordinal);
         Assert.Contains("id=\"authBarrier\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<main id=\"appShell\" inert aria-hidden=\"true\">", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("id=\"authBarrier\" class=\"auth-barrier\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"authBarrierTitle\" aria-describedby=\"authBarrierDesc\" hidden", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".auth-barrier", css, StringComparison.Ordinal);
         Assert.Contains("showAuthBarrier", script, StringComparison.Ordinal);
         Assert.Contains("hideAuthBarrier", script, StringComparison.Ordinal);
