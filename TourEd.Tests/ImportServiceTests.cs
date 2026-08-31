@@ -39,6 +39,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("20260830132352_UpdateStampingProviderMetadata", migrations);
         Assert.Contains("20260830150127_AddHarzerWandernadelProvider", migrations);
         Assert.Contains("20260830184653_SupportOptionalVisitTimestamps", migrations);
+        Assert.Contains("20260830203007_AddStampingProviderDataSourceMetadata", migrations);
         var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
         Assert.Equal(2, providers.Length);
         Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);
@@ -236,20 +237,27 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task HarzerWandernadelImportUpdatesByNumberWithoutDeletingPointsOrVisits()
+    public async Task HarzerWandernadelImportPreservesPointIdsAndVisits()
     {
         await using var context = await CreateContextAsync();
         var repository = new TouredRepository(context);
         var existingPoints = await repository.SaveStampingPointsAsync(
             CreatePoint("Existing 44", StampingProvider.HarzerWandernadelId, "HWN044", 44),
             CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45));
+        var existing44 = existingPoints.Single(point => point.Number == 44);
         var existing45 = existingPoints.Single(point => point.Number == 45);
         var user = new User { Email = "hwn@example.test" };
         context.Users.Add(user);
         await context.SaveChangesAsync();
         await repository.AddUserVisitAsync(user, existing45.Id, new DateTime(2026, 8, 30, 12, 0, 0), true);
-        var updated45 = CreatePoint("Updated 45", StampingProvider.HarzerWandernadelId, "HWN045", 45);
-        var manager = CreateImportManager(context, repository, null, null, [updated45]);
+        var importedPoints = Enumerable.Range(1, 222)
+            .Select(number => CreatePoint(
+                $"Imported {number}",
+                StampingProvider.HarzerWandernadelId,
+                $"osm-node-{number}",
+                number))
+            .ToArray();
+        var manager = CreateImportManager(context, repository, null, null, importedPoints);
 
         await manager.ImportHarzerWandernadelDataAsync();
 
@@ -257,14 +265,49 @@ public sealed class ImportServiceTests : IDisposable
             .Where(point => point.ProviderId == StampingProvider.HarzerWandernadelId)
             .OrderBy(point => point.Number)
             .ToArrayAsync();
-        Assert.Equal(2, storedPoints.Length);
-        Assert.Equal("Existing 44", storedPoints[0].Name);
-        Assert.Equal(existing45.Id, storedPoints[1].Id);
-        Assert.Equal("Updated 45", storedPoints[1].Name);
+        Assert.Equal(222, storedPoints.Length);
+        Assert.Equal(existing44.Id, storedPoints.Single(point => point.Number == 44).Id);
+        Assert.Equal("Imported 44", storedPoints.Single(point => point.Number == 44).Name);
+        Assert.Equal(existing45.Id, storedPoints.Single(point => point.Number == 45).Id);
+        Assert.Equal("Imported 45", storedPoints.Single(point => point.Number == 45).Name);
         Assert.Equal(existing45.Id, Assert.Single(await context.UserVisits.AsNoTracking().ToArrayAsync()).StampingPointId);
         var import = Assert.Single(await context.Imports.AsNoTracking().ToArrayAsync());
-        Assert.Equal(1, import.StampingPointsCount);
+        Assert.Equal(222, import.StampingPointsCount);
         Assert.Equal(0, import.HikingToursCount);
+        var provider = await context.StampingProviders.AsNoTracking()
+            .SingleAsync(item => item.Id == StampingProvider.HarzerWandernadelId);
+        Assert.True(provider.IsAnonymousAccessAllowed);
+        Assert.Equal("44", provider.DataSourceRevision);
+        Assert.Equal("© OpenStreetMap contributors", provider.DataSourceAttribution);
+        Assert.NotNull(provider.DataImportedAt);
+    }
+
+    [Fact]
+    public async Task IncompleteHarzerWandernadelSnapshotDoesNotPublishProviderData()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new TouredRepository(context);
+        var existing = Assert.Single(await repository.SaveStampingPointsAsync(
+            CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45)));
+        var manager = CreateImportManager(
+            context,
+            repository,
+            null,
+            null,
+            [CreatePoint("Incomplete 45", StampingProvider.HarzerWandernadelId, "osm-node-45", 45)]);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => manager.ImportHarzerWandernadelDataAsync());
+
+        var stored = Assert.Single(await context.StampingPoints.AsNoTracking()
+            .Where(point => point.ProviderId == StampingProvider.HarzerWandernadelId)
+            .ToArrayAsync());
+        var provider = await context.StampingProviders.AsNoTracking()
+            .SingleAsync(item => item.Id == StampingProvider.HarzerWandernadelId);
+        Assert.Equal(existing.Id, stored.Id);
+        Assert.Equal("Existing 45", stored.Name);
+        Assert.False(provider.IsAnonymousAccessAllowed);
+        Assert.Null(provider.DataImportedAt);
+        Assert.Empty(await context.Imports.AsNoTracking().ToArrayAsync());
     }
 
     [Fact]
@@ -353,7 +396,14 @@ public sealed class ImportServiceTests : IDisposable
 
     private sealed class StubHarzerWandernadelImportService(IReadOnlyList<StampingPoint> points) : IHarzerWandernadelImportService
     {
-        public Task<IReadOnlyList<StampingPoint>> DownloadStampingPointsAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(points);
+        public Task<StampingPointSourceSnapshot> DownloadStampingPointsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new StampingPointSourceSnapshot(
+                points,
+                new Uri("https://www.openstreetmap.org/relation/148007"),
+                "© OpenStreetMap contributors",
+                "Open Data Commons Open Database License (ODbL) 1.0",
+                new Uri("https://opendatacommons.org/licenses/odbl/1-0/"),
+                "44",
+                new DateTime(2026, 3, 9, 22, 17, 30, DateTimeKind.Utc)));
     }
 }

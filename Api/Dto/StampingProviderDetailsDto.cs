@@ -8,12 +8,28 @@ public sealed record StampingProviderDetailsDto(
     string? Abbreviation,
     bool IsAnonymousAccessAllowed,
     string? Description,
-    string? WebsiteUrl)
+    string? WebsiteUrl,
+    string? DataSourceAttribution,
+    string? DataSourceUrl,
+    string? DataLicenseName,
+    string? DataLicenseUrl,
+    bool HasPublicDataDownload)
 {
     public static StampingProviderDetailsDto Create(StampingProvider provider)
-        => new(provider.Slug, provider.Name, provider.Abbreviation, provider.IsAnonymousAccessAllowed, provider.Description, GetPublicWebsiteUrl(provider.WebsiteUri));
+        => new(
+            provider.Slug,
+            provider.Name,
+            provider.Abbreviation,
+            provider.IsAnonymousAccessAllowed,
+            provider.Description,
+            GetPublicHttpUrl(provider.WebsiteUri),
+            provider.DataSourceAttribution,
+            GetPublicHttpUrl(provider.DataSourceUri),
+            provider.DataLicenseName,
+            GetPublicHttpUrl(provider.DataLicenseUri),
+            provider.IsAnonymousAccessAllowed && provider.DataImportedAt is not null);
 
-    private static string? GetPublicWebsiteUrl(Uri? websiteUri)
+    private static string? GetPublicHttpUrl(Uri? websiteUri)
     {
         if (websiteUri is not { IsAbsoluteUri: true })
         {

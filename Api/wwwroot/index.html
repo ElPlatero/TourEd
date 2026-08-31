@@ -165,13 +165,22 @@
         </div>
     </section>
 
-    <dialog id="providerInfoDialog" class="provider-info-dialog" aria-labelledby="providerInfoName" aria-describedby="providerInfoDescription providerInfoDisclaimer">
+    <dialog id="providerInfoDialog" class="provider-info-dialog" aria-labelledby="providerInfoName" aria-describedby="providerInfoDescription providerDataSource providerInfoDisclaimer">
         <div class="provider-info-dialog__header">
             <h2 id="providerInfoName"></h2>
             <button id="closeProviderInfoButton" class="icon-button" type="button" aria-label="Anbieterinformationen schließen">×</button>
         </div>
         <p id="providerInfoDescription"></p>
         <a id="providerInfoWebsite" class="action provider-website" target="_blank" rel="noopener noreferrer" hidden>Website des Anbieters öffnen</a>
+        <section id="providerDataSource" class="provider-data-source" aria-label="Datenquelle" hidden>
+            <h3>Datenquelle</h3>
+            <p>
+                <span id="providerDataAttribution"></span>
+                · <a id="providerDataSourceLink" target="_blank" rel="noopener noreferrer">Quelldatensatz</a>
+                · <a id="providerDataLicenseLink" target="_blank" rel="noopener noreferrer"></a>
+            </p>
+            <a id="providerDataDownload" class="provider-data-download" download>Stempelstellen als GeoJSON herunterladen</a>
+        </section>
         <p id="providerInfoDisclaimer" class="provider-disclaimer">
             TourEd ist ein unabhängiges Projekt und steht in keiner geschäftlichen oder organisatorischen Verbindung zu diesem Anbieter.
         </p>

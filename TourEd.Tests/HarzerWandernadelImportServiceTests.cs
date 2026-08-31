@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Net;
 using System.Text;
 using System.Xml;
@@ -11,39 +10,58 @@ namespace TourEd.Tests;
 
 public sealed class HarzerWandernadelImportServiceTests
 {
-    private static readonly Uri DownloadPageUri = new("https://www.harzer-wandernadel.de/stempelstellen/gps-download/");
-    private static readonly Uri OverviewUri = new("https://www.harzer-wandernadel.de/stempelstellen/uebersichtstabelle/");
-    private static readonly Uri ArchiveUri = new("https://www.harzer-wandernadel.de/files/GPX-Daten-Stempelstellen.zip");
+    private const long RelationId = 148007;
+    private static readonly Uri RelationApiUri = new("https://api.openstreetmap.org/api/0.6/relation/148007/full");
+    private static readonly Uri RelationPublicUri = new("https://www.openstreetmap.org/relation/148007");
 
     [Fact]
-    public async Task DownloadsCurrentNamesAndCoordinatesForCompleteRegularNumberSet()
+    public async Task DownloadsCompleteOsmRelationAndSelectsSummerLocationFor69()
     {
-        var handler = new HwnHttpMessageHandler(CreateArchive(222));
+        var handler = new HwnHttpMessageHandler(CreateOsm(222, includeWinter69: true));
         var service = CreateService(handler);
 
-        var points = await service.DownloadStampingPointsAsync();
+        var snapshot = await service.DownloadStampingPointsAsync();
 
-        Assert.Equal(222, points.Count);
-        var first = points[0];
+        Assert.Equal(222, snapshot.Points.Count);
+        var first = snapshot.Points[0];
         Assert.Equal(StampingProvider.HarzerWandernadelId, first.ProviderId);
         Assert.Equal(1, first.Number);
         Assert.Equal(1, first.Code);
-        Assert.Equal("HWN001", first.ExternalId);
+        Assert.Equal("osm-node-1001", first.ExternalId);
         Assert.Equal(10.001m, first.Longitude);
         Assert.Equal(51.001m, first.Latitude);
-        Assert.Equal("Aktueller Name 45", points[44].Name);
-        Assert.Equal([DownloadPageUri, OverviewUri, ArchiveUri], handler.RequestedUris);
+        Assert.Equal("Punkt 1", first.Name);
+        var point69 = snapshot.Points.Single(point => point.Number == 69);
+        Assert.Equal("Sommerpunkt 69", point69.Name);
+        Assert.Equal("osm-node-1069", point69.ExternalId);
+        Assert.Equal(RelationPublicUri, snapshot.SourceUri);
+        Assert.Equal("© OpenStreetMap contributors", snapshot.Attribution);
+        Assert.Equal("Open Data Commons Open Database License (ODbL) 1.0", snapshot.LicenseName);
+        Assert.Equal("44", snapshot.Revision);
+        Assert.Equal(new DateTime(2026, 3, 9, 22, 17, 30, DateTimeKind.Utc), snapshot.SourceUpdatedAt);
+        Assert.Equal([RelationApiUri], handler.RequestedUris);
     }
 
     [Fact]
-    public async Task RejectsIncompleteGpxBeforeReturningAnyPoints()
+    public async Task RejectsIncompleteOsmRelationBeforeReturningAnyPoints()
     {
-        var service = CreateService(new HwnHttpMessageHandler(CreateArchive(221)));
+        var service = CreateService(new HwnHttpMessageHandler(CreateOsm(221, includeWinter69: true)));
 
         var exception = await Assert.ThrowsAsync<InvalidDataException>(
             () => service.DownloadStampingPointsAsync());
 
-        Assert.Contains("each number from 1 through 222", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("missing: 222", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsSeasonalPointWithoutExactlyOneSummerLocation()
+    {
+        var service = CreateService(new HwnHttpMessageHandler(CreateOsm(222, includeWinter69: false, make69WinterOnly: true)));
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(
+            () => service.DownloadStampingPointsAsync());
+
+        Assert.Contains("missing: 69", exception.Message, StringComparison.Ordinal);
     }
 
     private static HarzerWandernadelImportService CreateService(HttpMessageHandler handler)
@@ -51,39 +69,98 @@ public sealed class HarzerWandernadelImportServiceTests
             new HttpClient(handler),
             new HarzerWandernadelConfiguration
             {
-                DownloadPageUri = DownloadPageUri,
-                OverviewUri = OverviewUri,
+                RelationId = RelationId,
+                RelationApiUri = RelationApiUri,
+                RelationPublicUri = RelationPublicUri,
                 MaxDownloadBytes = 2 * 1024 * 1024
             });
 
-    private static byte[] CreateArchive(int pointCount)
+    private static byte[] CreateOsm(
+        int pointCount,
+        bool includeWinter69,
+        bool make69WinterOnly = false)
     {
-        using var archiveStream = new MemoryStream();
-        using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, leaveOpen: true))
+        using var stream = new MemoryStream();
+        using var writer = XmlWriter.Create(stream, new XmlWriterSettings
         {
-            var entry = archive.CreateEntry("HWN.gpx");
-            using var entryStream = entry.Open();
-            using var writer = XmlWriter.Create(entryStream, new XmlWriterSettings
-            {
-                Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                Indent = false
-            });
-            writer.WriteStartElement("gpx", "http://www.topografix.com/GPX/1/1");
-            for (var number = 1; number <= pointCount; number++)
-            {
-                writer.WriteStartElement("wpt", "http://www.topografix.com/GPX/1/1");
-                writer.WriteAttributeString("lat", (51m + number / 1000m).ToString(CultureInfo.InvariantCulture));
-                writer.WriteAttributeString("lon", (10m + number / 1000m).ToString(CultureInfo.InvariantCulture));
-                writer.WriteElementString("name", "http://www.topografix.com/GPX/1/1", $"HWN{number:D3} GPX Name {number}");
-                writer.WriteElementString("desc", "http://www.topografix.com/GPX/1/1", $"GPX Description {number}");
-                writer.WriteEndElement();
-            }
-            writer.WriteEndElement();
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            Indent = false
+        });
+        writer.WriteStartElement("osm");
+        for (var number = 1; number <= pointCount; number++)
+        {
+            WriteNode(
+                writer,
+                1000 + number,
+                number,
+                number == 69 ? "Sommerpunkt 69" : $"Punkt {number}",
+                number == 69 ? make69WinterOnly ? "winter" : "spring;summer;autumn" : null);
         }
-        return archiveStream.ToArray();
+        if (includeWinter69 && pointCount >= 69)
+        {
+            WriteNode(writer, 9069, 69, "Winterpunkt 69", "winter");
+        }
+
+        writer.WriteStartElement("relation");
+        writer.WriteAttributeString("id", RelationId.ToString(CultureInfo.InvariantCulture));
+        writer.WriteAttributeString("version", "44");
+        writer.WriteAttributeString("timestamp", "2026-03-09T22:17:30Z");
+        for (var number = 1; number <= pointCount; number++)
+        {
+            WriteMember(writer, 1000 + number);
+        }
+        if (includeWinter69 && pointCount >= 69)
+        {
+            WriteMember(writer, 9069);
+        }
+        WriteTag(writer, "name", "HWN Stempelstellen");
+        WriteTag(writer, "operator", "Harzer Wandernadel");
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.Flush();
+        return stream.ToArray();
     }
 
-    private sealed class HwnHttpMessageHandler(byte[] archive) : HttpMessageHandler
+    private static void WriteNode(
+        XmlWriter writer,
+        long nodeId,
+        int number,
+        string name,
+        string? seasonal)
+    {
+        writer.WriteStartElement("node");
+        writer.WriteAttributeString("id", nodeId.ToString(CultureInfo.InvariantCulture));
+        writer.WriteAttributeString("lat", (51m + number / 1000m).ToString(CultureInfo.InvariantCulture));
+        writer.WriteAttributeString("lon", (10m + number / 1000m).ToString(CultureInfo.InvariantCulture));
+        WriteTag(writer, "checkpoint", "hiking");
+        WriteTag(writer, "checkpoint:type", "stamp");
+        WriteTag(writer, "operator", "Harzer Wandernadel");
+        WriteTag(writer, "ref", $"HWN {number:D3}");
+        WriteTag(writer, "name", $"HWN {number:D3} - {name}");
+        if (seasonal is not null)
+        {
+            WriteTag(writer, "seasonal", seasonal);
+        }
+        writer.WriteEndElement();
+    }
+
+    private static void WriteMember(XmlWriter writer, long nodeId)
+    {
+        writer.WriteStartElement("member");
+        writer.WriteAttributeString("type", "node");
+        writer.WriteAttributeString("ref", nodeId.ToString(CultureInfo.InvariantCulture));
+        writer.WriteEndElement();
+    }
+
+    private static void WriteTag(XmlWriter writer, string key, string value)
+    {
+        writer.WriteStartElement("tag");
+        writer.WriteAttributeString("k", key);
+        writer.WriteAttributeString("v", value);
+        writer.WriteEndElement();
+    }
+
+    private sealed class HwnHttpMessageHandler(byte[] relation) : HttpMessageHandler
     {
         public List<Uri> RequestedUris { get; } = [];
 
@@ -93,25 +170,15 @@ public sealed class HarzerWandernadelImportServiceTests
         {
             var uri = request.RequestUri ?? throw new InvalidOperationException("Request URI is missing.");
             RequestedUris.Add(uri);
-            HttpContent content = uri == DownloadPageUri
-                ? new StringContent($"<a href=\"{ArchiveUri}\">GPX</a>", Encoding.UTF8, "text/html")
-                : uri == OverviewUri
-                    ? new StringContent(CreateOverview(), Encoding.UTF8, "text/html")
-                    : uri == ArchiveUri
-                        ? new ByteArrayContent(archive)
-                        : throw new InvalidOperationException($"Unexpected request URI: {uri}");
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
-        }
-
-        private static string CreateOverview()
-        {
-            var rows = new StringBuilder("<table><tbody>");
-            for (var number = 1; number <= 222; number++)
+            if (uri != RelationApiUri)
             {
-                var name = number == 45 ? "Aktu&shy;eller&nbsp;Name 45" : $"Aktueller Name {number}";
-                rows.Append(CultureInfo.InvariantCulture, $"<tr><td>{number}</td><td><a>{name}</a></td><td>Ort</td></tr>");
+                throw new InvalidOperationException($"Unexpected request URI: {uri}");
             }
-            return rows.Append("</tbody></table>").ToString();
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(relation)
+            });
         }
     }
 }

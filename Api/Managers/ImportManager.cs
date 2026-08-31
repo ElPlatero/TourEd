@@ -77,9 +77,16 @@ public partial class ImportManager : IImportManager
 
     public async Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default)
     {
-        var stampingPoints = await _harzerWandernadelImporter.DownloadStampingPointsAsync(cancellationToken);
-        await _repository.SaveStampingPointsAsync(stampingPoints.ToArray());
-        await _repository.SaveImportAsync(stampingPoints.Count, 0);
+        var snapshot = await _harzerWandernadelImporter.DownloadStampingPointsAsync(cancellationToken);
+        var expectedNumbers = Enumerable.Range(1, 222);
+        if (!snapshot.Points.Select(point => point.Number).OrderBy(number => number).SequenceEqual(expectedNumbers))
+        {
+            throw new InvalidDataException("The HWN import must contain every regular number from 1 through 222 exactly once.");
+        }
+        await _repository.SaveStampingPointSourceImportAsync(
+            StampingProvider.HarzerWandernadelId,
+            snapshot,
+            cancellationToken);
     }
 
     public async Task ImportUserDataAsync(Stream stream)
