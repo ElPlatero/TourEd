@@ -6,6 +6,8 @@ public class StampingProvider
     public const string TouringenSlug = "touringen";
     public const int HarzerWandernadelId = 2;
     public const string HarzerWandernadelSlug = "harzer-wandernadel";
+    public const int MalerwegId = 3;
+    public const string MalerwegSlug = "malerweg";
 
     public int Id { get; set; }
     public string Slug { get; set; } = null!;

@@ -59,6 +59,16 @@ public class DataContext : DbContext
                 IsAnonymousAccessAllowed = false,
                 WebsiteUri = new Uri("https://www.harzer-wandernadel.de/"),
                 Description = "Die Harzer Wandernadel ist ein seit 2006 bestehendes Wanderstempelsystem im Harz mit 222 regulären Stempelstellen. Wandernde sammeln die Stempel in einem Wanderpass und können damit verschiedene Leistungsabzeichen bis zum Harzer Wanderkaiser erreichen."
+            },
+            new StampingProvider
+            {
+                Id = StampingProvider.MalerwegId,
+                Slug = StampingProvider.MalerwegSlug,
+                Name = "Malerweg",
+                Abbreviation = "MW",
+                IsAnonymousAccessAllowed = true,
+                WebsiteUri = new Uri("https://www.saechsische-schweiz.de/malerweg"),
+                Description = "Der Malerweg im Elbsandsteingebirge der Sächsischen Schweiz gehört zu den traditionsreichsten und beliebtesten Wanderwegen Deutschlands. Der offizielle Wanderpass umfasst 8 Stempelstellen entlang der Etappen."
             });
         });
 
@@ -75,6 +85,103 @@ public class DataContext : DbContext
             dto.HasIndex(p => new { p.SeriesId, p.Number }).IsUnique();
             dto.HasIndex(p => new { p.ProviderId, p.ExternalId }).IsUnique();
             dto.Ignore(p => p.Position);
+            dto.HasData(
+                new
+                {
+                    Id = 5001,
+                    Name = "Liebethal",
+                    Longitude = 13.9538612m,
+                    Latitude = 50.9982441m,
+                    Number = (int?)1,
+                    Code = 1,
+                    ProviderId = StampingProvider.MalerwegId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId,
+                    ExternalId = "standard-1"
+                },
+                new
+                {
+                    Id = 5002,
+                    Name = "Stadt Wehlen",
+                    Longitude = 14.0729352m,
+                    Latitude = 50.9622998m,
+                    Number = (int?)2,
+                    Code = 2,
+                    ProviderId = StampingProvider.MalerwegId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId,
+                    ExternalId = "standard-2"
+                },
+                new
+                {
+                    Id = 5003,
+                    Name = "Hohnstein",
+                    Longitude = 14.1105942m,
+                    Latitude = 50.9788094m,
+                    Number = (int?)3,
+                    Code = 3,
+                    ProviderId = StampingProvider.MalerwegId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId,
+                    ExternalId = "standard-3"
+                },
+                new
+                {
+                    Id = 5004,
+                    Name = "Brand",
+                    Longitude = 14.1206126m,
+                    Latitude = 50.9702213m,
+                    Number = (int?)4,
+                    Code = 4,
+                    ProviderId = StampingProvider.MalerwegId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId,
+                    ExternalId = "standard-4"
+                },
+                new
+                {
+                    Id = 5005,
+                    Name = "Neumannmühle",
+                    Longitude = 14.1843440m,
+                    Latitude = 50.9416556m,
+                    Number = (int?)5,
+                    Code = 5,
+                    ProviderId = StampingProvider.MalerwegId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId,
+                    ExternalId = "standard-5"
+                },
+                new
+                {
+                    Id = 5006,
+                    Name = "Großer Zschirnstein",
+                    Longitude = 14.2562470m,
+                    Latitude = 50.9080517m,
+                    Number = (int?)6,
+                    Code = 6,
+                    ProviderId = StampingProvider.MalerwegId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId,
+                    ExternalId = "standard-6"
+                },
+                new
+                {
+                    Id = 5007,
+                    Name = "Gohrisch",
+                    Longitude = 14.1206126m,
+                    Latitude = 50.8872242m,
+                    Number = (int?)7,
+                    Code = 7,
+                    ProviderId = StampingProvider.MalerwegId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId,
+                    ExternalId = "standard-7"
+                },
+                new
+                {
+                    Id = 5008,
+                    Name = "Rauenstein",
+                    Longitude = 14.0734005m,
+                    Latitude = 50.9255018m,
+                    Number = (int?)8,
+                    Code = 8,
+                    ProviderId = StampingProvider.MalerwegId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId,
+                    ExternalId = "standard-8"
+                });
         });
 
         modelBuilder.Entity<StampingSeries>(dto =>
@@ -91,7 +198,8 @@ public class DataContext : DbContext
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenNaturalTreasuresId, ProviderId = StampingProvider.TouringenId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenNaturalTreasuresSlug, Name = "Naturschätze", ExpectedPointCount = 8 },
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenRhoenFamilyTrailsId, ProviderId = StampingProvider.TouringenId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenRhoenFamilyTrailsSlug, Name = "Familienwanderwege Rhön", ExpectedPointCount = 13 },
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenSpecialStampsId, ProviderId = StampingProvider.TouringenId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenSpecialStampsSlug, Name = "Sonderstempel", IsTemporary = true },
-                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerWandernadelStandardId, ProviderId = StampingProvider.HarzerWandernadelId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerWandernadelStandardSlug, Name = "Standard", ExpectedPointCount = 222 });
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerWandernadelStandardId, ProviderId = StampingProvider.HarzerWandernadelId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerWandernadelStandardSlug, Name = "Standard", ExpectedPointCount = 222 },
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId, ProviderId = StampingProvider.MalerwegId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardSlug, Name = "Standard", ExpectedPointCount = 8 });
         });
 
         modelBuilder.Entity<SortedStampingPoint>(dto =>

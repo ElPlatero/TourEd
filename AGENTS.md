@@ -4,9 +4,9 @@
 
 TourEd is a small .NET 10 application for stamping points and hiking tours from multiple providers.
 
-It stores Touringen and Harzer Wandernadel (HWN) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
+It stores Touringen, Harzer Wandernadel (HWN), and Malerweg (MW) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
-Stamping points are anchored by `StampingProvider` and belong to a provider-scoped `StampingSeries`. A series supplies the number namespace, so equally numbered points from different editions remain distinct. Each provider declares an abbreviation and whether its data is available anonymously. Touringen allows anonymous access. Harzer Wandernadel becomes anonymously available only after its first complete OSM import. Users store a `DefaultStampingProviderId` that currently defaults to Touringen.
+Stamping points are anchored by `StampingProvider` and belong to a provider-scoped `StampingSeries`. A series supplies the number namespace, so equally numbered points from different editions remain distinct. Each provider declares an abbreviation and whether its data is available anonymously. Touringen and Malerweg allow anonymous access. Harzer Wandernadel becomes anonymously available only after its first complete OSM import. Users store a `DefaultStampingProviderId` that currently defaults to Touringen.
 
 ## Frontend
 
@@ -116,7 +116,7 @@ The backend follows a simple layered structure:
 - `DataContext` defines SQLite-backed EF Core mappings.
 - `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
 
-Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN has one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
+Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN has one standard series. Malerweg has one standard series (8 points). Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
 
 `StampingProvider` also stores the public name, abbreviation, description, optional website, anonymous-access flag, and optional imported-data provenance used by the provider catalog and GeoJSON export. Provenance includes source and licence links, attribution, source revision/timestamp, and import timestamp. Public provider DTOs expose only absolute HTTP(S) URLs; unsupported URI schemes are omitted. Anonymous catalogs and point queries omit providers whose anonymous-access flag is false.
 
@@ -161,6 +161,12 @@ Harzer Wandernadel data import:
 - Updates points by series and number while retaining their internal ids and user visits.
 - Atomically records OSM provenance/licence metadata, records the import, and enables anonymous HWN access only after the complete validated point update succeeds.
 - Is started manually through the CLI-protected admin endpoint; no schedule or workflow triggers it automatically.
+
+Malerweg data:
+
+- 8 fixed stamping points across the Malerweg trail in Saxon Switzerland, seeded directly via EF Core migration.
+- Fully available for anonymous and authenticated users without requiring a background network import.
+- Provenance/import metadata fields remain null, hiding external source/licence links and public GeoJSON export in the provider information modal.
 
 User data import:
 
