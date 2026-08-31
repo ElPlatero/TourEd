@@ -8,6 +8,9 @@ public class StampingSeries
     public const int TouringenSpecialStampsId = 4;
     public const int HarzerWandernadelStandardId = 5;
     public const int MalerwegStandardId = 6;
+    public const int SchluchtensteigStandardId = 7;
+    public const int HeidschnuckenwegStandardId = 8;
+    public const int HarzerKlosterwanderwegStandardId = 9;
 
     public const string TouringenStandardSlug = "standard";
     public const string TouringenNaturalTreasuresSlug = "naturschaetze";
@@ -15,6 +18,9 @@ public class StampingSeries
     public const string TouringenSpecialStampsSlug = "sonderstempel";
     public const string HarzerWandernadelStandardSlug = "standard";
     public const string MalerwegStandardSlug = "standard";
+    public const string SchluchtensteigStandardSlug = "standard";
+    public const string HeidschnuckenwegStandardSlug = "standard";
+    public const string HarzerKlosterwanderwegStandardSlug = "standard";
 
     public int Id { get; set; }
     public int ProviderId { get; set; }

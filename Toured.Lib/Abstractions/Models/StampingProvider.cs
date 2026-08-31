@@ -8,6 +8,12 @@ public class StampingProvider
     public const string HarzerWandernadelSlug = "harzer-wandernadel";
     public const int MalerwegId = 3;
     public const string MalerwegSlug = "malerweg";
+    public const int SchluchtensteigId = 4;
+    public const string SchluchtensteigSlug = "schluchtensteig";
+    public const int HeidschnuckenwegId = 5;
+    public const string HeidschnuckenwegSlug = "heidschnuckenweg";
+    public const int HarzerKlosterwanderwegId = 6;
+    public const string HarzerKlosterwanderwegSlug = "harzer-klosterwanderweg";
 
     public int Id { get; set; }
     public string Slug { get; set; } = null!;
