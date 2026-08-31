@@ -138,6 +138,29 @@ curl --fail-with-body --request POST \
     https://server.example/toured/api/admin/imports
 ```
 
+For inserting or updating stamping points (e.g. temporary Sonderstempel):
+
+```bash
+curl --fail-with-body --request POST \
+    --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --data '[
+      {
+        "provider": "touringen",
+        "series": "sonderstempel",
+        "name": "Landesgartenschau Leinefelde-Worbis",
+        "latitude": 51.385012,
+        "longitude": 10.325123,
+        "externalId": "sonderstempel-lgs-worbis-2026",
+        "validFrom": "2026-04-23",
+        "validUntil": "2026-10-11"
+      }
+    ]' \
+    https://server.example/toured/api/admin/points
+```
+
+Existing points matched by `(series, number)` or `(provider, externalId)` are updated in place while preserving internal database IDs and all recorded user visits; new points are created.
+
 Avoid shell tracing and verbose HTTP output while handling the token. In a later administrator session, load it without echoing it by running `read -rsp 'CLI token: ' TOURED_CLI_TOKEN` and pressing Enter.
 
 To rotate the credential, generate a new token, replace only `Authentication__Cli__Token` in `/etc/toured-api.env`, and restart the service. The old token becomes invalid immediately after restart. Verify the required import calls with the new value, then run `unset TOURED_CLI_TOKEN` in every shell that held it. Rotate the Google client secret the same way and restart the service after replacing `Authentication__Google__ClientSecret`.

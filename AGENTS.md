@@ -226,6 +226,10 @@ Other endpoints:
 - `POST /api/admin/imports`
   - Imports user visit data.
   - Requires the dedicated CLI bearer token and is intended for manual/admin use.
+- `POST|PUT /api/admin/points`
+  - Upserts one or more stamping points (e.g. temporary Sonderstempel) from a JSON payload.
+  - Existing points matched by `(series, number)` or `(provider, externalId)` are updated in place while retaining internal IDs and user visits; new points are created.
+  - Requires the dedicated CLI bearer token and is intended for manual/admin use.
 
 ## Development Notes
 
