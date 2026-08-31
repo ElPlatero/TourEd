@@ -652,15 +652,18 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var script = await client.GetStringAsync("/js/toured.js");
 
         Assert.Contains("id=\"visitNowButton\"", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Jetzt als besucht eintragen", html, StringComparison.Ordinal);
+        Assert.Contains("Jetzt stempeln", html, StringComparison.Ordinal);
         Assert.Contains("id=\"openVisitFormButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Nachtragen", html, StringComparison.Ordinal);
         Assert.Contains("id=\"editVisitButton\"", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Datum und Uhrzeit bearbeiten", html, StringComparison.Ordinal);
+        Assert.Contains("Bearbeiten", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"deleteVisitButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Entfernen", html, StringComparison.Ordinal);
         Assert.Contains("id=\"visitedOnInput\" name=\"visitedOn\" type=\"date\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("id=\"visitedAtInput\" name=\"visitedAt\" type=\"time\" disabled", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Ohne Angaben wird nur gespeichert", html, StringComparison.Ordinal);
+        Assert.Contains("Ohne Angaben wird nur der Eintrag gespeichert.", html, StringComparison.Ordinal);
         Assert.Contains("id=\"deleteVisitDialog\"", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Besuch endgültig löschen", html, StringComparison.Ordinal);
+        Assert.Contains("Stempeleintrag endgültig entfernen", html, StringComparison.Ordinal);
         Assert.Contains("role=\"status\" aria-live=\"polite\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".visit-controls", css, StringComparison.Ordinal);
         Assert.Contains("min-height: 2.75rem", css, StringComparison.Ordinal);
@@ -669,7 +672,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("? \"PATCH\" : \"PUT\"", script, StringComparison.Ordinal);
         Assert.Contains("sendVisitRequest(\"DELETE\"", script, StringComparison.Ordinal);
         Assert.Contains("elements.deleteVisitDialog.showModal()", script, StringComparison.Ordinal);
-        Assert.Contains("wirklich gelöscht werden", script, StringComparison.Ordinal);
+        Assert.Contains("wirklich entfernt werden", script, StringComparison.Ordinal);
         Assert.Contains("stampingPoint.isVisited = isVisited", script, StringComparison.Ordinal);
         Assert.Contains("stampingPoint.visitedOn = visitedOn", script, StringComparison.Ordinal);
         Assert.Contains("stampingPoint.visitedAt = visitedAt", script, StringComparison.Ordinal);

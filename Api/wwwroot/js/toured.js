@@ -720,15 +720,15 @@
             return "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
         }
         if (response?.status === 404) {
-            return "Die Stempelstelle oder der Besuch wurde nicht gefunden.";
+            return "Die Stempelstelle oder der Eintrag wurde nicht gefunden.";
         }
         if (response?.status === 409) {
-            return "Für diese Stempelstelle ist bereits ein Besuch eingetragen.";
+            return "Für diese Stempelstelle ist bereits ein Eintrag vorhanden.";
         }
         if (response?.status === 400) {
             return "Datum oder Uhrzeit sind ungültig. Bitte prüfe deine Eingabe.";
         }
-        return "Der Besuch konnte nicht gespeichert werden. Bitte versuche es erneut.";
+        return "Der Eintrag konnte nicht gespeichert werden. Bitte versuche es erneut.";
     };
 
     const saveVisit = async (method, visitedOn, visitedAt) => {
@@ -737,7 +737,7 @@
             return;
         }
         setVisitBusy(true);
-        setVisitActionStatus("Besuch wird gespeichert …");
+        setVisitActionStatus("Eintrag wird gespeichert …");
         try {
             await sendVisitRequest(method, feature.stampingPoint, {
                 visitedOn,
@@ -745,7 +745,7 @@
                 utcOffsetMinutes: -new Date().getTimezoneOffset()
             });
             updatePointVisit(feature, true, visitedOn, visitedAt);
-            setVisitActionStatus("Besuch wurde gespeichert.", "ready");
+            setVisitActionStatus("Eintrag wurde gespeichert.", "ready");
         } catch (response) {
             if (response?.status === 401) {
                 setMapStatus("Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.", "error");
@@ -810,10 +810,10 @@
             ? `Anbieter: ${stampingPoint.provider.name}`
             : "Anbieter nicht angegeben";
         elements.pointStatus.textContent = visitState === VisitState.visited
-            ? "✓ Besucht"
+            ? "✓ Gestempelt"
             : visitState === VisitState.open
-                ? "Noch nicht besucht"
-                : "Besuchsstatus nicht verfügbar";
+                ? "Noch nicht gestempelt"
+                : "Stempelstatus nicht verfügbar";
         elements.pointStatus.dataset.state = visitState;
         populateTours(stampingPoint.tours);
 
@@ -892,7 +892,7 @@
             return;
         }
         if (visitedOn && visitedAt && new Date(`${visitedOn}T${visitedAt}`) > new Date(Date.now() + 300000)) {
-            setVisitActionStatus("Ein Besuch kann nicht in der Zukunft liegen.", "error");
+            setVisitActionStatus("Ein Stempeldatum kann nicht in der Zukunft liegen.", "error");
             return;
         }
         saveVisit(app.activeFeature?.visitState === VisitState.visited ? "PATCH" : "PUT", visitedOn, visitedAt);
@@ -912,7 +912,7 @@
         const label = stampingPoint.provider?.abbreviation
             ? `${stampingPoint.provider.abbreviation} ${stampingPoint.number}`
             : `Stempelstelle ${stampingPoint.number}`;
-        elements.deleteVisitMessage.textContent = `Soll dein Besuch bei ${label} – ${stampingPoint.name} wirklich gelöscht werden?`;
+        elements.deleteVisitMessage.textContent = `Soll dein Stempeleintrag bei ${label} – ${stampingPoint.name} wirklich entfernt werden?`;
         elements.deleteVisitDialog.showModal();
         elements.cancelDeleteVisitButton.focus({ preventScroll: true });
     });
@@ -929,7 +929,7 @@
             await sendVisitRequest("DELETE", feature.stampingPoint);
             updatePointVisit(feature, false);
             closeDeleteVisitDialog();
-            setVisitActionStatus("Besuch wurde gelöscht.", "ready");
+            setVisitActionStatus("Stempeleintrag wurde entfernt.", "ready");
         } catch (response) {
             closeDeleteVisitDialog();
             if (response?.status === 401) {

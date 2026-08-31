@@ -113,7 +113,7 @@
 
     <aside id="mapLegend" aria-label="Kartenlegende" hidden>
         <span><span class="legend-pin legend-pin--open" aria-hidden="true"></span>Offen</span>
-        <span><span class="legend-pin legend-pin--visited" aria-hidden="true"><span>✓</span></span>Besucht</span>
+        <span><span class="legend-pin legend-pin--visited" aria-hidden="true"><span>✓</span></span>Gestempelt</span>
     </aside>
 
     <section
@@ -135,14 +135,35 @@
         <div id="pointTours"></div>
         <time id="pointVisited" class="point-visited" hidden></time>
         <div id="visitControls" class="visit-controls" hidden>
-            <a id="visitLoginLink" class="action" href="auth/login" hidden>Anmelden, um Besuch einzutragen</a>
+            <a id="visitLoginLink" class="action" href="auth/login" hidden>Anmelden, um zu stempeln</a>
             <div id="newVisitActions" class="visit-actions" hidden>
-                <button id="visitNowButton" class="action action--primary" type="button">Jetzt als besucht eintragen</button>
-                <button id="openVisitFormButton" class="action" type="button">Besuch nachtragen</button>
+                <button id="visitNowButton" class="action action--primary action--tile" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 3a2.5 2.5 0 0 0-2.5 2.5v2a2 2 0 0 1-.7 1.5l-1.6 1.4A2 2 0 0 0 6.5 12V14h11v-2a2 2 0 0 0-.7-1.6l-1.6-1.4a2 2 0 0 1-.7-1.5v-2A2.5 2.5 0 0 0 12 3zM4 18h16M4 21h16" />
+                    </svg>
+                    <span>Jetzt stempeln</span>
+                </button>
+                <button id="openVisitFormButton" class="action action--tile" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                        <rect x="3" y="4" width="18" height="18" rx="2" />
+                        <path d="M16 2v4M8 2v4M3 10h18M12 14v6M9 17h6" />
+                    </svg>
+                    <span>Nachtragen</span>
+                </button>
             </div>
             <div id="existingVisitActions" class="visit-actions" hidden>
-                <button id="editVisitButton" class="action" type="button">Datum und Uhrzeit bearbeiten</button>
-                <button id="deleteVisitButton" class="action action--danger" type="button">Besuch löschen</button>
+                <button id="editVisitButton" class="action action--tile" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                    <span>Bearbeiten</span>
+                </button>
+                <button id="deleteVisitButton" class="action action--danger action--tile" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6" />
+                    </svg>
+                    <span>Entfernen</span>
+                </button>
             </div>
             <form id="visitForm" class="visit-form" hidden novalidate>
                 <div class="visit-fields">
@@ -155,9 +176,9 @@
                         <input id="visitedAtInput" name="visitedAt" type="time" disabled />
                     </label>
                 </div>
-                <p class="visit-form__hint">Ohne Angaben wird nur gespeichert, dass du den Stempel besucht hast.</p>
+                <p class="visit-form__hint">Ohne Angaben wird nur der Eintrag gespeichert.</p>
                 <div class="visit-form__actions">
-                    <button id="saveVisitButton" class="action action--primary" type="submit">Besuch speichern</button>
+                    <button id="saveVisitButton" class="action action--primary" type="submit">Eintrag speichern</button>
                     <button id="cancelVisitButton" class="action" type="button">Abbrechen</button>
                 </div>
             </form>
@@ -188,12 +209,12 @@
 
     <dialog id="deleteVisitDialog" class="provider-info-dialog delete-visit-dialog" aria-labelledby="deleteVisitTitle" aria-describedby="deleteVisitMessage">
         <div class="provider-info-dialog__header">
-            <h2 id="deleteVisitTitle">Besuch löschen?</h2>
-            <button id="closeDeleteVisitButton" class="icon-button" type="button" aria-label="Löschen abbrechen">×</button>
+            <h2 id="deleteVisitTitle">Stempeleintrag entfernen?</h2>
+            <button id="closeDeleteVisitButton" class="icon-button" type="button" aria-label="Entfernen abbrechen">×</button>
         </div>
         <p id="deleteVisitMessage"></p>
         <div class="delete-visit-actions">
-            <button id="confirmDeleteVisitButton" class="action action--danger" type="button">Besuch endgültig löschen</button>
+            <button id="confirmDeleteVisitButton" class="action action--danger" type="button">Stempeleintrag endgültig entfernen</button>
             <button id="cancelDeleteVisitButton" class="action" type="button">Abbrechen</button>
         </div>
     </dialog>
