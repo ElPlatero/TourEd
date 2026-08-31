@@ -21,40 +21,40 @@ The page calls the backend with relative URLs:
 - `GET auth/session`
   - Loaded first to determine whether the browser has a valid TourEd session.
 - `GET auth/login`
-  - Used by the “Mit Google anmelden” link to start the Google challenge.
+  - Used by the “Mit Google anmelden” link/button to start the Google challenge.
 - `POST auth/logout`
-  - Ends the TourEd cookie session and returns the map to anonymous mode.
+  - Ends the TourEd cookie session and returns the UI to the login lock screen.
 - `GET api/providers`
-  - Loads the providers available to the current anonymous or authenticated session before point data.
+  - Requires an authenticated session (`401` otherwise).
+  - Loads the providers available to the authenticated session before point data.
   - All returned provider slugs are selected internally by default.
-- `GET api/points?provider=all`
-  - Used when the session is anonymous.
-  - Loads points only from providers that permit anonymous access into the in-memory frontend cache.
-  - Renders all returned points with a neutral marker because personal visit state is unavailable.
 - `GET api/points?provider=all&vis=false`
-  - Used when `auth/session` reports an authenticated cookie session.
+  - Requires an authenticated session (`401` otherwise).
   - Loads unvisited points from every integrated provider into the in-memory frontend cache.
 - `GET api/points?provider=all&vis=true`
-  - Used when `auth/session` reports an authenticated cookie session.
+  - Requires an authenticated session (`401` otherwise).
   - Loads visited points from every integrated provider into the in-memory frontend cache.
 
-The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All available providers are selected after each page initialization, `Alle` and `Keine` provide bulk selection, and an empty selection renders zero points. Provider names, abbreviations, and non-standard series names are used in point details because point numbers are series-scoped and may be absent for temporary stamps. Visit mutations use the stable internal point id together with the provider slug. Provider information also exposes recorded source/licence metadata and a public GeoJSON download when available. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
+When unauthenticated, the frontend displays an accessible login barrier (`#authBarrier`), marks the main container (`#appShell`) `inert` and `aria-hidden="true"`, and sends zero provider or point requests.
 
-Authenticated users can record a stamp directly from a locked point-detail dialog using large, square action tiles with dedicated icons and concise labels ('Jetzt stempeln', 'Nachtragen', 'Bearbeiten', 'Entfernen'), either with the current local date and time or with no timestamp, a date only, or a date plus time. Existing stamps allow editing only their optional date/time and can be removed after a point-specific confirmation. Every visit request includes the provider slug. Successful mutations update the cached point and marker layer without a full page reload; anonymous users see a login link instead of write controls.
+The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All available providers are selected after each page initialization, `Alle` und `Keine` provide bulk selection, and an empty selection renders zero points. Provider names, abbreviations, and non-standard series names are used in point details because point numbers are series-scoped and may be absent for temporary stamps. Visit mutations use the stable internal point id together with the provider slug. Provider information also exposes recorded source/licence metadata and a public GeoJSON download when available. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
+
+Authenticated users can record a stamp directly from a locked point-detail dialog using large, square action tiles with dedicated icons and concise labels ('Jetzt stempeln', 'Nachtragen', 'Bearbeiten', 'Entfernen'), either with the current local date and time or with no timestamp, a date only, or a date plus time. Existing stamps allow editing only their optional date/time and can be removed after a point-specific confirmation. Every visit request includes the provider slug. Successful mutations update the cached point and marker layer without a full page reload.
 
 A magnifier button to the left of the provider and account controls opens a mutually exclusive search flyout. A crosshair button to the left of the search button starts client-side geolocation only after it is pressed, centers the map on the user's current device location, and keeps the marker current while the page remains open. It renders a logo-colored blue marker with a dark blue outline and a soft accuracy area. TourEd does not transmit the coordinates to its backend or store them; centering still causes the normal OpenStreetMap tile requests for the displayed map area. The client searches only the already loaded points of currently selected providers, normalizing case and diacritics across point name, number, provider name, and abbreviation. Search results are capped, contain provider-scoped number labels, and selecting one centers and zooms the existing map before opening its locked point-detail dialog. Search terms and results are not persisted and require no additional backend endpoint.
 
-The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and user-initiated navigation to external provider websites and the public GitHub source repository. Keep it synchronized whenever these data flows or their retention rules change.
+The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map and login barrier. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and user-initiated navigation to external provider websites and the public GitHub source repository. Keep it synchronized whenever these data flows or their retention rules change.
 
 The map attribution permanently links its compact `© TourEd` label to the public TourEd source repository, with an accessible AGPL-3.0 source-link label, next to the privacy link.
 
-The frontend never reads or writes user ids, Google subjects, tokens, custom identity headers, local storage, or session storage. A `401` while loading authenticated point data returns the UI to anonymous mode without starting a login redirect.
+The frontend never reads or writes user ids, Google subjects, tokens, custom identity headers, local storage, or session storage. A `401` while loading authenticated point data returns the UI to the login lock screen without starting an infinite redirect loop.
 
 Optional `provider` query behavior on `GET api/points`:
 
-- Omitted: uses the authenticated user's default provider, or `touringen` for anonymous requests.
-- Provider slug, for example `provider=touringen`: returns points from that provider if it is available to the current session; otherwise an anonymous request receives `401`.
-- `provider=all`: returns points from every provider for authenticated users and only anonymously enabled providers for anonymous users.
+- Requires an authenticated cookie session; unauthenticated requests receive `401`.
+- Omitted: uses the authenticated user's default provider.
+- Provider slug, for example `provider=touringen`: returns points from that provider if it is available to the current session.
+- `provider=all`: returns points from every provider for authenticated users.
 
 The map uses logo-colored SVG pin assets stored in `Api/wwwroot/img`:
 
@@ -184,11 +184,11 @@ Main consumer endpoint:
 
 Useful query behavior:
 
-- `provider=<slug>` returns points for a specific stamping provider when it is available to the current session; anonymous access to a restricted provider returns 401.
-- `provider=all` returns all providers for authenticated users and only anonymously enabled providers for anonymous users.
+- Requires an authenticated session (`401` otherwise).
+- `provider=<slug>` returns points for a specific stamping provider when it is available to the current session.
+- `provider=all` returns all providers for authenticated users.
 - `vis=true` returns visited points for the authenticated user.
 - `vis=false` returns unvisited points for the authenticated user.
-- Requests with `vis=true` or `vis=false` return `401` when no valid cookie identity with internal user claims is present.
 - Geo filtering exists via query parameters and is used server-side.
 
 Point DTOs include a stable internal id, provider and series metadata, optional number, name, position, explicit visit state, optional visit date/time, and tours.
@@ -198,11 +198,11 @@ Visit state is represented independently from its optional timestamp: `isVisited
 Other endpoints:
 
 - `GET /api/providers`
-  - Session-aware catalog of available stamping providers; restricted providers are omitted for anonymous requests.
+  - Session-aware catalog of available stamping providers; requires an authenticated session.
   - Returns providers ordered by name and slug, including abbreviation, description, anonymous-access status, optional validated public website/source/licence URLs, attribution, and public-data-download availability.
 
 - `GET /api/providers/{slug}/points.geojson`
-  - Anonymous machine-readable export for an anonymously enabled provider with complete source/licence metadata.
+  - Machine-readable export for an enabled provider with complete source/licence metadata; requires an authenticated session.
   - Returns point number, name, provider, reference, OSM element id, coordinates, source revision/timestamps, attribution, and licence metadata; never returns accounts, visits, or authentication state.
 
 - `GET /health`
