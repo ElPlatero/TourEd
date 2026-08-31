@@ -539,6 +539,242 @@ public class TouredRepository : IUserService
         return updatedUsers == 1;
     }
 
+    public async Task<RegistrationRequest?> GetRegistrationRequestByGoogleSubjectOrDefaultAsync(
+        string googleSubject,
+        CancellationToken cancellationToken = default)
+    {
+        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
+        return await _dbContext.RegistrationRequests
+            .FirstOrDefaultAsync(r => r.GoogleSubject == googleSubject, cancellationToken);
+    }
+
+    public async Task<RegistrationRequest> RecordOrUpdateRegistrationRequestAsync(
+        string googleSubject,
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+
+        var existing = await _dbContext.RegistrationRequests
+            .FirstOrDefaultAsync(r => r.GoogleSubject == googleSubject, cancellationToken);
+
+        if (existing is null)
+        {
+            var newRequest = new RegistrationRequest
+            {
+                GoogleSubject = googleSubject,
+                Email = normalizedEmail,
+                Status = RegistrationRequestStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+            _dbContext.RegistrationRequests.Add(newRequest);
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return newRequest;
+            }
+            catch (DbUpdateException)
+            {
+                existing = await _dbContext.RegistrationRequests
+                    .FirstOrDefaultAsync(r => r.GoogleSubject == googleSubject, cancellationToken);
+                if (existing is null)
+                {
+                    throw;
+                }
+            }
+        }
+
+        if (existing.Status == RegistrationRequestStatus.Pending)
+        {
+            if (!string.Equals(existing.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                existing.Email = normalizedEmail;
+                existing.UpdatedAt = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            return existing;
+        }
+
+        existing.Status = RegistrationRequestStatus.Pending;
+        existing.Email = normalizedEmail;
+        existing.CreatedAt = DateTime.UtcNow;
+        existing.UpdatedAt = DateTime.UtcNow;
+        existing.DecidedAt = null;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task MarkRegistrationRequestApprovedAsync(
+        string googleSubject,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await _dbContext.RegistrationRequests
+            .FirstOrDefaultAsync(r => r.GoogleSubject == googleSubject, cancellationToken);
+        if (request != null && request.Status != RegistrationRequestStatus.Approved)
+        {
+            request.Status = RegistrationRequestStatus.Approved;
+            request.DecidedAt = DateTime.UtcNow;
+            request.UpdatedAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    public async Task<List<AdminRegistrationRequestDto>> GetRegistrationRequestsAsync(
+        string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
+
+        var query = _dbContext.RegistrationRequests.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (Enum.TryParse<RegistrationRequestStatus>(status, ignoreCase: true, out var parsedStatus))
+            {
+                query = query.Where(r => r.Status == parsedStatus);
+            }
+            else
+            {
+                return [];
+            }
+        }
+
+        var requests = await query
+            .OrderBy(r => r.Status == RegistrationRequestStatus.Pending ? 0 : 1)
+            .ThenBy(r => r.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return requests.Select(r => new AdminRegistrationRequestDto(
+            r.Id,
+            r.GoogleSubject,
+            r.Email,
+            r.Status.ToString().ToLowerInvariant(),
+            r.CreatedAt,
+            r.DecidedAt)).ToList();
+    }
+
+    public async Task<AdminRegistrationRequestDto?> ApproveRegistrationRequestAsync(
+        int id,
+        int actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
+
+        var request = await _dbContext.RegistrationRequests
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (request is null)
+        {
+            return null;
+        }
+
+        var existingUser = await _dbContext.Users
+            .FirstOrDefaultAsync(u => u.GoogleSubject == request.GoogleSubject, cancellationToken);
+
+        if (existingUser is null)
+        {
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+            existingUser = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail, cancellationToken);
+
+            if (existingUser is not null)
+            {
+                if (existingUser.GoogleSubject is null)
+                {
+                    existingUser.GoogleSubject = request.GoogleSubject;
+                }
+                else if (existingUser.GoogleSubject != request.GoogleSubject)
+                {
+                    throw new InvalidOperationException("User email is already bound to another Google subject.");
+                }
+            }
+            else
+            {
+                existingUser = new User
+                {
+                    Email = request.Email.Trim().ToLowerInvariant(),
+                    GoogleSubject = request.GoogleSubject,
+                    DefaultStampingProviderId = null
+                };
+                _dbContext.Users.Add(existingUser);
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        request.Status = RegistrationRequestStatus.Approved;
+        request.DecidedAt = DateTime.UtcNow;
+        request.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.AdminAuditEntries.Add(CreateAudit(
+            actorUserId,
+            "registration.approved",
+            existingUser.Id,
+            null));
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return new AdminRegistrationRequestDto(
+            request.Id,
+            request.GoogleSubject,
+            request.Email,
+            request.Status.ToString().ToLowerInvariant(),
+            request.CreatedAt,
+            request.DecidedAt);
+    }
+
+    public async Task<AdminRegistrationRequestDto?> RejectRegistrationRequestAsync(
+        int id,
+        int actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
+
+        var request = await _dbContext.RegistrationRequests
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (request is null)
+        {
+            return null;
+        }
+
+        request.Status = RegistrationRequestStatus.Rejected;
+        request.DecidedAt = DateTime.UtcNow;
+        request.UpdatedAt = DateTime.UtcNow;
+
+        _dbContext.AdminAuditEntries.Add(CreateAudit(
+            actorUserId,
+            "registration.rejected",
+            0,
+            null));
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return new AdminRegistrationRequestDto(
+            request.Id,
+            request.GoogleSubject,
+            request.Email,
+            request.Status.ToString().ToLowerInvariant(),
+            request.CreatedAt,
+            request.DecidedAt);
+    }
+
+    public async Task<int> CleanupExpiredRegistrationRequestsAsync(
+        DateTime? utcNow = null,
+        CancellationToken cancellationToken = default)
+    {
+        var now = utcNow ?? DateTime.UtcNow;
+        var cutoff = now.Subtract(TimeSpan.FromDays(30));
+
+        var deletedCount = await _dbContext.RegistrationRequests
+            .Where(request =>
+                (request.Status == RegistrationRequestStatus.Pending && request.CreatedAt < cutoff) ||
+                (request.Status == RegistrationRequestStatus.Rejected && (request.DecidedAt ?? request.CreatedAt) < cutoff) ||
+                (request.Status == RegistrationRequestStatus.Approved && (request.DecidedAt ?? request.CreatedAt) < cutoff))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        return deletedCount;
+    }
+
     public async Task<UserVisit?> GetUserVisitOrDefaultAsync(User currentUser, int stampingPointId) 
         => await _dbContext.UserVisits.FirstOrDefaultAsync(p => p.StampingPointId == stampingPointId && p.UserId == currentUser.Id);
 

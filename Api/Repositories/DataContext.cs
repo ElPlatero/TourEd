@@ -19,6 +19,7 @@ public class DataContext : DbContext
     public DbSet<UserStampingProvider> UserStampingProviders { get; set; } = null!;
     public DbSet<UserVisit> UserVisits { get; set; } = null!;
     public DbSet<AdminAuditEntry> AdminAuditEntries { get; set; } = null!;
+    public DbSet<RegistrationRequest> RegistrationRequests { get; set; } = null!;
     
     
     protected override void OnConfiguring(DbContextOptionsBuilder options)
@@ -701,6 +702,19 @@ public class DataContext : DbContext
             dto.Property(p => p.Action).IsRequired();
             dto.HasIndex(p => p.CreatedAt);
             dto.HasIndex(p => p.TargetUserId);
+        });
+
+        modelBuilder.Entity<RegistrationRequest>(dto =>
+        {
+            dto.HasKey(p => p.Id);
+            dto.Property(p => p.Id).ValueGeneratedOnAdd();
+            dto.Property(p => p.GoogleSubject).IsRequired();
+            dto.Property(p => p.Email).IsRequired();
+            dto.Property(p => p.Status).HasConversion<string>().IsRequired();
+            dto.Property(p => p.CreatedAt).HasDefaultValueSql("datetime('now')");
+            dto.HasIndex(p => p.GoogleSubject).IsUnique();
+            dto.HasIndex(p => p.CreatedAt);
+            dto.HasIndex(p => p.Status);
         });
 
         modelBuilder.Entity<UserVisit>(dto =>

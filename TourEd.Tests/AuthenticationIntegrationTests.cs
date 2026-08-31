@@ -134,6 +134,29 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task UnknownGoogleUserCreatesRegistrationRequestAndRedirectsToPendingRegistration()
+    {
+        using var client = CreateClient(_factory);
+
+        var callbackResponse = await client.GetAsync("/fake-google/callback?email=newhiker@example.test&subject=google-sub-new");
+
+        Assert.Equal(HttpStatusCode.Redirect, callbackResponse.StatusCode);
+        Assert.Equal("/?registration=pending", callbackResponse.Headers.Location?.OriginalString);
+
+        var session = await client.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        Assert.NotNull(session);
+        Assert.False(session.Authenticated);
+        Assert.Null(session.Email);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+        var request = await context.RegistrationRequests.SingleOrDefaultAsync(r => r.GoogleSubject == "google-sub-new");
+        Assert.NotNull(request);
+        Assert.Equal("newhiker@example.test", request.Email);
+        Assert.Equal(RegistrationRequestStatus.Pending, request.Status);
+    }
+
+    [Fact]
     public async Task SessionDistinguishesAnonymousAndLogoutRemovesCookieSession()
     {
         using var client = CreateClient(_factory);
@@ -881,8 +904,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("Ein Besuch kann auch ohne Datum und Uhrzeit eingetragen werden", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("den einzelnen Besuch nach einer Bestätigung vollständig löschen", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("die freigeschalteten Stempelanbieter", privacyNotice, StringComparison.Ordinal);
-        Assert.Contains("Administrative Änderungen an Anbieterfreigaben", privacyNotice, StringComparison.Ordinal);
-        Assert.Contains("Administrations-Token und E-Mail-Adressen werden nicht", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Registrierungsantrag", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("nach Ablauf von 30 Tagen automatisch", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("administrative Änderungen an Anbieterfreigaben", privacyNotice, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Google-Kontokennungen und E-Mail-Adressen werden nicht in dieses Änderungsprotokoll", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Mit der Kontolöschung werden die Anbieterfreigaben", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Die anonyme Kartenansicht ist ohne Benutzerkonto möglich", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
@@ -1093,12 +1118,21 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
                 return false;
             }
 
+            var email = Request.Query["email"].FirstOrDefault() ?? Email;
+            var subject = Request.Query["subject"].FirstOrDefault() ?? "google-subject-1";
             using var document = JsonDocument.Parse(
-                $$"""{"id":"google-subject-1","email":"{{Email}}","verified_email":true}""");
+                $$"""{"id":"{{subject}}","email":"{{email}}","verified_email":true}""");
             var ticketService = Context.RequestServices.GetRequiredService<GoogleOAuthTicketService>();
-            var principal = await ticketService.CreatePrincipalAsync(document.RootElement, Context.RequestAborted);
-            await Context.SignInAsync(TouredAuthenticationSchemes.Cookie, principal);
-            Response.Redirect(Request.Query["returnUrl"].FirstOrDefault() ?? $"{Request.PathBase}/");
+            var result = await ticketService.ProcessTicketAsync(document.RootElement, Context.RequestAborted);
+            if (result.Status == GoogleLoginStatus.Authenticated && result.Principal is not null)
+            {
+                await Context.SignInAsync(TouredAuthenticationSchemes.Cookie, result.Principal);
+                Response.Redirect(Request.Query["returnUrl"].FirstOrDefault() ?? $"{Request.PathBase}/");
+            }
+            else
+            {
+                Response.Redirect($"{Request.PathBase}/?registration=pending");
+            }
             return true;
         }
     }

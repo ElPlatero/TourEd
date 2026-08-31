@@ -24,4 +24,21 @@ public sealed class AdminUserManager
         int actorUserId,
         CancellationToken cancellationToken)
         => _repository.UpdateAdminUserProvidersAsync(userId, request, actorUserId, cancellationToken);
+
+    public Task<List<AdminRegistrationRequestDto>> GetRegistrationRequestsAsync(
+        string? status,
+        CancellationToken cancellationToken)
+        => _repository.GetRegistrationRequestsAsync(status, cancellationToken);
+
+    public Task<AdminRegistrationRequestDto?> ApproveRegistrationRequestAsync(
+        int id,
+        int actorUserId,
+        CancellationToken cancellationToken)
+        => _repository.ApproveRegistrationRequestAsync(id, actorUserId, cancellationToken);
+
+    public Task<AdminRegistrationRequestDto?> RejectRegistrationRequestAsync(
+        int id,
+        int actorUserId,
+        CancellationToken cancellationToken)
+        => _repository.RejectRegistrationRequestAsync(id, actorUserId, cancellationToken);
 }

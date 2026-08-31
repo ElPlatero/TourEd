@@ -7,6 +7,7 @@
         appShell: document.getElementById("appShell"),
         authBarrier: document.getElementById("authBarrier"),
         authBarrierLoginButton: document.getElementById("authBarrierLoginButton"),
+        authBarrierNotice: document.getElementById("authBarrierNotice"),
         cancelDeleteVisitButton: document.getElementById("cancelDeleteVisitButton"),
         cancelVisitButton: document.getElementById("cancelVisitButton"),
         closeDeleteVisitButton: document.getElementById("closeDeleteVisitButton"),
@@ -1174,6 +1175,31 @@
         resetPointCache();
         elements.stampingPointSearchInput.value = "";
         renderSearchResults();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const registrationParam = urlParams.get("registration");
+        if (registrationParam === "pending" && elements.authBarrierNotice) {
+            elements.authBarrierNotice.className = "auth-barrier__notice";
+            elements.authBarrierNotice.textContent = "";
+            const strong = document.createElement("strong");
+            strong.textContent = "Registrierungsantrag eingegangen";
+            elements.authBarrierNotice.appendChild(strong);
+            elements.authBarrierNotice.appendChild(document.createTextNode(
+                "Dein Antrag wurde erfasst und wartet auf administrative Freischaltung. Sobald dein Zugang freigeschaltet wurde, kannst du dich mit Google anmelden."
+            ));
+            elements.authBarrierNotice.hidden = false;
+        } else if (registrationParam === "rejected" && elements.authBarrierNotice) {
+            elements.authBarrierNotice.className = "auth-barrier__notice auth-barrier__notice--rejected";
+            elements.authBarrierNotice.textContent = "";
+            const strong = document.createElement("strong");
+            strong.textContent = "Registrierungsantrag abgelehnt";
+            elements.authBarrierNotice.appendChild(strong);
+            elements.authBarrierNotice.appendChild(document.createTextNode(
+                "Dein Registrierungsantrag wurde abgelehnt. Du kannst dich erneut mit Google anmelden, um einen neuen Antrag zu stellen."
+            ));
+            elements.authBarrierNotice.hidden = false;
+        }
+
         let session = { authenticated: false };
         try {
             session = await getJson("auth/session");
@@ -1191,6 +1217,9 @@
             return;
         }
 
+        if (elements.authBarrierNotice) {
+            elements.authBarrierNotice.hidden = true;
+        }
         hideAuthBarrier();
         setMapStatus("Karte wird geladen …", "loading");
 
