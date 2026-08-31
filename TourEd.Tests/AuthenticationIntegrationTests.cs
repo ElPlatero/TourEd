@@ -702,7 +702,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.DoesNotContain("TourEd 2023", frontendScript, StringComparison.Ordinal);
         Assert.Contains("rel=\"noopener noreferrer\"", frontendScript, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("tino@schuettpelz.org", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("dsgvo@baelgun.de", privacyNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("@schuettpelz.org", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Eine Verbindung zu dieser Website wird erst hergestellt, wenn der Link bewusst geöffnet wird", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("TourEd übermittelt beim Öffnen eines Anbieterlinks weder die E-Mail-Adresse noch gespeicherte Stempelbesuche", privacyNotice, StringComparison.Ordinal);
