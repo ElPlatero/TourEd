@@ -147,13 +147,12 @@ Runtime configuration uses `Authentication__Google__ClientId`, `Authentication__
 
 Touringen data import:
 
-- Downloads Touringen's three official GPX archives and requires exactly 430 Standard, 8 Naturschätze, and 13 Familienwanderwege Rhön points with complete, non-duplicated number ranges.
+- Reads the 430 standard stamping points directly from OSM relation 14773147 (requiring exactly numbers 1 through 430 with valid name and coordinates), and downloads the official GPX archives for 8 Naturschätze and 13 Familienwanderwege Rhön points with complete, non-duplicated number ranges.
 - Uses an explicit verified name-to-number correction map for Naturschätze because that archive omits its public numbers. Unknown names fail the import instead of being guessed.
 - Fetches `https://www.touringen.de/stempelstellen`, extracts the embedded JavaScript `dmos` JSON string, and uses it only for hiking-tour relationships among standard points; the verified Naturschätze area ids 102 through 109 are explicitly excluded from that legacy relationship source.
 - Updates points by series and number while retaining their database-generated internal ids and visits. The distinct series namespaces prevent special-edition points 1 through 8 from overwriting standard points 1 through 8; existing visits on standard points 1 through 8 are preserved when updating them to canonical standard data.
-- Seeds a variable temporary Sonderstempel series with optional point validity dates. The current Sonderstempel page is not imported automatically because it has no complete stable machine-readable point source and does not publish coordinates for every current stamp.
-- Records import metadata.
-- Touringen is not currently imported from OSM because relation 14773147 has 430 members but only 429 distinct nodes: regular point 309 is missing and node 379 is duplicated. Keep the official Touringen GPX source until those OSM data issues are resolved; any later OSM migration must preserve and verify existing visit assignments.
+- Seeds/supports a variable temporary Sonderstempel series with optional point validity dates via the administrative upsert endpoint.
+- Atomically records OSM provenance/licence metadata (attributing OpenStreetMap contributors under ODbL 1.0) and records the import metadata, enabling public GeoJSON export for Touringen.
 
 Harzer Wandernadel data import:
 

@@ -462,6 +462,32 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(existing.Id, (await context.UserVisits.AsNoTracking().SingleAsync()).StampingPointId);
     }
 
+    [Fact]
+    public async Task TouringenImportSavesOsmProvenanceAndEnablesGeoJsonExport()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new TouredRepository(context);
+        var canonicalRawPoint = CreateRawStampPoint(101, 1);
+        var rawTour = new RawTour(101, "Tour", [canonicalRawPoint], false, true, false, null, "Start", "End");
+        var rawData = JsonSerializer.Serialize(new[] { new RawArea(1, "Area", [rawTour], []) });
+        var manager = CreateImportManager(context, repository, null, rawData);
+
+        await manager.ImportTouringenDataAsync();
+
+        var provider = await context.StampingProviders.AsNoTracking().SingleAsync(p => p.Id == StampingProvider.TouringenId);
+        Assert.Equal("© OpenStreetMap contributors", provider.DataSourceAttribution);
+        Assert.Equal("Open Data Commons Open Database License (ODbL) 1.0", provider.DataLicenseName);
+        Assert.Equal("https://opendatacommons.org/licenses/odbl/1-0/", provider.DataLicenseUri?.AbsoluteUri);
+        Assert.Equal("https://www.openstreetmap.org/relation/14773147", provider.DataSourceUri?.AbsoluteUri);
+        Assert.Equal("45", provider.DataSourceRevision);
+        Assert.NotNull(provider.DataImportedAt);
+        Assert.True(provider.IsAnonymousAccessAllowed);
+
+        var publicData = await repository.GetPublicProviderDataAsync(StampingProvider.TouringenSlug);
+        Assert.NotNull(publicData);
+        Assert.Single(publicData.Value.Points);
+    }
+
     private async Task<DataContext> CreateContextAsync()
     {
         var configuration = new ConfigurationBuilder()
@@ -562,7 +588,14 @@ public sealed class ImportServiceTests : IDisposable
 
     private sealed class StubTouringenStampingPointImportService(IReadOnlyList<StampingPoint> points) : ITouringenStampingPointImportService
     {
-        public Task<TouringenStampingPointSnapshot> DownloadStampingPointsAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new TouringenStampingPointSnapshot(points));
+        public Task<StampingPointSourceSnapshot> DownloadStampingPointsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new StampingPointSourceSnapshot(
+                points,
+                new Uri("https://www.openstreetmap.org/relation/14773147"),
+                "© OpenStreetMap contributors",
+                "Open Data Commons Open Database License (ODbL) 1.0",
+                new Uri("https://opendatacommons.org/licenses/odbl/1-0/"),
+                "45",
+                new DateTime(2026, 8, 31, 15, 14, 0, DateTimeKind.Utc)));
     }
 }

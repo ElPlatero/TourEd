@@ -11,6 +11,13 @@ namespace TourEd.Lib.Services;
 
 public sealed partial class TouringenStampingPointImportService : ITouringenStampingPointImportService
 {
+    private const int ExpectedStandardPointCount = 430;
+    private const int ExpectedNaturalTreasuresCount = 8;
+    private const int ExpectedRhoenCount = 13;
+    private const string Attribution = "© OpenStreetMap contributors";
+    private const string LicenseName = "Open Data Commons Open Database License (ODbL) 1.0";
+    private static readonly Uri LicenseUri = new("https://opendatacommons.org/licenses/odbl/1-0/");
+
     private static readonly IReadOnlyDictionary<string, int> NaturalTreasureNumbers =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
@@ -33,44 +40,62 @@ public sealed partial class TouringenStampingPointImportService : ITouringenStam
         _configuration = configuration;
     }
 
-    public async Task<TouringenStampingPointSnapshot> DownloadStampingPointsAsync(CancellationToken cancellationToken = default)
+    public async Task<StampingPointSourceSnapshot> DownloadStampingPointsAsync(CancellationToken cancellationToken = default)
     {
         ValidateConfiguration();
-        var standardTask = DownloadArchiveAsync(_configuration.StandardGpxUri, cancellationToken);
+        var relationTask = DownloadRelationAsync(cancellationToken);
         var naturalTreasuresTask = DownloadArchiveAsync(_configuration.NaturalTreasuresGpxUri, cancellationToken);
         var rhoenTask = DownloadArchiveAsync(_configuration.RhoenFamilyTrailsGpxUri, cancellationToken);
-        await Task.WhenAll(standardTask, naturalTreasuresTask, rhoenTask);
+        await Task.WhenAll(relationTask, naturalTreasuresTask, rhoenTask);
 
-        var standard = ParseArchive(
-            await standardTask,
-            StampingSeries.TouringenStandardId,
-            StampingSeries.TouringenStandardSlug,
-            ParseStandardIdentity,
-            430);
+        var (standardPoints, revision, sourceUpdatedAt) = ParseRelation(await relationTask);
         var naturalTreasures = ParseArchive(
             await naturalTreasuresTask,
             StampingSeries.TouringenNaturalTreasuresId,
             StampingSeries.TouringenNaturalTreasuresSlug,
             ParseNaturalTreasureIdentity,
-            8);
+            ExpectedNaturalTreasuresCount);
         var rhoen = ParseArchive(
             await rhoenTask,
             StampingSeries.TouringenRhoenFamilyTrailsId,
             StampingSeries.TouringenRhoenFamilyTrailsSlug,
             ParseRhoenIdentity,
-            13);
+            ExpectedRhoenCount);
 
-        return new TouringenStampingPointSnapshot([.. standard, .. naturalTreasures, .. rhoen]);
+        return new StampingPointSourceSnapshot(
+            [.. standardPoints, .. naturalTreasures, .. rhoen],
+            _configuration.RelationPublicUri,
+            Attribution,
+            LicenseName,
+            LicenseUri,
+            revision,
+            sourceUpdatedAt);
     }
 
     private void ValidateConfiguration()
     {
-        ValidateTouringenUri(_configuration.StandardGpxUri, "standard GPX archive");
+        if (_configuration.RelationId <= 0)
+        {
+            throw new InvalidOperationException("Touringen OSM relation id must be positive.");
+        }
+
+        ValidateOsmUri(_configuration.RelationApiUri, "api.openstreetmap.org", "relation API");
+        ValidateOsmUri(_configuration.RelationPublicUri, "www.openstreetmap.org", "public relation");
         ValidateTouringenUri(_configuration.NaturalTreasuresGpxUri, "natural treasures GPX archive");
         ValidateTouringenUri(_configuration.RhoenFamilyTrailsGpxUri, "Rhön family trails GPX archive");
         if (_configuration.MaxDownloadBytes is < 1024 or > 20 * 1024 * 1024)
         {
             throw new InvalidOperationException("Touringen MaxDownloadBytes must be between 1 KiB and 20 MiB.");
+        }
+    }
+
+    private static void ValidateOsmUri(Uri? uri, string expectedHost, string description)
+    {
+        if (uri is not { IsAbsoluteUri: true } ||
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(uri.Host, expectedHost, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Touringen OSM {description} URL must use HTTPS on {expectedHost}.");
         }
     }
 
@@ -81,6 +106,144 @@ public sealed partial class TouringenStampingPointImportService : ITouringenStam
             !string.Equals(uri.Host, "www.touringen.de", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException($"Touringen {description} URL must use HTTPS on www.touringen.de.");
+        }
+    }
+
+    private async Task<XDocument> DownloadRelationAsync(CancellationToken cancellationToken)
+    {
+        using var response = await _client.GetAsync(
+            _configuration.RelationApiUri,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength > _configuration.MaxDownloadBytes)
+        {
+            throw new InvalidDataException("The Touringen OSM relation response exceeds the configured size limit.");
+        }
+
+        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var destination = new MemoryStream();
+        var buffer = new byte[81920];
+        while (true)
+        {
+            var bytesRead = await source.ReadAsync(buffer, cancellationToken);
+            if (bytesRead == 0) break;
+            if (destination.Length + bytesRead > _configuration.MaxDownloadBytes)
+            {
+                throw new InvalidDataException("The Touringen OSM relation response exceeds the configured size limit.");
+            }
+            await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+        }
+
+        destination.Position = 0;
+        var settings = new XmlReaderSettings
+        {
+            Async = false,
+            DtdProcessing = DtdProcessing.Prohibit,
+            MaxCharactersInDocument = _configuration.MaxDownloadBytes,
+            XmlResolver = null
+        };
+        using var reader = XmlReader.Create(destination, settings);
+        return XDocument.Load(reader, LoadOptions.None);
+    }
+
+    private (IReadOnlyList<StampingPoint> Points, string Revision, DateTime SourceUpdatedAt) ParseRelation(XDocument document)
+    {
+        var relation = document.Root?.Elements("relation").SingleOrDefault(element =>
+            ParseIdentifier(element.Attribute("id")?.Value, "relation") == _configuration.RelationId)
+            ?? throw new InvalidDataException($"OSM relation {_configuration.RelationId} is missing from the response.");
+
+        var revision = RequiredAttribute(relation, "version", "relation");
+        var sourceUpdatedAt = ParseTimestamp(RequiredAttribute(relation, "timestamp", "relation"));
+        ValidateRelation(relation);
+
+        var nodesById = document.Root!.Elements("node").ToDictionary(
+            node => ParseIdentifier(node.Attribute("id")?.Value, "node"));
+        var candidatesByNumber = new Dictionary<int, StampingPoint>();
+
+        foreach (var member in relation.Elements("member")
+                     .Where(member => string.Equals(member.Attribute("type")?.Value, "node", StringComparison.Ordinal)))
+        {
+            var nodeId = ParseIdentifier(member.Attribute("ref")?.Value, "node reference");
+            if (!nodesById.TryGetValue(nodeId, out var node))
+            {
+                throw new InvalidDataException($"OSM relation member node {nodeId} is missing from the response.");
+            }
+
+            var tags = node.Elements("tag").ToDictionary(
+                tag => RequiredAttribute(tag, "k", $"node {nodeId} tag"),
+                tag => RequiredAttribute(tag, "v", $"node {nodeId} tag"),
+                StringComparer.Ordinal);
+            ValidateNodeTags(nodeId, tags);
+
+            var refValue = RequiredTag(tags, "ref", nodeId);
+            var refMatch = ReferenceRegex().Match(refValue);
+            if (!refMatch.Success ||
+                !int.TryParse(refMatch.Groups["number"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ||
+                number is < 1 or > ExpectedStandardPointCount)
+            {
+                throw new InvalidDataException($"OSM node {nodeId} has invalid Touringen reference '{refValue}'.");
+            }
+
+            if (candidatesByNumber.ContainsKey(number))
+            {
+                throw new InvalidDataException($"Touringen standard points contain duplicate number {number}.");
+            }
+
+            var rawName = RequiredTag(tags, "name", nodeId);
+            var name = rawName.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new InvalidDataException($"OSM node {nodeId} has no usable Touringen name.");
+            }
+
+            var longitude = ParseCoordinate(node.Attribute("lon")?.Value, "longitude", nodeId);
+            var latitude = ParseCoordinate(node.Attribute("lat")?.Value, "latitude", nodeId);
+            var point = new StampingPoint(
+                default,
+                name,
+                longitude,
+                latitude,
+                number,
+                number,
+                StampingProvider.TouringenId,
+                $"osm-node-{nodeId}")
+            {
+                SeriesId = StampingSeries.TouringenStandardId
+            };
+            candidatesByNumber[number] = point;
+        }
+
+        if (candidatesByNumber.Count != ExpectedStandardPointCount ||
+            !candidatesByNumber.Keys.OrderBy(n => n).SequenceEqual(Enumerable.Range(1, ExpectedStandardPointCount)))
+        {
+            throw new InvalidDataException($"Touringen standard series must contain every number from 1 through {ExpectedStandardPointCount} exactly once.");
+        }
+
+        var points = candidatesByNumber.OrderBy(e => e.Key).Select(e => e.Value).ToArray();
+        return (points, revision, sourceUpdatedAt);
+    }
+
+    private static void ValidateRelation(XElement relation)
+    {
+        var tags = relation.Elements("tag").ToDictionary(
+            tag => RequiredAttribute(tag, "k", "relation tag"),
+            tag => RequiredAttribute(tag, "v", "relation tag"),
+            StringComparer.Ordinal);
+        if (!string.Equals(tags.GetValueOrDefault("name"), "Stempelstellen Touringen", StringComparison.Ordinal) ||
+            !string.Equals(tags.GetValueOrDefault("operator"), "Touringen", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The configured OSM relation is not the Touringen relation.");
+        }
+    }
+
+    private static void ValidateNodeTags(long nodeId, IReadOnlyDictionary<string, string> tags)
+    {
+        if (!string.Equals(tags.GetValueOrDefault("checkpoint"), "hiking", StringComparison.Ordinal) ||
+            !string.Equals(tags.GetValueOrDefault("checkpoint:type"), "stamp", StringComparison.Ordinal) ||
+            !string.Equals(tags.GetValueOrDefault("operator"), "Touringen", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"OSM node {nodeId} is not a Touringen hiking stamp checkpoint.");
         }
     }
 
@@ -174,16 +337,6 @@ public sealed partial class TouringenStampingPointImportService : ITouringenStam
         return points.OrderBy(point => point.Number).ToArray();
     }
 
-    private static (int Number, string Name) ParseStandardIdentity(string fileName, XElement waypoint)
-    {
-        var match = StandardFileNameRegex().Match(fileName);
-        if (!match.Success || !int.TryParse(match.Groups["number"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var number))
-        {
-            throw new InvalidDataException($"Touringen standard GPX filename '{fileName}' has no usable point number.");
-        }
-        return (number, RequireName(match.Groups["name"].Value, fileName));
-    }
-
     private static (int Number, string Name) ParseNaturalTreasureIdentity(string fileName, XElement waypoint)
     {
         var rawName = WaypointName(waypoint);
@@ -216,13 +369,32 @@ public sealed partial class TouringenStampingPointImportService : ITouringenStam
             ? value.Trim()
             : throw new InvalidDataException($"Touringen GPX '{source}' has no usable point name.");
 
-    private static decimal ParseCoordinate(string? value, string coordinateName, string source)
+    private static decimal ParseCoordinate(string? value, string coordinateName, object source)
         => decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var coordinate)
             ? coordinate
-            : throw new InvalidDataException($"Touringen GPX '{source}' has invalid {coordinateName} '{value}'.");
+            : throw new InvalidDataException($"Touringen {source} has invalid {coordinateName} '{value}'.");
 
-    [GeneratedRegex(@"^Touringen Stempelstellen Nr\. (?<number>\d+) (?<name>.+)\.gpx$", RegexOptions.IgnoreCase)]
-    private static partial Regex StandardFileNameRegex();
+    private static long ParseIdentifier(string? value, string description)
+        => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0
+            ? id
+            : throw new InvalidDataException($"The OSM {description} identifier '{value}' is invalid.");
+
+    private static string RequiredAttribute(XElement element, string attributeName, string description)
+        => element.Attribute(attributeName)?.Value
+           ?? throw new InvalidDataException($"The OSM {description} is missing required attribute '{attributeName}'.");
+
+    private static string RequiredTag(IReadOnlyDictionary<string, string> tags, string key, long nodeId)
+        => tags.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : throw new InvalidDataException($"OSM node {nodeId} is missing required tag '{key}'.");
+
+    private static DateTime ParseTimestamp(string value)
+        => DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var timestamp)
+            ? timestamp
+            : throw new InvalidDataException($"The OSM timestamp '{value}' is invalid.");
+
+    [GeneratedRegex(@"^(?:Touringen\s+)?(?<number>\d+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex ReferenceRegex();
 
     [GeneratedRegex(@"^Touringen Sonderstempel\s+", RegexOptions.IgnoreCase)]
     private static partial Regex NaturalTreasurePrefixRegex();

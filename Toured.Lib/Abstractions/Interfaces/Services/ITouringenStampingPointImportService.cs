@@ -4,5 +4,5 @@ namespace TourEd.Lib.Abstractions.Interfaces.Services;
 
 public interface ITouringenStampingPointImportService
 {
-    Task<TouringenStampingPointSnapshot> DownloadStampingPointsAsync(CancellationToken cancellationToken = default);
+    Task<StampingPointSourceSnapshot> DownloadStampingPointsAsync(CancellationToken cancellationToken = default);
 }
