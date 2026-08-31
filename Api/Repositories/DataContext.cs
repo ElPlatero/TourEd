@@ -16,6 +16,7 @@ public class DataContext : DbContext
     public DbSet<SortedStampingPoint> StampingPointsInTours { get; set; } = null!;
     public DbSet<HikingTour> HikingTours { get; set; } = null!;
     public DbSet<User> Users { get; set; } = null!;
+    public DbSet<UserStampingProvider> UserStampingProviders { get; set; } = null!;
     public DbSet<UserVisit> UserVisits { get; set; } = null!;
     
     
@@ -672,10 +673,23 @@ public class DataContext : DbContext
         {
             dto.HasKey(p => p.Id);
             dto.Property(p => p.Id).ValueGeneratedOnAdd();
-            dto.Property(p => p.DefaultStampingProviderId).HasDefaultValue(StampingProvider.TouringenId);
             dto.HasIndex(p => p.GoogleSubject).IsUnique();
-            dto.HasOne(p => p.DefaultStampingProvider).WithMany().OnDelete(DeleteBehavior.Restrict);
+            dto.HasOne(p => p.DefaultStampingProvider).WithMany()
+                .HasForeignKey(p => p.DefaultStampingProviderId)
+                .OnDelete(DeleteBehavior.Restrict);
+            dto.HasMany(p => p.StampingProviders).WithOne(p => p.User);
             dto.HasMany(p => p.VisitedStampingPoints);
+        });
+
+        modelBuilder.Entity<UserStampingProvider>(dto =>
+        {
+            dto.HasKey(p => new { p.UserId, p.StampingProviderId });
+            dto.HasOne(p => p.User).WithMany(p => p.StampingProviders)
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            dto.HasOne(p => p.StampingProvider).WithMany(p => p.Users)
+                .HasForeignKey(p => p.StampingProviderId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<UserVisit>(dto =>

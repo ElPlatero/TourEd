@@ -38,7 +38,7 @@ public class PointsController : ControllerBase
         }
         catch (UnauthorizedAccessException)
         {
-            return Unauthorized();
+            return Forbid();
         }
     }
 
@@ -63,6 +63,10 @@ public class PointsController : ControllerBase
         catch (NotSupportedException)
         {
             return BadRequest();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
     }
 
@@ -92,6 +96,10 @@ public class PointsController : ControllerBase
         {
             return Conflict();
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [Authorize]
@@ -115,6 +123,10 @@ public class PointsController : ControllerBase
         catch (NotSupportedException)
         {
             return BadRequest();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
     }
 
@@ -140,6 +152,10 @@ public class PointsController : ControllerBase
         {
             return BadRequest();
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [Authorize]
@@ -154,6 +170,7 @@ public class PointsController : ControllerBase
         }
         catch (EntityNotFoundException) { return NotFound(); }
         catch (NotSupportedException) { return BadRequest(); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
     }
 
     [Authorize]
@@ -169,6 +186,7 @@ public class PointsController : ControllerBase
         catch (EntityNotFoundException) { return NotFound(); }
         catch (NotSupportedException) { return BadRequest(); }
         catch (InvalidOperationException) { return Conflict(); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
     }
 
     [Authorize]
@@ -183,6 +201,7 @@ public class PointsController : ControllerBase
         }
         catch (EntityNotFoundException) { return NotFound(); }
         catch (NotSupportedException) { return BadRequest(); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
     }
 
     [Authorize]
@@ -197,6 +216,7 @@ public class PointsController : ControllerBase
         }
         catch (EntityNotFoundException) { return NotFound(); }
         catch (NotSupportedException) { return BadRequest(); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
     }
     
     private static StampingPointDto CreateDto((StampingPoint Point, List<HikingTour>? Tours, UserVisit? Visit) data)

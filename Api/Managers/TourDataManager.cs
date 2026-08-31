@@ -33,9 +33,11 @@ public class TourDataManager
         return (point, tours);
     }
 
-    public Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync((Position Centre, decimal Range)? distance = null)
+    public Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync(
+        int currentUserId,
+        (Position Centre, decimal Range)? distance = null)
     {
-        return _repository.GetHikingToursAsync(distance);
+        return _repository.GetHikingToursAsync(distance, currentUserId);
     }
 
     public async Task<(StampingPoint StampingPoint, UserVisit? UserVisit)> GetVisitAsync(User currentUser, int stampingPointNumber, string? providerSlug = null, string? seriesSlug = null)

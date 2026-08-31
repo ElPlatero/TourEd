@@ -6,7 +6,7 @@ TourEd is a small .NET 10 application for stamping points and hiking tours from 
 
 It stores Touringen, Harzer Wandernadel (HWN), Malerweg (MW), Schluchtensteig (SS), Heidschnuckenweg (HNW), and Harzer Klosterwanderweg (HKW) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
-Stamping points are anchored by `StampingProvider` and belong to a provider-scoped `StampingSeries`. A series supplies the number namespace, so equally numbered points from different editions remain distinct. Each provider declares an abbreviation and whether its data is available anonymously. Touringen, Malerweg, Schluchtensteig, Heidschnuckenweg, and Harzer Klosterwanderweg allow anonymous access. Harzer Wandernadel becomes anonymously available only after its first complete OSM import. Users store a `DefaultStampingProviderId` that currently defaults to Touringen.
+Stamping points are anchored by `StampingProvider` and belong to a provider-scoped `StampingSeries`. A series supplies the number namespace, so equally numbered points from different editions remain distinct. Per-user `UserStampingProvider` entitlements determine which providers an authenticated account may access. Existing users received every provider present when the entitlement migration ran; new users and providers receive no automatic grants. `User.DefaultStampingProviderId` is nullable and is used only when it references an entitled provider.
 
 ## Frontend
 
@@ -26,14 +26,14 @@ The page calls the backend with relative URLs:
   - Ends the TourEd cookie session and returns the UI to the login lock screen.
 - `GET api/providers`
   - Requires an authenticated session (`401` otherwise).
-  - Loads the providers available to the authenticated session before point data.
+  - Loads only providers explicitly enabled for the authenticated user before point data.
   - All returned provider slugs are selected internally by default.
 - `GET api/points?provider=all&vis=false`
   - Requires an authenticated session (`401` otherwise).
-  - Loads unvisited points from every integrated provider into the in-memory frontend cache.
+  - Loads unvisited points from every provider enabled for the authenticated user into the in-memory frontend cache.
 - `GET api/points?provider=all&vis=true`
   - Requires an authenticated session (`401` otherwise).
-  - Loads visited points from every integrated provider into the in-memory frontend cache.
+  - Loads visited points from every provider enabled for the authenticated user into the in-memory frontend cache.
 
 The frontend starts fail-closed: the accessible login barrier (`#authBarrier`) is visible in the initial HTML and the main container (`#appShell`) is already `inert` and `aria-hidden="true"`. A confirmed authenticated session unlocks the application; unauthenticated use sends zero provider or point requests.
 
@@ -52,9 +52,9 @@ The frontend never reads or writes user ids, Google subjects, tokens, custom ide
 Optional `provider` query behavior on `GET api/points`:
 
 - Requires an authenticated cookie session; unauthenticated requests receive `401`.
-- Omitted: uses the authenticated user's default provider.
-- Provider slug, for example `provider=touringen`: returns points from that provider if it is available to the current session.
-- `provider=all`: returns points from every provider for authenticated users.
+- Omitted: uses the authenticated user's default provider only when that provider is enabled for the user; there is no fallback.
+- Provider slug, for example `provider=touringen`: returns points only when that provider is enabled for the authenticated user; otherwise it returns `403`.
+- `provider=all`: returns points from every provider enabled for the authenticated user.
 
 The map uses logo-colored SVG pin assets stored in `Api/wwwroot/img`:
 
@@ -62,7 +62,7 @@ The map uses logo-colored SVG pin assets stored in `Api/wwwroot/img`:
 - `img/pin_icon_visited.svg`
 - `img/toured-logo-transparent.svg`
 
-The anonymous map hides the visit-state legend. Anonymous and authenticated open points use the logo's light blue; authenticated visited points use its dark blue and carry a white check matching the logo. The bundled map omits OpenLayers' on-map zoom buttons while retaining its touch, mouse, and keyboard zoom interactions.
+The login barrier hides the visit-state legend. Open points use the logo's light blue; visited points use its dark blue and carry a white check matching the logo. The bundled map omits OpenLayers' on-map zoom buttons while retaining its touch, mouse, and keyboard zoom interactions.
 
 The current static map does not use the tours endpoint or admin/import endpoints.
 
@@ -72,8 +72,8 @@ Normal user flow:
 
 1. User opens the HTML map served by the TourEd application.
 2. Browser checks the TourEd session and offers Google login or logout as appropriate.
-3. Browser loads the provider catalog and requests all-provider anonymous points once, or all-provider visited and unvisited points separately for an authenticated cookie session.
-4. Backend returns points, provider info, optional tour summaries, and user visit state depending on the session.
+3. Browser loads the authenticated user's enabled provider catalog and requests enabled-provider visited and unvisited points separately.
+4. Backend returns only entitled points, provider info, optional tour summaries, and user visit state.
 5. Map renders markers and shows a responsive detail dialog on selection, with optional pointer hover on suitable desktop devices.
 
 Maintenance/admin flow:
@@ -116,9 +116,9 @@ The backend follows a simple layered structure:
 - `DataContext` defines SQLite-backed EF Core mappings.
 - `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
 
-Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN, Malerweg (8 points), Schluchtensteig (6 points), Heidschnuckenweg (13 points), and Harzer Klosterwanderweg (16 points) each have one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
+Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN, Malerweg (8 points), Schluchtensteig (6 points), Heidschnuckenweg (13 points), and Harzer Klosterwanderweg (16 points) each have one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. `UserStampingProvider` uses `(UserId, StampingProviderId)` as its unique key. Removing an entitlement hides its provider and visits without deleting visit rows; restoring it makes those visits visible again. Deleting a user cascades to entitlements.
 
-`StampingProvider` also stores the public name, abbreviation, description, optional website, anonymous-access flag, and optional imported-data provenance used by the provider catalog and GeoJSON export. Provenance includes source and licence links, attribution, source revision/timestamp, and import timestamp. Public provider DTOs expose only absolute HTTP(S) URLs; unsupported URI schemes are omitted. Anonymous catalogs and point queries omit providers whose anonymous-access flag is false.
+`StampingProvider` also stores the public name, abbreviation, description, optional website, legacy anonymous-access/data-readiness flag, and optional imported-data provenance used by the provider catalog and GeoJSON export. Provenance includes source and licence links, attribution, source revision/timestamp, and import timestamp. Public provider DTOs expose only absolute HTTP(S) URLs; unsupported URI schemes are omitted. Browser catalogs, points, tours, visits, search data and GeoJSON exports are always restricted by user entitlements.
 
 Users can optionally store a unique Google subject identifier. `GoogleLoginService` resolves an existing binding by subject or atomically binds the first verified Google login to an existing user by normalized email. It never creates users.
 
@@ -159,13 +159,13 @@ Harzer Wandernadel data import:
 - Reads the direct node members of OSM relation 148007 and uses OSM as the sole source for HWN point number, name, and coordinates.
 - Accepts exactly the 222 regular numbered points HWN 1 through HWN 222; child relations, Sonderstempel, temporary points, and the winter alternative for HWN 69 are excluded.
 - Updates points by series and number while retaining their internal ids and user visits.
-- Atomically records OSM provenance/licence metadata, records the import, and enables anonymous HWN access only after the complete validated point update succeeds.
+- Atomically records OSM provenance/licence metadata, records the import, and marks HWN data ready for entitled catalog/GeoJSON access only after the complete validated point update succeeds.
 - Is started manually through the CLI-protected admin endpoint; no schedule or workflow triggers it automatically.
 
 Seeded trail providers (Malerweg, Schluchtensteig, Heidschnuckenweg, Harzer Klosterwanderweg):
 
 - Fixed stamping points across established trails (Malerweg: 8, Schluchtensteig: 6, Heidschnuckenweg: 13, Harzer Klosterwanderweg: 16), seeded directly via EF Core migrations.
-- Fully available for anonymous and authenticated users without requiring a background network import.
+- Available without a background network import, but visible only to authenticated users with a matching entitlement.
 - Provenance/import metadata fields remain null, hiding external source/licence links and public GeoJSON export in the provider information modal.
 
 User data import:
@@ -173,7 +173,7 @@ User data import:
 - Requires `Authorization: Bearer <token>` using the dedicated CLI configuration and runs as its configured existing TourEd user.
 - Accepts uploaded CSV-like data.
 - Parses stamping point numbers and optional visit timestamps.
-- Maps numbers only to stored stamping points from the authenticated user's default provider.
+- Maps numbers only to stored stamping points from the authenticated user's default provider when that provider is enabled for the user; it never falls back to another provider.
 - Creates user visit records for the authenticated user.
 
 ## Important API Context
@@ -185,8 +185,8 @@ Main consumer endpoint:
 Useful query behavior:
 
 - Requires an authenticated session (`401` otherwise).
-- `provider=<slug>` returns points for a specific stamping provider when it is available to the current session.
-- `provider=all` returns all providers for authenticated users.
+- `provider=<slug>` returns points for a specific stamping provider when it is enabled for the authenticated user; disabled providers return `403`.
+- `provider=all` returns all providers enabled for the authenticated user.
 - `vis=true` returns visited points for the authenticated user.
 - `vis=false` returns unvisited points for the authenticated user.
 - Geo filtering exists via query parameters and is used server-side.
@@ -198,11 +198,11 @@ Visit state is represented independently from its optional timestamp: `isVisited
 Other endpoints:
 
 - `GET /api/providers`
-  - Session-aware catalog of available stamping providers; requires an authenticated session.
+  - Catalog of providers enabled for the authenticated user; requires an authenticated session.
   - Returns providers ordered by name and slug, including abbreviation, description, anonymous-access status, optional validated public website/source/licence URLs, attribution, and public-data-download availability.
 
 - `GET /api/providers/{slug}/points.geojson`
-  - Machine-readable export for an enabled provider with complete source/licence metadata; requires an authenticated session.
+  - Machine-readable export for a user-entitled, data-ready provider with complete source/licence metadata; requires an authenticated session.
   - Returns point number, name, provider, reference, OSM element id, coordinates, source revision/timestamps, attribution, and licence metadata; never returns accounts, visits, or authentication state.
 
 - `GET /health`
