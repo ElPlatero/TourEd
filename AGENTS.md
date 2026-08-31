@@ -40,7 +40,7 @@ The page calls the backend with relative URLs:
 
 The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All available providers are selected after each page initialization, `Alle` and `Keine` provide bulk selection, and an empty selection renders zero points. Provider names and abbreviations are used in point details because point numbers are provider-scoped. Provider information also exposes recorded source/licence metadata and a public GeoJSON download when available. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
 
-Authenticated users can create a visit directly from a locked point-detail dialog, either with the current local date and time or with no timestamp, a date only, or a date plus time. Existing visits allow editing only their optional date/time and can be deleted after a point-specific confirmation. Every visit request includes the provider slug. Successful mutations update the cached point and marker layer without a full page reload; anonymous users see a login link instead of write controls.
+Authenticated users can record a stamp directly from a locked point-detail dialog using large, square action tiles with dedicated icons and concise labels ('Jetzt stempeln', 'Nachtragen', 'Bearbeiten', 'Entfernen'), either with the current local date and time or with no timestamp, a date only, or a date plus time. Existing stamps allow editing only their optional date/time and can be removed after a point-specific confirmation. Every visit request includes the provider slug. Successful mutations update the cached point and marker layer without a full page reload; anonymous users see a login link instead of write controls.
 
 A magnifier button to the left of the provider and account controls opens a mutually exclusive search flyout. The client searches only the already loaded points of currently selected providers, normalizing case and diacritics across point name, number, provider name, and abbreviation. Search results are capped, contain provider-scoped number labels, and selecting one centers and zooms the existing map before opening its locked point-detail dialog. Search terms and results are not persisted and require no additional backend endpoint.
 
@@ -152,6 +152,7 @@ Touringen data import:
 - Stores the highest source id as the point's current external id and maps every source alias in the import payload to the normalized point.
 - Maps all hiking-tour relationships for those source aliases to the normalized stamping point id.
 - Records import metadata.
+- Touringen is not currently imported from OSM because relation 14773147 has 430 members but only 429 distinct nodes: regular point 309 is missing and node 379 is duplicated. Equally numbered “Thüringer Naturschätze” special points also currently overwrite regular Touringen points 1 through 8. Keep the existing Touringen source until those OSM data issues are resolved; any later OSM migration must preserve and verify existing visit assignments.
 
 Harzer Wandernadel data import:
 

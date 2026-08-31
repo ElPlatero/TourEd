@@ -538,16 +538,47 @@ input:focus-visible,
     border-top: 1px solid rgb(37 37 34 / 20%);
 }
 
-.visit-actions,
+.visit-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.action--tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.75rem 0.5rem;
+    min-height: 4.75rem;
+    aspect-ratio: 1 / 1;
+    text-align: center;
+    border-radius: 0.65rem;
+}
+
+.action--tile svg {
+    width: 1.75rem;
+    height: 1.75rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+    flex-shrink: 0;
+}
+
+.action--tile span {
+    font-size: 0.85rem;
+    font-weight: 650;
+    line-height: 1.2;
+}
+
 .visit-form__actions,
 .delete-visit-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.55rem;
-}
-
-.visit-actions .action {
-    flex: 1 1 12rem;
 }
 
 .visit-form {
