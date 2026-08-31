@@ -182,6 +182,64 @@ public class TouredRepository : IUserService
         return savedPoints;
     }
 
+    public async Task SaveStampingPointSourceImportAsync(
+        int providerId,
+        StampingPointSourceSnapshot snapshot,
+        CancellationToken cancellationToken = default)
+    {
+        if (snapshot.Points.Count == 0 || snapshot.Points.Any(point => point.ProviderId != providerId))
+        {
+            throw new InvalidOperationException("A provider source import must contain points for exactly that provider.");
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await SaveStampingPointsAsync(snapshot.Points.ToArray());
+        var provider = await _dbContext.StampingProviders.SingleAsync(
+            item => item.Id == providerId,
+            cancellationToken);
+        provider.DataSourceUri = snapshot.SourceUri;
+        provider.DataSourceAttribution = snapshot.Attribution;
+        provider.DataLicenseName = snapshot.LicenseName;
+        provider.DataLicenseUri = snapshot.LicenseUri;
+        provider.DataSourceRevision = snapshot.Revision;
+        provider.DataSourceUpdatedAt = snapshot.SourceUpdatedAt;
+        provider.DataImportedAt = DateTime.UtcNow;
+        provider.IsAnonymousAccessAllowed = true;
+        await _dbContext.AddAsync(
+            new Import(default, default, snapshot.Points.Count, 0),
+            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<(StampingProvider Provider, List<StampingPoint> Points)?> GetPublicProviderDataAsync(
+        string providerSlug,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedSlug = providerSlug.Trim().ToLowerInvariant();
+        var provider = await _dbContext.StampingProviders.AsNoTracking().SingleOrDefaultAsync(
+            item => item.Slug.ToLower() == normalizedSlug &&
+                    item.IsAnonymousAccessAllowed &&
+                    item.DataSourceUri != null &&
+                    item.DataSourceAttribution != null &&
+                    item.DataLicenseName != null &&
+                    item.DataLicenseUri != null &&
+                    item.DataSourceRevision != null &&
+                    item.DataSourceUpdatedAt != null &&
+                    item.DataImportedAt != null,
+            cancellationToken);
+        if (provider is null)
+        {
+            return null;
+        }
+
+        var points = await _dbContext.StampingPoints.AsNoTracking()
+            .Where(point => point.ProviderId == provider.Id)
+            .OrderBy(point => point.Number)
+            .ToListAsync(cancellationToken);
+        return (provider, points);
+    }
+
     public async Task SaveHikingToursAsync(params HikingTour[] tours)
     {
         List<HikingTour> updatedEntries = new();

@@ -690,6 +690,26 @@ input:focus-visible,
     width: fit-content;
 }
 
+.provider-data-source {
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid rgba(15, 45, 72, 0.18);
+    font-size: 0.88rem;
+}
+
+.provider-data-source h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+}
+
+.provider-data-source p {
+    margin: 0 0 0.5rem;
+}
+
+.provider-data-download {
+    color: #124a73;
+}
+
 .provider-disclaimer {
     padding: 0.75rem;
     border-left: 0.25rem solid #168bd2;

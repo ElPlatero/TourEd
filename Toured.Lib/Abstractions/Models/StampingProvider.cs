@@ -14,4 +14,11 @@ public class StampingProvider
     public bool IsAnonymousAccessAllowed { get; set; }
     public Uri? WebsiteUri { get; set; }
     public string? Description { get; set; }
+    public Uri? DataSourceUri { get; set; }
+    public string? DataSourceAttribution { get; set; }
+    public string? DataLicenseName { get; set; }
+    public Uri? DataLicenseUri { get; set; }
+    public string? DataSourceRevision { get; set; }
+    public DateTime? DataSourceUpdatedAt { get; set; }
+    public DateTime? DataImportedAt { get; set; }
 }

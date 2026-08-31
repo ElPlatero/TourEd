@@ -125,7 +125,9 @@ curl --fail-with-body --request POST \
     https://server.example/toured/api/admin/imports/harzer-wandernadel
 ```
 
-The HWN import discovers the current official GPX archive, combines its coordinates with the official overview names, and requires exactly the 222 regular numbered points. It updates existing points without changing their internal ids or visits and does not delete stored points that disappear from a later source. The non-secret source URLs and download-size limit are configured in the deployed appsettings under `harzerWandernadel`.
+The HWN import reads OSM relation 148007 and requires exactly one usable summer location for every regular number from 1 through 222. The winter alternative for HWN 69 is intentionally excluded. A complete import updates existing points without changing their internal ids or visits, records the OSM relation revision and licence metadata, and enables anonymous HWN access atomically. Until the first successful OSM import, HWN remains restricted and the public GeoJSON endpoint is unavailable. The non-secret relation id, OSM API/public URLs, and download-size limit are configured in the deployed appsettings under `harzerWandernadel`.
+
+After deploying this change, run the HWN import once with the CLI token. Then verify anonymous `GET /api/points?provider=harzer-wandernadel` and `GET /api/providers/harzer-wandernadel/points.geojson`; the latter contains only public provider point data and ODbL provenance, never accounts or visits.
 
 For a user visit import:
 

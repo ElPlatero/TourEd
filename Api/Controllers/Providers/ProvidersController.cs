@@ -24,4 +24,26 @@ public sealed class ProvidersController : ControllerBase
             providers.Count,
             providers.Select(StampingProviderDetailsDto.Create)));
     }
+
+    [Produces("application/geo+json")]
+    [ProducesResponseType(typeof(StampingPointGeoJsonFeatureCollectionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [HttpGet("{providerSlug}/points.geojson")]
+    public async Task<IActionResult> GetProviderData(
+        string providerSlug,
+        CancellationToken cancellationToken)
+    {
+        var result = await _manager.GetPublicProviderDataAsync(providerSlug, cancellationToken);
+        if (result is not { } providerData)
+        {
+            return NotFound();
+        }
+
+        return new JsonResult(StampingPointGeoJsonFeatureCollectionDto.Create(
+            providerData.Provider,
+            providerData.Points))
+        {
+            ContentType = "application/geo+json"
+        };
+    }
 }

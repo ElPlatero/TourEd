@@ -14,4 +14,9 @@ public sealed class StampingProviderManager
 
     public Task<List<StampingProvider>> GetStampingProvidersAsync(bool includeRestrictedProviders)
         => _repository.GetStampingProvidersAsync(includeRestrictedProviders);
+
+    public Task<(StampingProvider Provider, List<StampingPoint> Points)?> GetPublicProviderDataAsync(
+        string providerSlug,
+        CancellationToken cancellationToken = default)
+        => _repository.GetPublicProviderDataAsync(providerSlug, cancellationToken);
 }

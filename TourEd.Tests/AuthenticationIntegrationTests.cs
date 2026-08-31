@@ -351,6 +351,51 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ImportedOsmProviderIsAnonymousAndPublishesLicensedGeoJsonWithoutVisitData()
+    {
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            var provider = await context.StampingProviders.SingleAsync(item =>
+                item.Id == StampingProvider.HarzerWandernadelId);
+            provider.IsAnonymousAccessAllowed = true;
+            provider.DataSourceUri = new Uri("https://www.openstreetmap.org/relation/148007");
+            provider.DataSourceAttribution = "© OpenStreetMap contributors";
+            provider.DataLicenseName = "Open Data Commons Open Database License (ODbL) 1.0";
+            provider.DataLicenseUri = new Uri("https://opendatacommons.org/licenses/odbl/1-0/");
+            provider.DataSourceRevision = "44";
+            provider.DataSourceUpdatedAt = new DateTime(2026, 3, 9, 22, 17, 30, DateTimeKind.Utc);
+            provider.DataImportedAt = new DateTime(2026, 8, 30, 20, 30, 0, DateTimeKind.Utc);
+            await context.SaveChangesAsync();
+        }
+
+        using var client = CreateClient(_factory);
+        var providers = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
+        var response = await client.GetAsync("/api/providers/harzer-wandernadel/points.geojson");
+        var json = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(json);
+
+        Assert.NotNull(providers);
+        var hwn = Assert.Single(providers.StampingProviders,
+            provider => provider.Slug == StampingProvider.HarzerWandernadelSlug);
+        Assert.True(hwn.IsAnonymousAccessAllowed);
+        Assert.Equal("© OpenStreetMap contributors", hwn.DataSourceAttribution);
+        Assert.Equal("https://www.openstreetmap.org/relation/148007", hwn.DataSourceUrl);
+        Assert.True(hwn.HasPublicDataDownload);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/geo+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("FeatureCollection", document.RootElement.GetProperty("type").GetString());
+        Assert.Equal("44", document.RootElement.GetProperty("sourceRevision").GetString());
+        Assert.Equal("© OpenStreetMap contributors", document.RootElement.GetProperty("attribution").GetString());
+        var feature = Assert.Single(document.RootElement.GetProperty("features").EnumerateArray());
+        Assert.Equal(RestrictedProviderPointNumber, feature.GetProperty("properties").GetProperty("number").GetInt32());
+        Assert.Equal(11.8m, feature.GetProperty("geometry").GetProperty("coordinates")[0].GetDecimal());
+        Assert.DoesNotContain("visited", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("email", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("user", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task CookieSessionCanCreateEditAndDeleteVisitWithOptionalTimestamp()
     {
         var endpoint = $"/api/points/{WritablePointNumber}?provider={StampingProvider.TouringenSlug}";
@@ -533,6 +578,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("id=\"selectAllProvidersButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("id=\"selectNoProvidersButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("<dialog id=\"providerInfoDialog\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"providerDataSource\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Stempelstellen als GeoJSON herunterladen", html, StringComparison.Ordinal);
         Assert.Contains("target=\"_blank\" rel=\"noopener noreferrer\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("TourEd ist ein unabhängiges Projekt", html, StringComparison.Ordinal);
         Assert.Contains("id=\"pointProvider\"", html, StringComparison.OrdinalIgnoreCase);
@@ -548,6 +595,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("providerInfoDialog.addEventListener(\"cancel\"", script, StringComparison.Ordinal);
         Assert.Contains("elements.providerInfoTrigger?.focus", script, StringComparison.Ordinal);
         Assert.Contains("url.protocol === \"http:\" || url.protocol === \"https:\"", script, StringComparison.Ordinal);
+        Assert.Contains("provider.hasPublicDataDownload", script, StringComparison.Ordinal);
+        Assert.Contains("points.geojson", script, StringComparison.Ordinal);
         Assert.Contains("stampingPoint.provider?.name", script, StringComparison.Ordinal);
         Assert.Contains("stampingPoint.provider?.abbreviation", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
@@ -646,7 +695,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("TourEd übermittelt beim Öffnen eines Anbieterlinks weder die E-Mail-Adresse noch gespeicherte Stempelbesuche", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("TourEd ist ein unabhängiges Projekt", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Beim bewussten Öffnen eines externen Anbieterlinks", privacyNotice, StringComparison.Ordinal);
-        Assert.Contains("ausschließlich für angemeldete, zuvor freigeschaltete TourEd-Benutzer sichtbar", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("serverseitig aus OpenStreetMap übernommen", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("keine Konto-, Sitzungs- oder Besuchsdaten an OpenStreetMap", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("GeoJSON-Download", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("keine Konto- oder Besuchsdaten an den Stempelanbieter übermittelt", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Ein Besuch kann auch ohne Datum und Uhrzeit eingetragen werden", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("den einzelnen Besuch nach einer Bestätigung vollständig löschen", privacyNotice, StringComparison.Ordinal);

@@ -34,6 +34,11 @@
         providerInfoDisclaimer: document.getElementById("providerInfoDisclaimer"),
         providerInfoName: document.getElementById("providerInfoName"),
         providerInfoWebsite: document.getElementById("providerInfoWebsite"),
+        providerDataAttribution: document.getElementById("providerDataAttribution"),
+        providerDataDownload: document.getElementById("providerDataDownload"),
+        providerDataLicenseLink: document.getElementById("providerDataLicenseLink"),
+        providerDataSource: document.getElementById("providerDataSource"),
+        providerDataSourceLink: document.getElementById("providerDataSourceLink"),
         providerMenuButton: document.getElementById("providerMenuButton"),
         providerOptions: document.getElementById("providerOptions"),
         providerPanel: document.getElementById("providerPanel"),
@@ -259,6 +264,30 @@
             elements.providerInfoWebsite.href = websiteUrl;
         } else {
             elements.providerInfoWebsite.removeAttribute("href");
+        }
+        const sourceUrl = getSafeExternalUrl(provider.dataSourceUrl);
+        const licenseUrl = getSafeExternalUrl(provider.dataLicenseUrl);
+        const hasDataSource = Boolean(
+            provider.dataSourceAttribution
+            && provider.dataLicenseName
+            && sourceUrl
+            && licenseUrl
+            && provider.hasPublicDataDownload);
+        elements.providerDataSource.hidden = !hasDataSource;
+        if (hasDataSource) {
+            elements.providerDataAttribution.textContent = provider.dataSourceAttribution;
+            elements.providerDataSourceLink.href = sourceUrl;
+            elements.providerDataLicenseLink.href = licenseUrl;
+            elements.providerDataLicenseLink.textContent = provider.dataLicenseName;
+            elements.providerDataDownload.href = `api/providers/${encodeURIComponent(provider.slug)}/points.geojson`;
+            elements.providerDataDownload.download = `${provider.slug}-stempelstellen.geojson`;
+        } else {
+            elements.providerDataAttribution.textContent = "";
+            elements.providerDataSourceLink.removeAttribute("href");
+            elements.providerDataLicenseLink.removeAttribute("href");
+            elements.providerDataLicenseLink.textContent = "";
+            elements.providerDataDownload.removeAttribute("href");
+            elements.providerDataDownload.removeAttribute("download");
         }
         elements.providerInfoTrigger = trigger;
         elements.providerInfoDialog.showModal();
