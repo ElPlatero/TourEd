@@ -16,6 +16,7 @@
         editVisitButton: document.getElementById("editVisitButton"),
         existingVisitActions: document.getElementById("existingVisitActions"),
         infoCard: document.getElementById("infoCard"),
+        locateButton: document.getElementById("locateButton"),
         loginLink: document.getElementById("loginLink"),
         logoutButton: document.getElementById("logoutButton"),
         map: document.getElementById("map"),
@@ -86,9 +87,47 @@
         })
     });
 
+    const locationSource = new ol.source.Vector();
+    const accuracyFeature = new ol.Feature();
+    const positionFeature = new ol.Feature();
+
+    positionFeature.setStyle(
+        new ol.style.Style({
+            image: new ol.style.Circle({
+                radius: 7,
+                fill: new ol.style.Fill({
+                    color: "rgba(39, 156, 223, 0.85)"
+                }),
+                stroke: new ol.style.Stroke({
+                    color: "#123e65",
+                    width: 2.5
+                })
+            })
+        })
+    );
+
+    accuracyFeature.setStyle(
+        new ol.style.Style({
+            fill: new ol.style.Fill({
+                color: "rgba(39, 156, 223, 0.12)"
+            }),
+            stroke: new ol.style.Stroke({
+                color: "rgba(18, 62, 101, 0.3)",
+                width: 1
+            })
+        })
+    );
+
+    locationSource.addFeatures([accuracyFeature, positionFeature]);
+
+    const userLocationLayer = new ol.layer.Vector({
+        source: locationSource
+    });
+
     const app = {
         activeFeature: null,
         authenticated: false,
+        centerOnNextPosition: false,
         infoLocked: false,
         infoPixel: null,
         loadGeneration: 0,
@@ -101,6 +140,7 @@
         },
         providers: [],
         selectedProviderSlugs: new Set(),
+        userLocationLayer,
         visitedMarkers: createMarkerLayer("img/pin_icon_visited.svg?v=3"),
         unvisitedMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3")
     };
@@ -120,6 +160,7 @@
                     maxZoom: 18
                 })
             }),
+            userLocationLayer,
             app.neutralMarkers,
             app.unvisitedMarkers,
             app.visitedMarkers
@@ -137,6 +178,56 @@
         elements.mapStatus.dataset.state = state ?? "loading";
         elements.mapStatus.hidden = !message;
     };
+
+    const geolocation = new ol.Geolocation({
+        tracking: false,
+        trackingOptions: {
+            enableHighAccuracy: true
+        },
+        projection: app.map.getView().getProjection()
+    });
+
+    geolocation.on("change:position", () => {
+        const coordinates = geolocation.getPosition();
+        if (coordinates) {
+            positionFeature.setGeometry(new ol.geom.Point(coordinates));
+            if (app.centerOnNextPosition) {
+                app.centerOnNextPosition = false;
+                setMapStatus("");
+                const view = app.map.getView();
+                if (!reducedMotion.matches) {
+                    view.animate({
+                        center: coordinates,
+                        zoom: Math.max(view.getZoom() ?? 0, 14),
+                        duration: 500
+                    });
+                } else {
+                    view.setCenter(coordinates);
+                    view.setZoom(Math.max(view.getZoom() ?? 0, 14));
+                }
+            }
+        }
+    });
+
+    geolocation.on("change:accuracyGeometry", () => {
+        const geometry = geolocation.getAccuracyGeometry();
+        accuracyFeature.setGeometry(geometry ?? undefined);
+    });
+
+    geolocation.on("error", () => {
+        geolocation.setTracking(false);
+        positionFeature.setGeometry(undefined);
+        accuracyFeature.setGeometry(undefined);
+        if (app.centerOnNextPosition) {
+            app.centerOnNextPosition = false;
+            setMapStatus("Standort konnte nicht ermittelt werden.", "error");
+            setTimeout(() => {
+                if (elements.mapStatus.textContent === "Standort konnte nicht ermittelt werden.") {
+                    setMapStatus("");
+                }
+            }, 4000);
+        }
+    });
 
     const setSession = (session) => {
         const authenticated = session?.authenticated === true;
@@ -975,6 +1066,36 @@
         } else if (!elements.infoCard.hidden) {
             hideInfo(true);
             elements.map.focus({ preventScroll: true });
+        }
+    });
+
+    elements.locateButton.addEventListener("click", () => {
+        closeSearchMenu();
+        closeProviderMenu();
+        closeAccountMenu();
+
+        const coordinates = geolocation.getPosition();
+        if (coordinates) {
+            if (!geolocation.getTracking()) {
+                geolocation.setTracking(true);
+            }
+            const view = app.map.getView();
+            if (!reducedMotion.matches) {
+                view.animate({
+                    center: coordinates,
+                    zoom: Math.max(view.getZoom() ?? 0, 14),
+                    duration: 500
+                });
+            } else {
+                view.setCenter(coordinates);
+                view.setZoom(Math.max(view.getZoom() ?? 0, 14));
+            }
+        } else {
+            app.centerOnNextPosition = true;
+            setMapStatus("Standort wird ermittelt …");
+            if (!geolocation.getTracking()) {
+                geolocation.setTracking(true);
+            }
         }
     });
 
