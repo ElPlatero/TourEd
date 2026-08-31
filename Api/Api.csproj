@@ -7,6 +7,9 @@
         <InvariantGlobalization>true</InvariantGlobalization>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
         <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+        <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+        <Copyright>Copyright © 2023-2026 Tino Schüttpelz</Copyright>
+        <RepositoryUrl>https://github.com/ElPlatero/TourEd</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>

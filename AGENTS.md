@@ -44,7 +44,9 @@ Authenticated users can record a stamp directly from a locked point-detail dialo
 
 A magnifier button to the left of the provider and account controls opens a mutually exclusive search flyout. The client searches only the already loaded points of currently selected providers, normalizing case and diacritics across point name, number, provider name, and abbreviation. Search results are capped, contain provider-scoped number labels, and selecting one centers and zooms the existing map before opening its locked point-detail dialog. Search terms and results are not persisted and require no additional backend endpoint.
 
-The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and the user-initiated navigation to external provider websites. Keep it synchronized whenever these data flows or their retention rules change.
+The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and user-initiated navigation to external provider websites and the public GitHub source repository. Keep it synchronized whenever these data flows or their retention rules change.
+
+The map attribution permanently links to the public TourEd source repository and identifies its AGPL-3.0 licensing next to the privacy link.
 
 The frontend never reads or writes user ids, Google subjects, tokens, custom identity headers, local storage, or session storage. A `401` while loading authenticated point data returns the UI to anonymous mode without starting a login redirect.
 
@@ -226,6 +228,8 @@ Other endpoints:
 ## Development Notes
 
 The frontend intentionally remains a plain static page under `Api/wwwroot`; there is no separate frontend project or build process.
+
+TourEd source code is licensed under `AGPL-3.0-only`. Separate commercial licenses are available from the copyright holder for organizations that do not want to comply with the AGPL. The AGPL does not grant trademark rights in the TourEd name or branding. Third-party software and provider data retain their own licenses; imported OpenStreetMap data remains subject to ODbL 1.0 where identified.
 
 The API uses:
 
