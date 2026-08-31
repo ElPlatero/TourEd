@@ -271,7 +271,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AnonymousPointsRemainAvailableWhileBothVisitedFiltersRequireAuthentication()
+    public async Task AnonymousRequestsToPointsEndpointsAreRejectedWithUnauthorized()
     {
         using var client = CreateClient(_factory);
 
@@ -279,7 +279,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var visitedResponse = await client.GetAsync("/api/points?vis=true");
         var unvisitedResponse = await client.GetAsync("/api/points?vis=false");
 
-        Assert.Equal(HttpStatusCode.OK, anonymousResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, visitedResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, unvisitedResponse.StatusCode);
         Assert.Null(visitedResponse.Headers.Location);
@@ -287,13 +287,11 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AllProviderPointQueriesWorkForAnonymousAndAuthenticatedSessions()
+    public async Task AllProviderPointQueriesRequireAuthenticationAndReturnCorrectPoints()
     {
         using var anonymousClient = CreateClient(_factory);
-        var anonymousResponse = await anonymousClient.GetFromJsonAsync<GetStampingPointsResponse>(
-            "/api/points?provider=all");
-        var restrictedAnonymousResponse = await anonymousClient.GetAsync(
-            $"/api/points?provider={StampingProvider.HarzerWandernadelSlug}");
+        var anonymousResponse = await anonymousClient.GetAsync("/api/points?provider=all");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
 
         using var authenticatedClient = CreateClient(_factory);
         await LoginAsync(authenticatedClient);
@@ -301,16 +299,6 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             "/api/points?provider=all&vis=true");
         var unvisitedResponse = await authenticatedClient.GetFromJsonAsync<GetStampingPointsResponse>(
             "/api/points?provider=all&vis=false");
-
-        Assert.NotNull(anonymousResponse);
-        Assert.Contains(anonymousResponse.StampingPoints, point =>
-            point.Provider.Slug == StampingProvider.TouringenSlug &&
-            point.Series.Slug == StampingSeries.TouringenStandardSlug);
-        Assert.Contains(anonymousResponse.StampingPoints, point =>
-            point.Provider.Slug == "other" && point.Number == OtherProviderPointNumber);
-        Assert.DoesNotContain(anonymousResponse.StampingPoints, point =>
-            point.Provider.Slug == StampingProvider.HarzerWandernadelSlug);
-        Assert.Equal(HttpStatusCode.Unauthorized, restrictedAnonymousResponse.StatusCode);
 
         Assert.NotNull(visitedResponse);
         Assert.NotNull(unvisitedResponse);
@@ -326,19 +314,22 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ProviderCatalogFiltersRestrictedProvidersAndExposesOnlyPublicWebsiteUrls()
+    public async Task ProviderCatalogRequiresAuthenticationAndExposesConfiguredWebsiteUrls()
     {
         using var client = CreateClient(_factory);
 
-        var anonymousResponse = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
+        var anonymousResponse = await client.GetAsync("/api/providers");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+
         await LoginAsync(client);
         var authenticatedResponse = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
 
-        Assert.NotNull(anonymousResponse);
-        Assert.Equal(7, anonymousResponse.OverallCount);
-        var providers = anonymousResponse.StampingProviders.ToArray();
+        Assert.NotNull(authenticatedResponse);
+        Assert.Equal(8, authenticatedResponse.OverallCount);
+        var providers = authenticatedResponse.StampingProviders.ToArray();
         Assert.Equal([
             "Harzer Klosterwanderweg",
+            "Harzer Wandernadel",
             "Heidschnuckenweg",
             "Malerweg",
             "Other provider",
@@ -357,8 +348,6 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var unsupported = providers.Single(p => p.Slug == "unsupported-link");
         Assert.Null(unsupported.WebsiteUrl);
 
-        Assert.NotNull(authenticatedResponse);
-        Assert.Equal(8, authenticatedResponse.OverallCount);
         var harzerWandernadel = Assert.Single(authenticatedResponse.StampingProviders,
             provider => provider.Slug == StampingProvider.HarzerWandernadelSlug);
         Assert.Equal("HWN", harzerWandernadel.Abbreviation);
@@ -367,7 +356,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ImportedOsmProviderIsAnonymousAndPublishesLicensedGeoJsonWithoutVisitData()
+    public async Task ImportedOsmProviderRequiresAuthenticationAndPublishesLicensedGeoJsonWithoutVisitData()
     {
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
@@ -386,6 +375,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         }
 
         using var client = CreateClient(_factory);
+        var anonymousGeoJsonResponse = await client.GetAsync("/api/providers/harzer-wandernadel/points.geojson");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousGeoJsonResponse.StatusCode);
+
+        await LoginAsync(client);
         var providers = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
         var response = await client.GetAsync("/api/providers/harzer-wandernadel/points.geojson");
         var json = await response.Content.ReadAsStringAsync();
@@ -734,11 +727,24 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("sendVisitRequest(\"DELETE\"", script, StringComparison.Ordinal);
         Assert.Contains("elements.deleteVisitDialog.showModal()", script, StringComparison.Ordinal);
         Assert.Contains("wirklich entfernt werden", script, StringComparison.Ordinal);
-        Assert.Contains("stampingPoint.isVisited = isVisited", script, StringComparison.Ordinal);
-        Assert.Contains("stampingPoint.visitedOn = visitedOn", script, StringComparison.Ordinal);
-        Assert.Contains("stampingPoint.visitedAt = visitedAt", script, StringComparison.Ordinal);
-        Assert.Contains("elements.visitLoginLink.hidden", script, StringComparison.Ordinal);
+        Assert.Contains("id=\"authBarrier\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(".auth-barrier", css, StringComparison.Ordinal);
+        Assert.Contains("showAuthBarrier", script, StringComparison.Ordinal);
+        Assert.Contains("hideAuthBarrier", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ToursEndpointRequiresAuthentication()
+    {
+        using var client = CreateClient(_factory);
+
+        var anonymousResponse = await client.GetAsync("/api/tours");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+
+        await LoginAsync(client);
+        var authenticatedResponse = await client.GetAsync("/api/tours");
+        Assert.Equal(HttpStatusCode.OK, authenticatedResponse.StatusCode);
     }
 
     [Fact]
@@ -798,7 +804,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         Assert.NotNull(initialSession);
         Assert.False(initialSession.Authenticated);
-        Assert.Equal(HttpStatusCode.OK, initialPoints.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, initialPoints.StatusCode);
         Assert.NotNull(authenticatedSession);
         Assert.True(authenticatedSession.Authenticated);
         Assert.Equal(HttpStatusCode.OK, unvisitedPoints.StatusCode);
@@ -806,7 +812,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
         Assert.NotNull(finalSession);
         Assert.False(finalSession.Authenticated);
-        Assert.Equal(HttpStatusCode.OK, finalPoints.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, finalPoints.StatusCode);
     }
 
     [Fact]
@@ -840,7 +846,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.OK, neutralPinResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, visitedPinResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, logoResponse.StatusCode);
-            Assert.Equal(HttpStatusCode.OK, providersResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, providersResponse.StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, restrictedPointsResponse.StatusCode);
             Assert.NotNull(response.Headers.Location);
             var query = QueryHelpers.ParseQuery(response.Headers.Location.Query);

@@ -45,9 +45,48 @@ public sealed class MalerwegIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task MalerwegProviderIsAvailableAnonymouslyWithEightPoints()
+    public async Task AnonymousPointsAndCatalogRequestsAreRejectedWithUnauthorized()
     {
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var pointsResponse = await client.GetAsync("/api/points?provider=malerweg");
+        Assert.Equal(HttpStatusCode.Unauthorized, pointsResponse.StatusCode);
+
+        var providersResponse = await client.GetAsync("/api/providers");
+        Assert.Equal(HttpStatusCode.Unauthorized, providersResponse.StatusCode);
+
+        var geoJsonResponse = await client.GetAsync("/api/providers/malerweg/points.geojson");
+        Assert.Equal(HttpStatusCode.Unauthorized, geoJsonResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AuthenticatedUserCanQueryMalerwegPointsAndCatalogWithoutProvenanceOrGeoJson()
+    {
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            if (!await context.Users.AnyAsync(u => u.Email == FakeGoogleHandler.Email))
+            {
+                context.Users.Add(new User { Email = FakeGoogleHandler.Email });
+                await context.SaveChangesAsync();
+            }
+        }
+
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var challenge = await client.GetAsync("/auth/login");
+        var callback = await client.GetAsync(challenge.Headers.Location);
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
 
         var response = await client.GetAsync("/api/points?provider=malerweg");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -71,12 +110,6 @@ public sealed class MalerwegIntegrationTests : IAsyncLifetime
         Assert.Equal("Großer Zschirnstein", ordered[5].Name);
         Assert.Equal("Gohrisch", ordered[6].Name);
         Assert.Equal("Rauenstein", ordered[7].Name);
-    }
-
-    [Fact]
-    public async Task MalerwegAppearsInProviderCatalogWithoutProvenanceOrGeoJson()
-    {
-        using var client = _factory.CreateClient();
 
         var providersResponse = await client.GetAsync("/api/providers");
         Assert.Equal(HttpStatusCode.OK, providersResponse.StatusCode);
