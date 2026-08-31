@@ -105,9 +105,25 @@ location /toured/ {
 
 The server setup validates that the environment file is a regular root-owned file inaccessible to group and others, requires every expected setting exactly once, creates the persistent key directory for the runtime user with mode `0700`, and renders the environment-file path into the systemd unit.
 
-## Use CLI authentication for imports
+## Use CLI authentication for administration and imports
 
-The three import endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or arbitrary identity header cannot authorize these routes.
+The admin endpoints use a dedicated CLI identity. They accept exactly one configured bearer token and resolve it to one existing TourEd user. A browser session or arbitrary identity header cannot authorize these routes.
+
+The separately maintained local `TourEd.Admin` terminal client reads this token from a configurable file, uses only HTTP(S), and can list users/providers, replace one user's provider entitlements, and start the Touringen or HWN imports. The server API remains usable directly. For example:
+
+```bash
+curl --fail-with-body \
+    --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
+    https://server.example/toured/api/admin/users
+
+curl --fail-with-body --request PUT \
+    --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
+    --header "Content-Type: application/json" \
+    --data '{"providers":["touringen","harzer-wandernadel"],"defaultProvider":"touringen"}' \
+    https://server.example/toured/api/admin/users/42/providers
+```
+
+The update replaces the complete entitlement set atomically. Its default provider must be included in that set. Grants, revocations, and default-provider changes are written to the database audit log using internal actor/target ids, action, timestamp, and optional provider slug; tokens and email addresses are not duplicated there.
 
 Use the token without writing its literal value into shell history. For the Touringen import:
 

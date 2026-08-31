@@ -881,6 +881,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("Ein Besuch kann auch ohne Datum und Uhrzeit eingetragen werden", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("den einzelnen Besuch nach einer Bestätigung vollständig löschen", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("die freigeschalteten Stempelanbieter", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Administrative Änderungen an Anbieterfreigaben", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Administrations-Token und E-Mail-Adressen werden nicht", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Mit der Kontolöschung werden die Anbieterfreigaben", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Die anonyme Kartenansicht ist ohne Benutzerkonto möglich", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);

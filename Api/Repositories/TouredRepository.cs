@@ -1,4 +1,5 @@
 using System.Drawing;
+using Api.Dto;
 using Api.Managers;
 using Microsoft.EntityFrameworkCore;
 using TourEd.Lib.Abstractions.Exceptions;
@@ -75,6 +76,138 @@ public class TouredRepository : IUserService
             .OrderBy(provider => provider.Name)
             .ThenBy(provider => provider.Slug)
             .ToListAsync();
+
+    public Task<List<AdminProviderDto>> GetAdminProvidersAsync(CancellationToken cancellationToken = default)
+        => _dbContext.StampingProviders.AsNoTracking()
+            .OrderBy(provider => provider.Name)
+            .ThenBy(provider => provider.Slug)
+            .Select(provider => new AdminProviderDto(provider.Id, provider.Slug, provider.Name, provider.Abbreviation))
+            .ToListAsync(cancellationToken);
+
+    public Task<List<AdminUserDto>> GetAdminUsersAsync(CancellationToken cancellationToken = default)
+        => _dbContext.Users.AsNoTracking()
+            .OrderBy(user => user.Email)
+            .ThenBy(user => user.Id)
+            .Select(user => new AdminUserDto(
+                user.Id,
+                user.Email,
+                user.GoogleSubject != null,
+                user.DefaultStampingProvider == null ? null : user.DefaultStampingProvider.Slug,
+                user.StampingProviders
+                    .OrderBy(access => access.StampingProvider.Name)
+                    .ThenBy(access => access.StampingProvider.Slug)
+                    .Select(access => access.StampingProvider.Slug)
+                    .ToList()))
+            .ToListAsync(cancellationToken);
+
+    public async Task<AdminUserDto?> UpdateAdminUserProvidersAsync(
+        int userId,
+        UpdateAdminUserProvidersRequestDto request,
+        int actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var requestedSlugs = request.Providers
+            .Select(slug => slug?.Trim().ToLowerInvariant())
+            .Where(slug => !string.IsNullOrWhiteSpace(slug))
+            .Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        if (requestedSlugs.Count != request.Providers.Count)
+        {
+            throw new InvalidDataException("Provider slugs must be non-empty and unique.");
+        }
+
+        var normalizedDefault = string.IsNullOrWhiteSpace(request.DefaultProvider)
+            ? null
+            : request.DefaultProvider.Trim().ToLowerInvariant();
+        if (normalizedDefault is not null && !requestedSlugs.Contains(normalizedDefault))
+        {
+            throw new InvalidDataException("The default provider must be included in Providers.");
+        }
+
+        var providers = await _dbContext.StampingProviders
+            .Where(provider => requestedSlugs.Contains(provider.Slug.ToLower()))
+            .ToListAsync(cancellationToken);
+        var foundSlugs = providers.Select(provider => provider.Slug.ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+        var unknownSlugs = requestedSlugs.Except(foundSlugs).Order().ToArray();
+        if (unknownSlugs.Length > 0)
+        {
+            throw new InvalidDataException($"Unknown provider(s): {string.Join(", ", unknownSlugs)}.");
+        }
+
+        var user = await _dbContext.Users
+            .Include(item => item.StampingProviders)
+            .ThenInclude(access => access.StampingProvider)
+            .SingleOrDefaultAsync(item => item.Id == userId, cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        var existingBySlug = user.StampingProviders.ToDictionary(
+            access => access.StampingProvider.Slug.ToLowerInvariant(),
+            StringComparer.Ordinal);
+        var removed = existingBySlug.Keys.Except(requestedSlugs).ToArray();
+        var added = requestedSlugs.Except(existingBySlug.Keys).ToArray();
+        var previousDefault = user.DefaultStampingProviderId;
+
+        _dbContext.UserStampingProviders.RemoveRange(removed.Select(slug => existingBySlug[slug]));
+        foreach (var slug in added)
+        {
+            user.StampingProviders.Add(new UserStampingProvider
+            {
+                UserId = user.Id,
+                StampingProvider = providers.Single(provider =>
+                    string.Equals(provider.Slug, slug, StringComparison.OrdinalIgnoreCase))
+            });
+        }
+
+        user.DefaultStampingProviderId = normalizedDefault is null
+            ? null
+            : providers.Single(provider =>
+                string.Equals(provider.Slug, normalizedDefault, StringComparison.OrdinalIgnoreCase)).Id;
+
+        foreach (var slug in removed)
+        {
+            _dbContext.AdminAuditEntries.Add(CreateAudit(actorUserId, "provider.revoked", userId, slug));
+        }
+        foreach (var slug in added)
+        {
+            _dbContext.AdminAuditEntries.Add(CreateAudit(actorUserId, "provider.granted", userId, slug));
+        }
+        if (previousDefault != user.DefaultStampingProviderId)
+        {
+            _dbContext.AdminAuditEntries.Add(CreateAudit(actorUserId, "default-provider.changed", userId, normalizedDefault));
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return await _dbContext.Users.AsNoTracking()
+            .Where(item => item.Id == userId)
+            .Select(item => new AdminUserDto(
+                item.Id,
+                item.Email,
+                item.GoogleSubject != null,
+                item.DefaultStampingProvider == null ? null : item.DefaultStampingProvider.Slug,
+                item.StampingProviders
+                    .OrderBy(access => access.StampingProvider.Name)
+                    .ThenBy(access => access.StampingProvider.Slug)
+                    .Select(access => access.StampingProvider.Slug)
+                    .ToList()))
+            .SingleAsync(cancellationToken);
+    }
+
+    private static AdminAuditEntry CreateAudit(
+        int actorUserId,
+        string action,
+        int targetUserId,
+        string? providerSlug)
+        => new()
+        {
+            CreatedAt = DateTime.UtcNow,
+            ActorUserId = actorUserId,
+            Action = action,
+            TargetUserId = targetUserId,
+            ProviderSlug = providerSlug
+        };
 
     public Task<List<StampingProvider>> GetStampingProvidersForUserAsync(
         int userId,

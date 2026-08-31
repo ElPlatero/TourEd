@@ -18,6 +18,7 @@ public class DataContext : DbContext
     public DbSet<User> Users { get; set; } = null!;
     public DbSet<UserStampingProvider> UserStampingProviders { get; set; } = null!;
     public DbSet<UserVisit> UserVisits { get; set; } = null!;
+    public DbSet<AdminAuditEntry> AdminAuditEntries { get; set; } = null!;
     
     
     protected override void OnConfiguring(DbContextOptionsBuilder options)
@@ -690,6 +691,16 @@ public class DataContext : DbContext
             dto.HasOne(p => p.StampingProvider).WithMany(p => p.Users)
                 .HasForeignKey(p => p.StampingProviderId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AdminAuditEntry>(dto =>
+        {
+            dto.HasKey(p => p.Id);
+            dto.Property(p => p.Id).ValueGeneratedOnAdd();
+            dto.Property(p => p.CreatedAt).HasDefaultValueSql("datetime('now')");
+            dto.Property(p => p.Action).IsRequired();
+            dto.HasIndex(p => p.CreatedAt);
+            dto.HasIndex(p => p.TargetUserId);
         });
 
         modelBuilder.Entity<UserVisit>(dto =>
