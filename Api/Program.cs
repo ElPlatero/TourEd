@@ -34,9 +34,8 @@ builder.Services
     }).Services
     .AddImportServices()
     .AddRepositories()
+    .AddManagers()
     .AddTransient<IUnitOfWork, UnitOfWork>()
-    .AddTransient<TourDataManager>()
-    .AddTransient<StampingProviderManager>()
     .AddTouredAuthentication(builder.Configuration)
     .AddTouredDataProtection(builder.Configuration)
     .AddSingleton<IHttpContextAccessor, HttpContextAccessor>()

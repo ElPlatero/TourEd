@@ -25,4 +25,12 @@ internal static class ServiceCollectionExtensions
         services.TryAddTransient<TouredRepository>();
         return services;
     }
+
+    public static IServiceCollection AddManagers(this IServiceCollection services)
+    {
+        services.TryAddTransient<AdminUserManager>();
+        services.TryAddTransient<TourDataManager>();
+        services.TryAddTransient<StampingProviderManager>();
+        return services;
+    }
 }

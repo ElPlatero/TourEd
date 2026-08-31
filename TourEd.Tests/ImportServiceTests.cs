@@ -44,6 +44,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("20260831133503_AddMalerwegProvider", migrations);
         Assert.Contains("20260831143217_AddSeedTrailProviders", migrations);
         Assert.Contains("20260831172419_AddUserStampingProviderEntitlements", migrations);
+        Assert.Contains("20260831181353_AddAdminAuditEntries", migrations);
         var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
         Assert.Equal(6, providers.Length);
         Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);

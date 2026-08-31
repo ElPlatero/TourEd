@@ -78,9 +78,9 @@ Normal user flow:
 
 Maintenance/admin flow:
 
-1. Admin uses `curl` or similar tooling.
-2. Admin calls import endpoints directly.
-3. No admin UI is expected or desired for normal use.
+1. Admin uses `curl` or the separately maintained local `TourEd.Admin` terminal client.
+2. The client calls only the CLI-protected HTTPS admin endpoints; it never accesses the database directly.
+3. No browser-based admin UI is expected or desired for normal use.
 
 Admin/import operations are intentionally terminal/API driven.
 
@@ -117,6 +117,8 @@ The backend follows a simple layered structure:
 - `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
 
 Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN, Malerweg (8 points), Schluchtensteig (6 points), Heidschnuckenweg (13 points), and Harzer Klosterwanderweg (16 points) each have one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. `UserStampingProvider` uses `(UserId, StampingProviderId)` as its unique key. Removing an entitlement hides its provider and visits without deleting visit rows; restoring it makes those visits visible again. Deleting a user cascades to entitlements.
+
+Administrative entitlement changes are recorded in `AdminAuditEntry` with timestamp, actor and target internal user ids, action, and optional provider slug. Tokens and email addresses are not copied into the audit table.
 
 `StampingProvider` also stores the public name, abbreviation, description, optional website, legacy anonymous-access/data-readiness flag, and optional imported-data provenance used by the provider catalog and GeoJSON export. Provenance includes source and licence links, attribution, source revision/timestamp, and import timestamp. Public provider DTOs expose only absolute HTTP(S) URLs; unsupported URI schemes are omitted. Browser catalogs, points, tours, visits, search data and GeoJSON exports are always restricted by user entitlements.
 
@@ -234,6 +236,16 @@ Other endpoints:
   - Upserts one or more stamping points (e.g. temporary Sonderstempel) from a JSON payload.
   - Existing points matched by `(series, number)` or `(provider, externalId)` are updated in place while retaining internal IDs and user visits; new points are created.
   - Requires the dedicated CLI bearer token and is intended for manual/admin use.
+- `GET /api/admin/users`
+  - Lists existing users with Google-link state, provider entitlements, and optional entitled default provider.
+  - Requires the dedicated CLI bearer token.
+- `GET /api/admin/providers`
+  - Lists every provider for administrative entitlement editing, independent of the CLI identity's own entitlements.
+  - Requires the dedicated CLI bearer token.
+- `PUT /api/admin/users/{id}/providers`
+  - Atomically replaces one user's provider entitlement set and optional default provider; the default must belong to the submitted set.
+  - Writes minimal audit entries for grants, revocations, and default-provider changes and preserves all visit rows.
+  - Requires the dedicated CLI bearer token.
 
 ## Development Notes
 
