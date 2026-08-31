@@ -51,7 +51,7 @@ public sealed record StampingPointGeoJsonFeatureDto(
 public sealed record StampingPointGeoJsonGeometryDto(string Type, decimal[] Coordinates);
 
 public sealed record StampingPointGeoJsonPropertiesDto(
-    int Number,
+    int? Number,
     string Name,
     string Provider,
     string Reference);

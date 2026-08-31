@@ -6,7 +6,7 @@ TourEd is a small .NET 10 application for stamping points and hiking tours from 
 
 It stores Touringen and Harzer Wandernadel (HWN) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
-Stamping points are anchored by `StampingProvider`. Each provider declares an abbreviation and whether its data is available anonymously. Touringen allows anonymous access. Harzer Wandernadel becomes anonymously available only after its first complete OSM import. Users store a `DefaultStampingProviderId` that currently defaults to Touringen.
+Stamping points are anchored by `StampingProvider` and belong to a provider-scoped `StampingSeries`. A series supplies the number namespace, so equally numbered points from different editions remain distinct. Each provider declares an abbreviation and whether its data is available anonymously. Touringen allows anonymous access. Harzer Wandernadel becomes anonymously available only after its first complete OSM import. Users store a `DefaultStampingProviderId` that currently defaults to Touringen.
 
 ## Frontend
 
@@ -38,7 +38,7 @@ The page calls the backend with relative URLs:
   - Used when `auth/session` reports an authenticated cookie session.
   - Loads visited points from every integrated provider into the in-memory frontend cache.
 
-The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All available providers are selected after each page initialization, `Alle` and `Keine` provide bulk selection, and an empty selection renders zero points. Provider names and abbreviations are used in point details because point numbers are provider-scoped. Provider information also exposes recorded source/licence metadata and a public GeoJSON download when available. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
+The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All available providers are selected after each page initialization, `Alle` and `Keine` provide bulk selection, and an empty selection renders zero points. Provider names, abbreviations, and non-standard series names are used in point details because point numbers are series-scoped and may be absent for temporary stamps. Visit mutations use the stable internal point id together with the provider slug. Provider information also exposes recorded source/licence metadata and a public GeoJSON download when available. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
 
 Authenticated users can record a stamp directly from a locked point-detail dialog using large, square action tiles with dedicated icons and concise labels ('Jetzt stempeln', 'Nachtragen', 'Bearbeiten', 'Entfernen'), either with the current local date and time or with no timestamp, a date only, or a date plus time. Existing stamps allow editing only their optional date/time and can be removed after a point-specific confirmation. Every visit request includes the provider slug. Successful mutations update the cached point and marker layer without a full page reload; anonymous users see a login link instead of write controls.
 
@@ -116,7 +116,7 @@ The backend follows a simple layered structure:
 - `DataContext` defines SQLite-backed EF Core mappings.
 - `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
 
-Provider data is represented by `StampingProvider`. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
+Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN has one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. Existing users and newly created users default to the Touringen provider through `User.DefaultStampingProviderId`.
 
 `StampingProvider` also stores the public name, abbreviation, description, optional website, anonymous-access flag, and optional imported-data provenance used by the provider catalog and GeoJSON export. Provenance includes source and licence links, attribution, source revision/timestamp, and import timestamp. Public provider DTOs expose only absolute HTTP(S) URLs; unsupported URI schemes are omitted. Anonymous catalogs and point queries omit providers whose anonymous-access flag is false.
 
@@ -147,20 +147,20 @@ Runtime configuration uses `Authentication__Google__ClientId`, `Authentication__
 
 Touringen data import:
 
-- Fetches `https://www.touringen.de/stempelstellen`.
-- Extracts an embedded JavaScript `dmos` JSON string.
-- Deserializes raw areas, tours, and stamp points.
-- Normalizes multiple Touringen source ids for the same provider-scoped stamping point number to one database-generated internal id.
-- Stores the highest source id as the point's current external id and maps every source alias in the import payload to the normalized point.
-- Maps all hiking-tour relationships for those source aliases to the normalized stamping point id.
+- Downloads Touringen's three official GPX archives and requires exactly 430 Standard, 8 Naturschätze, and 13 Familienwanderwege Rhön points with complete, non-duplicated number ranges.
+- Uses an explicit verified name-to-number correction map for Naturschätze because that archive omits its public numbers. Unknown names fail the import instead of being guessed.
+- Fetches `https://www.touringen.de/stempelstellen`, extracts the embedded JavaScript `dmos` JSON string, and uses it only for hiking-tour relationships among standard points; the verified Naturschätze area ids 102 through 109 are explicitly excluded from that legacy relationship source.
+- Updates points by series and number while retaining their database-generated internal ids and visits. The distinct series namespaces prevent special-edition points 1 through 8 from overwriting standard points 1 through 8.
+- Before correcting standard points 1 through 8, refuses the import if a differing existing point has visits; those visits must first be explicitly assigned to Standard or Naturschätze.
+- Seeds a variable temporary Sonderstempel series with optional point validity dates. The current Sonderstempel page is not imported automatically because it has no complete stable machine-readable point source and does not publish coordinates for every current stamp.
 - Records import metadata.
-- Touringen is not currently imported from OSM because relation 14773147 has 430 members but only 429 distinct nodes: regular point 309 is missing and node 379 is duplicated. Equally numbered “Thüringer Naturschätze” special points also currently overwrite regular Touringen points 1 through 8. Keep the existing Touringen source until those OSM data issues are resolved; any later OSM migration must preserve and verify existing visit assignments.
+- Touringen is not currently imported from OSM because relation 14773147 has 430 members but only 429 distinct nodes: regular point 309 is missing and node 379 is duplicated. Keep the official Touringen GPX source until those OSM data issues are resolved; any later OSM migration must preserve and verify existing visit assignments.
 
 Harzer Wandernadel data import:
 
 - Reads the direct node members of OSM relation 148007 and uses OSM as the sole source for HWN point number, name, and coordinates.
 - Accepts exactly the 222 regular numbered points HWN 1 through HWN 222; child relations, Sonderstempel, temporary points, and the winter alternative for HWN 69 are excluded.
-- Updates points by provider and number while retaining their internal ids and user visits.
+- Updates points by series and number while retaining their internal ids and user visits.
 - Atomically records OSM provenance/licence metadata, records the import, and enables anonymous HWN access only after the complete validated point update succeeds.
 - Is started manually through the CLI-protected admin endpoint; no schedule or workflow triggers it automatically.
 
@@ -187,7 +187,7 @@ Useful query behavior:
 - Requests with `vis=true` or `vis=false` return `401` when no valid cookie identity with internal user claims is present.
 - Geo filtering exists via query parameters and is used server-side.
 
-Point DTOs include provider name, slug, and abbreviation together with number, name, position, explicit visit state, optional visit date/time, and tours.
+Point DTOs include a stable internal id, provider and series metadata, optional number, name, position, explicit visit state, optional visit date/time, and tours.
 
 Visit state is represented independently from its optional timestamp: `isVisited` reports whether a visit row exists, `visitedOn` is the optional date, and `visitedAt` is the optional time. A time requires a date. The persistence model retains the nullable legacy `Visited` value and uses `HasVisitedTime` to distinguish a date-only value from a precise time; user and stamping-point ids form a unique visit key.
 
@@ -208,13 +208,15 @@ Other endpoints:
   - Exists for hiking tour queries.
   - Not currently used by the bundled HTML map.
 - `GET /api/points/{number}?provider={slug}`
-  - Returns the authenticated user's visit details for one provider-scoped point.
+  - Returns the authenticated user's visit details for one point; `series={slug}` selects its provider-scoped series and defaults to `standard`.
 - `PUT /api/points/{number}?provider={slug}`
-  - Creates one visit with optional `visitedOn` and `visitedAt`; duplicates return `409`.
+  - Creates one visit with optional `visitedOn` and `visitedAt`; `series={slug}` selects the series and defaults to `standard`; duplicates return `409`.
 - `PATCH /api/points/{number}?provider={slug}`
   - Changes only the optional date/time of an existing visit.
 - `DELETE /api/points/{number}?provider={slug}`
   - Deletes an existing visit. The bundled frontend asks for confirmation before calling it.
+- `GET|PUT|PATCH|DELETE /api/points/id/{id}?provider={slug}`
+  - Stable-id equivalents used by the bundled frontend, including for temporary points without a public number.
 - `POST /api/admin/imports/touringen`
   - Imports Touringen source data.
   - Requires the dedicated CLI bearer token and is intended for manual/admin use.

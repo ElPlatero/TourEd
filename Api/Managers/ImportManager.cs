@@ -14,28 +14,32 @@ namespace Api.Managers;
 
 public partial class ImportManager : IImportManager
 {
+    private static readonly HashSet<int> TouringenNaturalTreasureAreaIds = [102, 103, 104, 105, 106, 107, 108, 109];
     private readonly Func<User?> _getCurrentUser;
     private readonly IHtmlParsingService _htmlParser;
     private readonly IHarzerWandernadelImportService _harzerWandernadelImporter;
-    private readonly IImportService<StampingPoint> _stampingPointsImporter;
+    private readonly ITouringenStampingPointImportService _touringenStampingPointImporter;
     private readonly IImportService<HikingTour> _hikingToursImporter;
     private readonly TouredRepository _repository;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<StampingPoint> stampingPointsImporter, IImportService<HikingTour> hikingToursImporter, TouredRepository repository)
+    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, TouredRepository repository)
     {
         _getCurrentUser = () => httpContextAccessor.HttpContext?.User.GetUser();
         _htmlParser = htmlParser;
         _harzerWandernadelImporter = harzerWandernadelImporter;
-        _stampingPointsImporter = stampingPointsImporter;
+        _touringenStampingPointImporter = touringenStampingPointImporter;
         _hikingToursImporter = hikingToursImporter;
         _repository = repository;
         _configuration = options.Value;
     }
 
-    public async Task ImportTouringenDataAsync()
+    public async Task ImportTouringenDataAsync(CancellationToken cancellationToken = default)
     {
-        var rawData = await _htmlParser.GetRawDmoStringAsync(_configuration.StempelstellenUri);
+        var rawDataTask = _htmlParser.GetRawDmoStringAsync(_configuration.StempelstellenUri);
+        var stampingPointSnapshotTask = _touringenStampingPointImporter.DownloadStampingPointsAsync(cancellationToken);
+        await Task.WhenAll(rawDataTask, stampingPointSnapshotTask);
+        var rawData = await rawDataTask;
         if (string.IsNullOrWhiteSpace(rawData))
         {
             throw new SerializationException("no data");
@@ -47,20 +51,29 @@ public partial class ImportManager : IImportManager
             throw new SerializationException("no data");
         }
 
-        var stampingPoints = _stampingPointsImporter.Import(importData).ToArray();
+        var stampingPoints = (await stampingPointSnapshotTask).Points.ToArray();
+        var standardImportData = importData
+            .Where(area => !TouringenNaturalTreasureAreaIds.Contains(area.Id))
+            .ToArray();
+        var ambiguousVisitedNumbers = await _repository.GetAmbiguousVisitedTouringenNumbersAsync(stampingPoints, cancellationToken);
+        if (ambiguousVisitedNumbers.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Touringen points {string.Join(", ", ambiguousVisitedNumbers)} contain visits but differ from the canonical standard GPX data. Resolve whether those visits belong to the standard or Naturschätze series before importing.");
+        }
         var savedStampingPoints = await _repository.SaveStampingPointsAsync(stampingPoints);
         var stampingPointIdsByNumber = savedStampingPoints
-            .Where(p => p.ProviderId == StampingProvider.TouringenId)
-            .ToDictionary(p => p.Number, p => p.Id);
-        var stampingPointIdsByExternalId = importData
+            .Where(p => p.SeriesId == StampingSeries.TouringenStandardId && p.Number.HasValue)
+            .ToDictionary(p => p.Number!.Value, p => p.Id);
+        var stampingPointIdsByExternalId = standardImportData
             .SelectMany(p => p.Touren.SelectMany(q => q.StampPoints))
-            .Union(importData.SelectMany(p => p.OrphanedStampPoints))
+            .Union(standardImportData.SelectMany(p => p.OrphanedStampPoints))
             .DistinctBy(p => p.Id)
             .ToDictionary(
                 p => p.Id.ToString(CultureInfo.InvariantCulture),
                 p => stampingPointIdsByNumber[p.StampPointNumber]);
 
-        var hikingTours = _hikingToursImporter.Import(importData).ToArray();
+        var hikingTours = _hikingToursImporter.Import(standardImportData).ToArray();
         foreach (var hikingTour in hikingTours)
         {
             hikingTour.StampingPoints = hikingTour.StampingPoints.Select(point => new SortedStampingPoint(point.Position)
@@ -79,7 +92,8 @@ public partial class ImportManager : IImportManager
     {
         var snapshot = await _harzerWandernadelImporter.DownloadStampingPointsAsync(cancellationToken);
         var expectedNumbers = Enumerable.Range(1, 222);
-        if (!snapshot.Points.Select(point => point.Number).OrderBy(number => number).SequenceEqual(expectedNumbers))
+        if (snapshot.Points.Count != 222 ||
+            !snapshot.Points.Where(point => point.Number.HasValue).Select(point => point.Number!.Value).OrderBy(number => number).SequenceEqual(expectedNumbers))
         {
             throw new InvalidDataException("The HWN import must contain every regular number from 1 through 222 exactly once.");
         }
@@ -103,7 +117,13 @@ public partial class ImportManager : IImportManager
         }
 
         var providerFilter = await _repository.GetStampingProviderFilterAsync(userId: user.Id);
-        var stampingPointsMap = (await _repository.GetStampingPointsAsync(providerFilter: providerFilter, stampingPointsNr: visits.Select(p => p.StampingPointNumber).ToArray())).Select(p => p.Point).ToDictionary(p => p.Number);
+        var stampingPointsMap = (await _repository.GetStampingPointsAsync(
+                providerFilter: providerFilter,
+                seriesSlug: StampingSeries.TouringenStandardSlug,
+                stampingPointsNr: visits.Select(p => p.StampingPointNumber).ToArray()))
+            .Select(p => p.Point)
+            .Where(point => point.Number.HasValue)
+            .ToDictionary(point => point.Number!.Value);
         List<UserVisit> importedVisits = new();
         foreach (var visit in visits)
         {

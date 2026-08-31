@@ -260,7 +260,7 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
         public string? AuthenticationType { get; private set; }
         public Claim[] Claims { get; private set; } = [];
 
-        public Task ImportTouringenDataAsync()
+        public Task ImportTouringenDataAsync(CancellationToken cancellationToken = default)
         {
             CapturePrincipal();
             Interlocked.Increment(ref _touringenImportCount);

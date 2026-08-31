@@ -65,9 +65,9 @@ public class TouredRepository : IUserService
             .ThenBy(provider => provider.Slug)
             .ToListAsync();
 
-    public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
+    public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, string? seriesSlug = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
     {
-        IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking();
+        IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking().Include(point => point.Series);
         if (providerFilter is { IsAnonymousOnly: true })
         {
             query = query.Where(point => point.Provider.IsAnonymousAccessAllowed);
@@ -75,6 +75,11 @@ public class TouredRepository : IUserService
         else if (providerFilter is { IncludesAllProviders: false, ProviderId: { } providerId })
         {
             query = query.Where(p => p.ProviderId == providerId);
+        }
+        if (!string.IsNullOrWhiteSpace(seriesSlug))
+        {
+            var normalizedSeriesSlug = seriesSlug.Trim().ToLowerInvariant();
+            query = query.Where(point => point.Series.Slug.ToLower() == normalizedSeriesSlug);
         }
 
         if (!string.IsNullOrWhiteSpace(nameFilter))
@@ -84,7 +89,7 @@ public class TouredRepository : IUserService
 
         if (stampingPointsNr.Length > 0)
         {
-            query = query.Where(p => stampingPointsNr.Contains(p.Number));
+            query = query.Where(p => p.Number.HasValue && stampingPointsNr.Contains(p.Number.Value));
         }
 
         var result = from point in query
@@ -106,8 +111,9 @@ public class TouredRepository : IUserService
             dto = dto.Where(p => Position.GetDistance(p.Point.Position, geoFilter.Value.Centre) < geoFilter.Value.Radius).ToList();
         }
         var providers = await GetStampingProvidersAsync(dto.Select(p => p.Point.ProviderId));
+        var series = await GetStampingSeriesAsync(dto.Select(p => p.Point.SeriesId));
         return dto.Select(p =>
-            (p.Point with { Provider = providers[p.Point.ProviderId] },
+            (p.Point with { Provider = providers[p.Point.ProviderId], Series = series[p.Point.SeriesId] },
                 p.Tours.Any(q => q != null) ? p.Tours : null,
                 (UserVisit?) p.UserVisit)).ToList();
     }
@@ -133,8 +139,9 @@ public class TouredRepository : IUserService
             dto = dto.Where(p => p.Points.Any(point => Position.GetDistance(point.Position, circularRange.Value.Centre) < circularRange.Value.Range)).ToList();
         }
         var providers = await GetStampingProvidersAsync(dto.SelectMany(p => p.Points).Select(p => p.ProviderId));
+        var series = await GetStampingSeriesAsync(dto.SelectMany(p => p.Points).Select(p => p.SeriesId));
         return dto.Select(p =>
-            (p.Tour, p.Points.Select(point => point with { Provider = providers[point.ProviderId] }).ToList())).ToList();
+            (p.Tour, p.Points.Select(point => point with { Provider = providers[point.ProviderId], Series = series[point.SeriesId] }).ToList())).ToList();
     }
 
     private async Task<Dictionary<int, StampingProvider>> GetStampingProvidersAsync(IEnumerable<int> providerIds)
@@ -144,6 +151,14 @@ public class TouredRepository : IUserService
             .Where(provider => ids.Contains(provider.Id))
             .ToDictionaryAsync(provider => provider.Id);
     }
+
+    private async Task<Dictionary<int, StampingSeries>> GetStampingSeriesAsync(IEnumerable<int> seriesIds)
+    {
+        var ids = seriesIds.Distinct().ToArray();
+        return await _dbContext.StampingSeries.AsNoTracking()
+            .Where(series => ids.Contains(series.Id))
+            .ToDictionaryAsync(series => series.Id);
+    }
     
     public async Task<IReadOnlyList<StampingPoint>> SaveStampingPointsAsync(params StampingPoint[] points)
     {
@@ -152,19 +167,46 @@ public class TouredRepository : IUserService
             return Array.Empty<StampingPoint>();
         }
 
-        var importedPoints = points.ToDictionary(p => (p.ProviderId, p.Number));
-        var providerIds = importedPoints.Keys.Select(p => p.ProviderId).Distinct().ToArray();
+        var importedNumberedPoints = points
+            .Where(point => point.Number.HasValue)
+            .ToDictionary(point => (point.SeriesId, Number: point.Number!.Value));
+        var importedUnnumberedPoints = points
+            .Where(point => !point.Number.HasValue)
+            .ToDictionary(point => (point.ProviderId, point.ExternalId));
+        _ = points.ToDictionary(point => (point.ProviderId, point.ExternalId));
+        var seriesIds = points.Select(point => point.SeriesId).Distinct().ToArray();
+        var providerIds = points.Select(point => point.ProviderId).Distinct().ToArray();
         var existingPoints = await _dbContext.StampingPoints.AsNoTracking()
-            .Where(p => providerIds.Contains(p.ProviderId))
-            .ToDictionaryAsync(p => new { p.ProviderId, p.Number });
-        var savedPoints = new List<StampingPoint>(importedPoints.Count);
+            .Where(point => seriesIds.Contains(point.SeriesId) || providerIds.Contains(point.ProviderId))
+            .ToArrayAsync();
+        var existingNumberedPoints = existingPoints
+            .Where(point => point.Number.HasValue)
+            .ToDictionary(point => (point.SeriesId, Number: point.Number!.Value));
+        var existingPointsByExternalId = existingPoints
+            .ToDictionary(point => (point.ProviderId, point.ExternalId));
+        var savedPoints = new List<StampingPoint>(points.Length);
 
-        foreach (var (key, importedPoint) in importedPoints)
+        foreach (var (key, importedPoint) in importedNumberedPoints)
         {
-            var pointToSave = existingPoints.TryGetValue(new { key.ProviderId, key.Number }, out var existingPoint)
+            var pointToSave = (existingNumberedPoints.TryGetValue(key, out var existingPoint) ||
+                               existingPointsByExternalId.TryGetValue((importedPoint.ProviderId, importedPoint.ExternalId), out existingPoint))
                 ? importedPoint with { Id = existingPoint.Id }
                 : importedPoint with { Id = default };
 
+            await SavePointAsync(pointToSave);
+        }
+
+        foreach (var (key, importedPoint) in importedUnnumberedPoints)
+        {
+            var pointToSave = existingPointsByExternalId.TryGetValue(key, out var existingPoint)
+                ? importedPoint with { Id = existingPoint.Id }
+                : importedPoint with { Id = default };
+
+            await SavePointAsync(pointToSave);
+        }
+
+        async Task SavePointAsync(StampingPoint pointToSave)
+        {
             if (pointToSave.Id == default)
             {
                 await _dbContext.AddAsync(pointToSave);
@@ -180,6 +222,32 @@ public class TouredRepository : IUserService
         await _dbContext.SaveChangesAsync();
         savedPoints.ForEach(p => _dbContext.Entry(p).State = EntityState.Detached);
         return savedPoints;
+    }
+
+    public async Task<IReadOnlyList<int>> GetAmbiguousVisitedTouringenNumbersAsync(
+        IReadOnlyCollection<StampingPoint> importedStandardPoints,
+        CancellationToken cancellationToken = default)
+    {
+        var canonicalPoints = importedStandardPoints
+            .Where(point => point.SeriesId == StampingSeries.TouringenStandardId && point.Number is >= 1 and <= 8)
+            .ToDictionary(point => point.Number!.Value);
+        if (canonicalPoints.Count == 0) return [];
+
+        var numbers = canonicalPoints.Keys.ToArray();
+        var existingPoints = await _dbContext.StampingPoints.AsNoTracking()
+            .Where(point => point.SeriesId == StampingSeries.TouringenStandardId &&
+                            point.Number.HasValue && numbers.Contains(point.Number.Value) &&
+                            _dbContext.UserVisits.Any(visit => visit.StampingPointId == point.Id))
+            .ToArrayAsync(cancellationToken);
+
+        return existingPoints
+            .Where(existing => existing.Number.HasValue && canonicalPoints.TryGetValue(existing.Number.Value, out var canonical) &&
+                               (existing.Name != canonical.Name ||
+                                existing.Longitude != canonical.Longitude ||
+                                existing.Latitude != canonical.Latitude))
+            .Select(point => point.Number!.Value)
+            .OrderBy(number => number)
+            .ToArray();
     }
 
     public async Task SaveStampingPointSourceImportAsync(
@@ -313,15 +381,39 @@ public class TouredRepository : IUserService
     public async Task<UserVisit?> GetUserVisitOrDefaultAsync(User currentUser, int stampingPointId) 
         => await _dbContext.UserVisits.FirstOrDefaultAsync(p => p.StampingPointId == stampingPointId && p.UserId == currentUser.Id);
 
-    public async Task<StampingPoint> GetStampingPointAsync(int stampingPointNumber, StampingProviderFilter providerFilter)
+    public async Task<StampingPoint> GetStampingPointAsync(int stampingPointNumber, StampingProviderFilter providerFilter, string? seriesSlug = null)
     {
         if (providerFilter.IncludesAllProviders)
         {
             throw new NotSupportedException("A single stamping point lookup requires one provider.");
         }
 
-        return await _dbContext.StampingPoints.Include(p => p.Provider).FirstOrDefaultAsync(p => p.Number == stampingPointNumber && p.ProviderId == providerFilter.ProviderId)
+        var normalizedSeriesSlug = seriesSlug?.Trim().ToLowerInvariant();
+        var query = _dbContext.StampingPoints.Include(p => p.Provider).Include(p => p.Series)
+            .Where(p => p.Number == stampingPointNumber && p.ProviderId == providerFilter.ProviderId);
+        if (!string.IsNullOrWhiteSpace(normalizedSeriesSlug))
+        {
+            query = query.Where(point => point.Series.Slug.ToLower() == normalizedSeriesSlug);
+        }
+        else
+        {
+            query = query.Where(point => point.Series.Slug == StampingSeries.TouringenStandardSlug);
+        }
+
+        return await query.FirstOrDefaultAsync()
                ?? throw EntityNotFoundException.Create<StampingPoint>(stampingPointNumber);
+    }
+
+    public async Task<StampingPoint> GetStampingPointByIdAsync(int stampingPointId, StampingProviderFilter providerFilter)
+    {
+        if (providerFilter.IncludesAllProviders)
+        {
+            throw new NotSupportedException("A single stamping point lookup requires one provider.");
+        }
+
+        return await _dbContext.StampingPoints.Include(point => point.Provider).Include(point => point.Series)
+                   .FirstOrDefaultAsync(point => point.Id == stampingPointId && point.ProviderId == providerFilter.ProviderId)
+               ?? throw EntityNotFoundException.Create<StampingPoint>(stampingPointId);
     }
 
     public async Task AddUserVisitAsync(User currentUser, int stampingPointId, DateTime? visited, bool hasVisitedTime)

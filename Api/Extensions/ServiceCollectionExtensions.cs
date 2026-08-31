@@ -13,7 +13,6 @@ internal static class ServiceCollectionExtensions
     public static IServiceCollection AddImportServices(this IServiceCollection services)
     {
         services.TryAddTransient<IHtmlParsingService, HtmlParsingService>();
-        services.TryAddTransient<IImportService<StampingPoint>, StampingPointImportService>();
         services.TryAddTransient<IImportService<HikingTour>, HikingToursImportService>();
         services.TryAddTransient<IImportManager, ImportManager>();
         return services;

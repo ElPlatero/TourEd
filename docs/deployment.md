@@ -88,7 +88,7 @@ sudo chmod 0600 /etc/toured-api.env
 unset TOURED_GOOGLE_CLIENT_SECRET
 ```
 
-`DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` has no trailing slash. `touringen__StempelstellenUri` supplies the source used by the terminal-driven Touringen import.
+`DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` has no trailing slash. The checked-in `touringen` settings supply the official Touringen page and GPX archive URLs used by the terminal-driven import; deployments normally override only `touringen__StempelstellenUri` if necessary.
 
 The reverse proxy must preserve the `/toured` prefix and send the original host and HTTPS protocol through forwarded headers. For nginx, a location with a path base uses `proxy_pass` without a trailing slash:
 

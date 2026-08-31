@@ -471,9 +471,17 @@
         .replace(/\s+/g, " ")
         .trim();
 
-    const getPointNumberLabel = point => point.provider?.abbreviation
-        ? `${point.provider.abbreviation} ${point.number}`
-        : `Stempelstelle ${point.number}`;
+    const getPointNumberLabel = point => {
+        if (point.number === null || point.number === undefined) {
+            return point.series?.name ?? "Sonderstempel";
+        }
+        const prefix = point.provider?.abbreviation
+            ? `${point.provider.abbreviation} ${point.number}`
+            : `Stempelstelle ${point.number}`;
+        return point.series?.slug && point.series.slug !== "standard"
+            ? `${point.series.name} ${point.number}`
+            : prefix;
+    };
 
     const getSearchablePoints = () => Object.values(VisitState).flatMap(visitState =>
         app.pointCache[visitState]
@@ -532,10 +540,14 @@
             .map(result => {
                 const point = result.point;
                 const numberLabel = getPointNumberLabel(point);
-                const compactNumber = `${point.provider?.abbreviation ?? ""}${point.number}`;
+                const compactNumber = point.number === null || point.number === undefined
+                    ? ""
+                    : `${point.provider?.abbreviation ?? ""}${point.number}`;
                 const haystack = normalizeSearchText([
                     point.name,
                     point.number,
+                    point.series?.name,
+                    point.series?.slug,
                     numberLabel,
                     compactNumber,
                     point.provider?.name,
@@ -636,7 +648,7 @@
 
     const sendVisitRequest = async (method, stampingPoint, body) => {
         const provider = encodeURIComponent(stampingPoint.provider.slug);
-        const response = await fetch(`api/points/${stampingPoint.number}?provider=${provider}`, {
+        const response = await fetch(`api/points/id/${stampingPoint.id}?provider=${provider}`, {
             method,
             headers: body === undefined
                 ? { "Accept": "application/json" }
@@ -718,8 +730,7 @@
         return { text, dateTime };
     };
 
-    const pointMatches = (left, right) => left.number === right.number
-        && left.provider?.slug === right.provider?.slug;
+    const pointMatches = (left, right) => left.id === right.id;
 
     const updatePointVisit = (feature, isVisited, visitedOn = null, visitedAt = null) => {
         const stampingPoint = feature.stampingPoint;
@@ -893,12 +904,10 @@
     const showInfo = (feature, pixel, locked) => {
         const stampingPoint = feature.stampingPoint;
         const visitState = feature.visitState;
-        elements.pointNumber.textContent = stampingPoint.provider?.abbreviation
-            ? `${stampingPoint.provider.abbreviation} ${stampingPoint.number}`
-            : `Stempelstelle ${stampingPoint.number}`;
+        elements.pointNumber.textContent = getPointNumberLabel(stampingPoint);
         elements.pointName.textContent = stampingPoint.name;
         elements.pointProvider.textContent = stampingPoint.provider?.name
-            ? `Anbieter: ${stampingPoint.provider.name}`
+            ? `Anbieter: ${stampingPoint.provider.name}${stampingPoint.series?.slug !== "standard" ? ` · ${stampingPoint.series.name}` : ""}`
             : "Anbieter nicht angegeben";
         elements.pointStatus.textContent = visitState === VisitState.visited
             ? "✓ Gestempelt"
@@ -1000,9 +1009,7 @@
         if (!stampingPoint) {
             return;
         }
-        const label = stampingPoint.provider?.abbreviation
-            ? `${stampingPoint.provider.abbreviation} ${stampingPoint.number}`
-            : `Stempelstelle ${stampingPoint.number}`;
+        const label = getPointNumberLabel(stampingPoint);
         elements.deleteVisitMessage.textContent = `Soll dein Stempeleintrag bei ${label} – ${stampingPoint.name} wirklich entfernt werden?`;
         elements.deleteVisitDialog.showModal();
         elements.cancelDeleteVisitButton.focus({ preventScroll: true });

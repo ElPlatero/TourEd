@@ -89,7 +89,10 @@ public sealed partial class HarzerWandernadelImportService : IHarzerWandernadelI
                 number,
                 number,
                 StampingProvider.HarzerWandernadelId,
-                $"osm-node-{nodeId}");
+                $"osm-node-{nodeId}")
+            {
+                SeriesId = StampingSeries.HarzerWandernadelStandardId
+            };
             GetOrAdd(candidatesByNumber, number).Add(point);
         }
 
