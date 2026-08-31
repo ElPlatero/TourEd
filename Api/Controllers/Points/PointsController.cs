@@ -8,7 +8,7 @@ using TourEd.Lib.Extensions;
 
 namespace Api.Controllers.Points;
 
-[ApiController, Route("api/[controller]")]
+[Authorize, ApiController, Route("api/[controller]")]
 public class PointsController : ControllerBase
 {
     private readonly TourDataManager _manager;
@@ -22,20 +22,14 @@ public class PointsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetStampingPoints([FromQuery] StampingPointQuery query)
     {
-        User? currentUser = null;
-        if (User.Identity?.IsAuthenticated == true && !User.TryGetUser(out currentUser))
-        {
-            return Unauthorized();
-        }
-
-        if (query.ShowVisited != null && currentUser is null)
+        if (!User.TryGetUser(out var currentUser))
         {
             return Unauthorized();
         }
 
         try
         {
-            var result = await _manager.GetStampingPointsAsync(query.Provider, currentUser?.Id, query.GetGeoFilterOrDefault(), query.GetUserFilterOrDefault(currentUser));
+            var result = await _manager.GetStampingPointsAsync(query.Provider, currentUser.Id, query.GetGeoFilterOrDefault(), query.GetUserFilterOrDefault(currentUser));
             return Ok(new GetStampingPointsResponse(result.Count, result.OrderBy(p => p.Point.Provider.Slug).ThenBy(p => p.Point.Series.Slug).ThenBy(p => p.Point.Number.HasValue ? 0 : 1).ThenBy(p => p.Point.Number).ThenBy(p => p.Point.Name).Select(CreateDto)));
         }
         catch (EntityNotFoundException)
