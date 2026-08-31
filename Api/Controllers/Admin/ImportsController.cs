@@ -53,7 +53,14 @@ public class ImportsController : ControllerBase
         using (unitOfWork)
         await using (var stream = csvImport[0].OpenReadStream())
         {
-            await _importManager.ImportUserDataAsync(stream);
+            try
+            {
+                await _importManager.ImportUserDataAsync(stream);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden);
+            }
             await unitOfWork.CommitAsync();
         }
 

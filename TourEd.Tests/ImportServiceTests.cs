@@ -43,6 +43,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("20260831112919_AddStampingSeries", migrations);
         Assert.Contains("20260831133503_AddMalerwegProvider", migrations);
         Assert.Contains("20260831143217_AddSeedTrailProviders", migrations);
+        Assert.Contains("20260831172419_AddUserStampingProviderEntitlements", migrations);
         var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
         Assert.Equal(6, providers.Length);
         Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);
@@ -71,6 +72,34 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(6, series.Single(item => item.Id == StampingSeries.SchluchtensteigStandardId).ExpectedPointCount);
         Assert.Equal(13, series.Single(item => item.Id == StampingSeries.HeidschnuckenwegStandardId).ExpectedPointCount);
         Assert.Equal(16, series.Single(item => item.Id == StampingSeries.HarzerKlosterwanderwegStandardId).ExpectedPointCount);
+    }
+
+    [Fact]
+    public async Task EntitlementMigrationCanBeRolledBackWithUsersThatHaveNoDefaultProvider()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
+            })
+            .Build();
+        await using var context = new DataContext(configuration);
+        await context.Database.MigrateAsync();
+        context.Users.Add(new User { Email = "rollback@example.test" });
+        await context.SaveChangesAsync();
+
+        await context.Database.MigrateAsync("20260831143217_AddSeedTrailProviders");
+
+        var connection = context.Database.GetDbConnection();
+        await connection.OpenAsync();
+        await using var defaultProviderCommand = connection.CreateCommand();
+        defaultProviderCommand.CommandText =
+            "SELECT DefaultStampingProviderId FROM Users WHERE Email = 'rollback@example.test';";
+        Assert.Equal(StampingProvider.TouringenId, Convert.ToInt32(await defaultProviderCommand.ExecuteScalarAsync()));
+        await using var tableCommand = connection.CreateCommand();
+        tableCommand.CommandText =
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'UserStampingProviders';";
+        Assert.Equal(0, Convert.ToInt32(await tableCommand.ExecuteScalarAsync()));
     }
 
     [Fact]
@@ -123,6 +152,43 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(StampingProvider.TouringenId, point.ProviderId);
         Assert.Equal("42", point.ExternalId);
         Assert.Equal(StampingSeries.TouringenStandardId, point.SeriesId);
+        var providerAccess = await context.UserStampingProviders
+            .Where(access => access.UserId == user.Id)
+            .OrderBy(access => access.StampingProviderId)
+            .ToArrayAsync();
+        Assert.Equal(6, providerAccess.Length);
+        Assert.Equal(Enumerable.Range(1, 6), providerAccess.Select(access => access.StampingProviderId));
+
+        var newUser = new User { Email = "new@example.test" };
+        context.Users.Add(newUser);
+        await context.SaveChangesAsync();
+        Assert.Null(newUser.DefaultStampingProviderId);
+        Assert.False(await context.UserStampingProviders.AnyAsync(access => access.UserId == newUser.Id));
+
+        context.StampingProviders.Add(CreateProvider(99, "added-later"));
+        await context.SaveChangesAsync();
+        Assert.False(await context.UserStampingProviders.AnyAsync(access =>
+            access.StampingProviderId == 99));
+    }
+
+    [Fact]
+    public async Task DeletingUserCascadesProviderEntitlements()
+    {
+        await using var context = await CreateContextAsync();
+        var user = new User { Email = "delete@example.test" };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        context.UserStampingProviders.Add(new UserStampingProvider
+        {
+            UserId = user.Id,
+            StampingProviderId = StampingProvider.TouringenId
+        });
+        await context.SaveChangesAsync();
+
+        context.Users.Remove(user);
+        await context.SaveChangesAsync();
+
+        Assert.False(await context.UserStampingProviders.AnyAsync(access => access.UserId == user.Id));
     }
 
     [Fact]
@@ -268,7 +334,6 @@ public sealed class ImportServiceTests : IDisposable
         var user = new User { Email = "hiker@example.test", DefaultStampingProviderId = StampingProvider.TouringenId };
         context.Users.Add(user);
         await context.SaveChangesAsync();
-
         foreach (var p in savedOld)
         {
             context.UserVisits.Add(new UserVisit
@@ -333,6 +398,12 @@ public sealed class ImportServiceTests : IDisposable
         var user = new User { Email = "user@example.test", DefaultStampingProviderId = 99 };
         context.Users.Add(user);
         await context.SaveChangesAsync();
+        context.UserStampingProviders.Add(new UserStampingProvider
+        {
+            UserId = user.Id,
+            StampingProviderId = 99
+        });
+        await context.SaveChangesAsync();
 
         var repository = new TouredRepository(context);
         var points = await repository.SaveStampingPointsAsync(
@@ -348,6 +419,26 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(otherPoint.Id, visit.StampingPointId);
         Assert.Equal(new DateTime(2026, 2, 1, 12, 30, 0), visit.Visited);
         Assert.True(visit.HasVisitedTime);
+    }
+
+    [Fact]
+    public async Task UserImportRejectsDefaultProviderWithoutEntitlement()
+    {
+        await using var context = await CreateContextAsync();
+        var user = new User
+        {
+            Email = "no-access@example.test",
+            DefaultStampingProviderId = StampingProvider.TouringenId
+        };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        var repository = new TouredRepository(context);
+        var manager = CreateImportManager(context, repository, user, null);
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => manager.ImportUserDataAsync(stream));
+
+        Assert.Empty(await context.UserVisits.AsNoTracking().ToListAsync());
     }
 
     [Fact]

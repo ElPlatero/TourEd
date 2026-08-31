@@ -20,7 +20,7 @@ public class TouredRepository : IUserService
     {
         if (string.Equals(providerSlug, "all", StringComparison.OrdinalIgnoreCase))
         {
-            return userId is null ? StampingProviderFilter.Anonymous : StampingProviderFilter.All;
+            return userId is null ? StampingProviderFilter.Anonymous : StampingProviderFilter.ForUser(userId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(providerSlug))
@@ -34,19 +34,30 @@ public class TouredRepository : IUserService
             {
                 throw new UnauthorizedAccessException("This stamping provider requires authentication.");
             }
-            return StampingProviderFilter.Single(provider.Id);
+            if (userId is not null && !await HasStampingProviderAccessAsync(userId.Value, provider.Id))
+            {
+                throw new UnauthorizedAccessException("This stamping provider is not enabled for the user.");
+            }
+            return userId is null
+                ? StampingProviderFilter.Single(provider.Id)
+                : StampingProviderFilter.SingleForUser(provider.Id, userId.Value);
         }
 
         if (userId != null)
         {
             var defaultProviderId = await _dbContext.Users.AsNoTracking()
-                .Where(p => p.Id == userId.Value)
-                .Select(p => p.DefaultStampingProviderId)
-                .FirstOrDefaultAsync();
-            if (defaultProviderId != default)
+                .Where(user => user.Id == userId.Value &&
+                               user.DefaultStampingProviderId != null &&
+                               user.StampingProviders.Any(access =>
+                                   access.StampingProviderId == user.DefaultStampingProviderId))
+                .Select(user => user.DefaultStampingProviderId)
+                .SingleOrDefaultAsync();
+            if (defaultProviderId is not null)
             {
-                return StampingProviderFilter.Single(defaultProviderId);
+                return StampingProviderFilter.SingleForUser(defaultProviderId.Value, userId.Value);
             }
+
+            throw new UnauthorizedAccessException("The user has no enabled default stamping provider.");
         }
 
         var anonymousDefaultProvider = await _dbContext.StampingProviders.AsNoTracking()
@@ -65,14 +76,37 @@ public class TouredRepository : IUserService
             .ThenBy(provider => provider.Slug)
             .ToListAsync();
 
+    public Task<List<StampingProvider>> GetStampingProvidersForUserAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+        => _dbContext.UserStampingProviders.AsNoTracking()
+            .Where(access => access.UserId == userId)
+            .Select(access => access.StampingProvider)
+            .OrderBy(provider => provider.Name)
+            .ThenBy(provider => provider.Slug)
+            .ToListAsync(cancellationToken);
+
+    public Task<bool> HasStampingProviderAccessAsync(
+        int userId,
+        int providerId,
+        CancellationToken cancellationToken = default)
+        => _dbContext.UserStampingProviders.AsNoTracking().AnyAsync(
+            access => access.UserId == userId && access.StampingProviderId == providerId,
+            cancellationToken);
+
     public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, string? seriesSlug = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
     {
         IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking().Include(point => point.Series);
-        if (providerFilter is { IsAnonymousOnly: true })
+        if (providerFilter?.UserId is { } permittedUserId)
+        {
+            query = query.Where(point => _dbContext.UserStampingProviders.Any(access =>
+                access.UserId == permittedUserId && access.StampingProviderId == point.ProviderId));
+        }
+        else if (providerFilter is { IsAnonymousOnly: true })
         {
             query = query.Where(point => point.Provider.IsAnonymousAccessAllowed);
         }
-        else if (providerFilter is { IncludesAllProviders: false, ProviderId: { } providerId })
+        if (providerFilter is { IncludesAllProviders: false, ProviderId: { } providerId })
         {
             query = query.Where(p => p.ProviderId == providerId);
         }
@@ -118,7 +152,10 @@ public class TouredRepository : IUserService
                 (UserVisit?) p.UserVisit)).ToList();
     }
 
-    public async Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync((Position Centre, decimal Range)? circularRange = null, params StampingPoint[] stampingPoints)
+    public async Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync(
+        (Position Centre, decimal Range)? circularRange = null,
+        int? userId = null,
+        params StampingPoint[] stampingPoints)
     {
         var query = _dbContext.HikingTours.AsNoTracking();
         if (stampingPoints.Any())
@@ -129,7 +166,10 @@ public class TouredRepository : IUserService
 
         var result = from tour in query
             join tourPoint in _dbContext.StampingPointsInTours.AsNoTracking() on tour.Id equals tourPoint.Tour.Id
-            join point in _dbContext.StampingPoints.AsNoTracking() on tourPoint.StampingPointId equals point.Id
+            join point in _dbContext.StampingPoints.AsNoTracking()
+                .Where(point => userId == null || _dbContext.UserStampingProviders.Any(access =>
+                    access.UserId == userId.Value && access.StampingProviderId == point.ProviderId))
+                on tourPoint.StampingPointId equals point.Id
             group point by tour into groupedStampingPoints
             select new { Tour = groupedStampingPoints.Key, Points = groupedStampingPoints.ToList() };
 
@@ -262,6 +302,7 @@ public class TouredRepository : IUserService
 
     public async Task<(StampingProvider Provider, List<StampingPoint> Points)?> GetPublicProviderDataAsync(
         string providerSlug,
+        int? userId = null,
         CancellationToken cancellationToken = default)
     {
         var normalizedSlug = providerSlug.Trim().ToLowerInvariant();
@@ -279,6 +320,11 @@ public class TouredRepository : IUserService
         if (provider is null)
         {
             return null;
+        }
+
+        if (userId is not null && !await HasStampingProviderAccessAsync(userId.Value, provider.Id, cancellationToken))
+        {
+            throw new UnauthorizedAccessException("This stamping provider is not enabled for the user.");
         }
 
         var points = await _dbContext.StampingPoints.AsNoTracking()

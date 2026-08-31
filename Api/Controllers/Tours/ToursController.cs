@@ -20,12 +20,16 @@ public class ToursController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetHikingTours([FromQuery] HikingTourQuery query)
     {
-        if (!User.TryGetUser(out _))
+        if (!User.TryGetUser(out var currentUser))
         {
             return Unauthorized();
         }
 
-        var result = await _manager.GetHikingToursAsync(query.Longitude != default && query.Latitude != default && query.Radius != default ? (new Position(query.Longitude, query.Latitude), query.Radius * 1000) : null);
+        var result = await _manager.GetHikingToursAsync(
+            currentUser.Id,
+            query.Longitude != default && query.Latitude != default && query.Radius != default
+                ? (new Position(query.Longitude, query.Latitude), query.Radius * 1000)
+                : null);
         return Ok(new GetHikingToursResponse(result.Count, result.SelectMany(p => p.Points.Select(q => q.Id)).Distinct().Count(), result.Select(CreateDto)));
     }
 

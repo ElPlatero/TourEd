@@ -20,12 +20,12 @@ public sealed class ProvidersController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<GetStampingProvidersResponse>> GetStampingProviders()
     {
-        if (!User.TryGetUser(out _))
+        if (!User.TryGetUser(out var currentUser))
         {
             return Unauthorized();
         }
 
-        var providers = await _manager.GetStampingProvidersAsync(includeRestrictedProviders: true);
+        var providers = await _manager.GetStampingProvidersAsync(currentUser.Id);
         return Ok(new GetStampingProvidersResponse(
             providers.Count,
             providers.Select(StampingProviderDetailsDto.Create)));
@@ -39,21 +39,28 @@ public sealed class ProvidersController : ControllerBase
         string providerSlug,
         CancellationToken cancellationToken)
     {
-        if (!User.TryGetUser(out _))
+        if (!User.TryGetUser(out var currentUser))
         {
             return Unauthorized();
         }
-        var result = await _manager.GetPublicProviderDataAsync(providerSlug, cancellationToken);
-        if (result is not { } providerData)
+        try
         {
-            return NotFound();
-        }
+            var result = await _manager.GetPublicProviderDataAsync(providerSlug, currentUser.Id, cancellationToken);
+            if (result is not { } providerData)
+            {
+                return NotFound();
+            }
 
-        return new JsonResult(StampingPointGeoJsonFeatureCollectionDto.Create(
-            providerData.Provider,
-            providerData.Points))
+            return new JsonResult(StampingPointGeoJsonFeatureCollectionDto.Create(
+                providerData.Provider,
+                providerData.Points))
+            {
+                ContentType = "application/geo+json"
+            };
+        }
+        catch (UnauthorizedAccessException)
         {
-            ContentType = "application/geo+json"
-        };
+            return Forbid();
+        }
     }
 }

@@ -12,11 +12,14 @@ public sealed class StampingProviderManager
         _repository = repository;
     }
 
-    public Task<List<StampingProvider>> GetStampingProvidersAsync(bool includeRestrictedProviders)
-        => _repository.GetStampingProvidersAsync(includeRestrictedProviders);
+    public Task<List<StampingProvider>> GetStampingProvidersAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+        => _repository.GetStampingProvidersForUserAsync(userId, cancellationToken);
 
     public Task<(StampingProvider Provider, List<StampingPoint> Points)?> GetPublicProviderDataAsync(
         string providerSlug,
+        int userId,
         CancellationToken cancellationToken = default)
-        => _repository.GetPublicProviderDataAsync(providerSlug, cancellationToken);
+        => _repository.GetPublicProviderDataAsync(providerSlug, userId, cancellationToken);
 }

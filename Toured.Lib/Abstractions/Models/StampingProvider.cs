@@ -29,4 +29,5 @@ public class StampingProvider
     public string? DataSourceRevision { get; set; }
     public DateTime? DataSourceUpdatedAt { get; set; }
     public DateTime? DataImportedAt { get; set; }
+    public List<UserStampingProvider> Users { get; set; } = [];
 }

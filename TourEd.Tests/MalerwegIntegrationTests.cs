@@ -72,8 +72,7 @@ public sealed class MalerwegIntegrationTests : IAsyncLifetime
             var context = scope.ServiceProvider.GetRequiredService<DataContext>();
             if (!await context.Users.AnyAsync(u => u.Email == FakeGoogleHandler.Email))
             {
-                context.Users.Add(new User { Email = FakeGoogleHandler.Email });
-                await context.SaveChangesAsync();
+                await AddUserWithAccessAsync(context);
             }
         }
 
@@ -137,8 +136,7 @@ public sealed class MalerwegIntegrationTests : IAsyncLifetime
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
             var context = scope.ServiceProvider.GetRequiredService<DataContext>();
-            context.Users.Add(new User { Email = FakeGoogleHandler.Email });
-            await context.SaveChangesAsync();
+            await AddUserWithAccessAsync(context);
         }
 
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -177,6 +175,19 @@ public sealed class MalerwegIntegrationTests : IAsyncLifetime
         Assert.NotNull(unvisitedData);
         Assert.Equal(7, unvisitedData.OverallCount);
         Assert.DoesNotContain(unvisitedData.StampingPoints, p => p.Number == 1);
+    }
+
+    private static async Task AddUserWithAccessAsync(DataContext context)
+    {
+        var user = new User { Email = FakeGoogleHandler.Email };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        context.UserStampingProviders.Add(new UserStampingProvider
+        {
+            UserId = user.Id,
+            StampingProviderId = StampingProvider.MalerwegId
+        });
+        await context.SaveChangesAsync();
     }
 
     private static void DeleteFileSafely(string path)

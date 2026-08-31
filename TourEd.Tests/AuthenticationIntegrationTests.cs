@@ -7,6 +7,7 @@ using Api.Authentication;
 using Api.Controllers.Auth;
 using Api.Controllers.Points;
 using Api.Controllers.Providers;
+using Api.Controllers.Tours;
 using Api.Dto;
 using Api.Repositories;
 using Microsoft.AspNetCore.Authentication;
@@ -71,7 +72,11 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             Slug = "standard",
             Name = "Standard"
         });
-        var user = new User { Email = FakeGoogleHandler.Email };
+        var user = new User
+        {
+            Email = FakeGoogleHandler.Email,
+            DefaultStampingProviderId = StampingProvider.TouringenId
+        };
         var visitedPoint = CreatePoint(VisitedPointNumber, StampingProvider.TouringenId);
         context.Users.Add(user);
         context.StampingPoints.AddRange(
@@ -81,6 +86,13 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             CreatePoint(OtherProviderPointNumber, OtherProviderId),
             CreatePoint(RestrictedProviderPointNumber, StampingProvider.HarzerWandernadelId));
         await context.SaveChangesAsync();
+        context.UserStampingProviders.AddRange(await context.StampingProviders
+            .Select(provider => new UserStampingProvider
+            {
+                UserId = user.Id,
+                StampingProviderId = provider.Id
+            })
+            .ToArrayAsync());
         context.UserVisits.Add(new UserVisit
         {
             UserId = user.Id,
@@ -353,6 +365,88 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Equal("HWN", harzerWandernadel.Abbreviation);
         Assert.False(harzerWandernadel.IsAnonymousAccessAllowed);
         Assert.Equal("https://www.harzer-wandernadel.de/", harzerWandernadel.WebsiteUrl);
+    }
+
+    [Fact]
+    public async Task ProviderEntitlementsRestrictEveryReadAndWritePathWithoutDeletingVisits()
+    {
+        int userId;
+        int otherPointId;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            var user = await context.Users.SingleAsync(item => item.Email == FakeGoogleHandler.Email);
+            var otherProvider = await context.StampingProviders.SingleAsync(item => item.Id == OtherProviderId);
+            var otherPoint = await context.StampingPoints.SingleAsync(item =>
+                item.ProviderId == OtherProviderId && item.Number == OtherProviderPointNumber);
+            var touringenPoint = await context.StampingPoints.SingleAsync(item =>
+                item.ProviderId == StampingProvider.TouringenId && item.Number == UnvisitedPointNumber);
+            userId = user.Id;
+            otherPointId = otherPoint.Id;
+
+            otherProvider.DataSourceUri = new Uri("https://provider.example.test/source");
+            otherProvider.DataSourceAttribution = "Provider test data";
+            otherProvider.DataLicenseName = "Test licence";
+            otherProvider.DataLicenseUri = new Uri("https://provider.example.test/licence");
+            otherProvider.DataSourceRevision = "1";
+            otherProvider.DataSourceUpdatedAt = new DateTime(2026, 8, 31, 10, 0, 0, DateTimeKind.Utc);
+            otherProvider.DataImportedAt = new DateTime(2026, 8, 31, 11, 0, 0, DateTimeKind.Utc);
+
+            context.UserVisits.Add(new UserVisit
+            {
+                UserId = user.Id,
+                StampingPointId = otherPoint.Id
+            });
+            var tour = new HikingTour(999, "Entitlement test tour", null, null, null, false, false, false);
+            context.HikingTours.Add(tour);
+            context.StampingPointsInTours.AddRange(
+                new SortedStampingPoint(1) { StampingPointId = touringenPoint.Id, Tour = tour },
+                new SortedStampingPoint(2) { StampingPointId = otherPoint.Id, Tour = tour });
+            var access = await context.UserStampingProviders.SingleAsync(item =>
+                item.UserId == user.Id && item.StampingProviderId == OtherProviderId);
+            context.UserStampingProviders.Remove(access);
+            await context.SaveChangesAsync();
+        }
+
+        using var client = CreateClient(_factory);
+        await LoginAsync(client);
+
+        var catalog = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
+        var allPoints = await client.GetFromJsonAsync<GetStampingPointsResponse>("/api/points?provider=all&vis=true");
+        var directPoint = await client.GetAsync($"/api/points/{OtherProviderPointNumber}?provider=other");
+        var directWrite = await client.PutAsJsonAsync(
+            $"/api/points/{OtherProviderPointNumber}?provider=other",
+            new SaveVisitRequest(null, null));
+        var geoJson = await client.GetAsync("/api/providers/other/points.geojson");
+        var tours = await client.GetFromJsonAsync<GetHikingToursResponse>("/api/tours");
+
+        Assert.NotNull(catalog);
+        Assert.DoesNotContain(catalog.StampingProviders, provider => provider.Slug == "other");
+        Assert.NotNull(allPoints);
+        Assert.DoesNotContain(allPoints.StampingPoints, point => point.Provider.Slug == "other");
+        Assert.Equal(HttpStatusCode.Forbidden, directPoint.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, directWrite.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, geoJson.StatusCode);
+        Assert.NotNull(tours);
+        var entitlementTour = Assert.Single(tours.HikingTours, tour => tour.Id == 999);
+        Assert.DoesNotContain(entitlementTour.StampingPoints!, point => point.Provider.Slug == "other");
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            Assert.True(await context.UserVisits.AnyAsync(visit =>
+                visit.UserId == userId && visit.StampingPointId == otherPointId));
+            context.UserStampingProviders.Add(new UserStampingProvider
+            {
+                UserId = userId,
+                StampingProviderId = OtherProviderId
+            });
+            await context.SaveChangesAsync();
+        }
+
+        var restoredPoint = await client.GetAsync($"/api/points/{OtherProviderPointNumber}?provider=other");
+        Assert.Equal(HttpStatusCode.OK, restoredPoint.StatusCode);
+        Assert.Contains("\"isVisited\":true", await restoredPoint.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -786,6 +880,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("keine Konto- oder Besuchsdaten an den Stempelanbieter übermittelt", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Ein Besuch kann auch ohne Datum und Uhrzeit eingetragen werden", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("den einzelnen Besuch nach einer Bestätigung vollständig löschen", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("die freigeschalteten Stempelanbieter", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Mit der Kontolöschung werden die Anbieterfreigaben", privacyNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("Die anonyme Kartenansicht ist ohne Benutzerkonto möglich", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
     }
 

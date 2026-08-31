@@ -73,8 +73,7 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
             var context = scope.ServiceProvider.GetRequiredService<DataContext>();
             if (!await context.Users.AnyAsync(u => u.Email == FakeGoogleHandler.Email))
             {
-                context.Users.Add(new User { Email = FakeGoogleHandler.Email });
-                await context.SaveChangesAsync();
+                await AddUserWithAccessAsync(context);
             }
         }
 
@@ -124,8 +123,7 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
             var context = scope.ServiceProvider.GetRequiredService<DataContext>();
             if (!await context.Users.AnyAsync(u => u.Email == FakeGoogleHandler.Email))
             {
-                context.Users.Add(new User { Email = FakeGoogleHandler.Email });
-                await context.SaveChangesAsync();
+                await AddUserWithAccessAsync(context);
             }
         }
 
@@ -175,6 +173,24 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
         var visitedAfterDeleteData = await visitedAfterDelete.Content.ReadFromJsonAsync<GetStampingPointsResponse>();
         Assert.NotNull(visitedAfterDeleteData);
         Assert.Empty(visitedAfterDeleteData.StampingPoints);
+    }
+
+    private static async Task AddUserWithAccessAsync(DataContext context)
+    {
+        var user = new User { Email = FakeGoogleHandler.Email };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        context.UserStampingProviders.AddRange(new[]
+        {
+            StampingProvider.SchluchtensteigId,
+            StampingProvider.HeidschnuckenwegId,
+            StampingProvider.HarzerKlosterwanderwegId
+        }.Select(providerId => new UserStampingProvider
+        {
+            UserId = user.Id,
+            StampingProviderId = providerId
+        }));
+        await context.SaveChangesAsync();
     }
 
     private static void DeleteFileSafely(string path)
