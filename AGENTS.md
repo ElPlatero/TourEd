@@ -35,7 +35,7 @@ The page calls the backend with relative URLs:
   - Requires an authenticated session (`401` otherwise).
   - Loads visited points from every integrated provider into the in-memory frontend cache.
 
-When unauthenticated, the frontend displays an accessible login barrier (`#authBarrier`), marks the main container (`#appShell`) `inert` and `aria-hidden="true"`, and sends zero provider or point requests.
+The frontend starts fail-closed: the accessible login barrier (`#authBarrier`) is visible in the initial HTML and the main container (`#appShell`) is already `inert` and `aria-hidden="true"`. A confirmed authenticated session unlocks the application; unauthenticated use sends zero provider or point requests.
 
 The frontend keeps provider metadata and point arrays only in memory. Marker rendering is centralized and filters the cached arrays against the currently selected provider slugs; changing the checkbox selection in the provider flyout does not require another point request. All available providers are selected after each page initialization, `Alle` und `Keine` provide bulk selection, and an empty selection renders zero points. Provider names, abbreviations, and non-standard series names are used in point details because point numbers are series-scoped and may be absent for temporary stamps. Visit mutations use the stable internal point id together with the provider slug. Provider information also exposes recorded source/licence metadata and a public GeoJSON download when available. Login, logout, and reinitialization reload the catalog and point caches, and stale initialization responses are ignored.
 

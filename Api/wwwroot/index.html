@@ -11,8 +11,8 @@
     <script defer src="js/toured.js"></script>
 </head>
 <body>
-<a class="skip-link" href="#map">Zur Karte springen</a>
-<main id="appShell">
+<main id="appShell" inert aria-hidden="true">
+    <a class="skip-link" href="#map">Zur Karte springen</a>
     <h1 class="visually-hidden">TourEd-Stempelstellenkarte</h1>
     <div class="brand-logo" aria-hidden="true">
         <img src="img/toured-logo-transparent.svg" alt="" />
@@ -232,7 +232,7 @@
     </dialog>
 </main>
 
-<div id="authBarrier" class="auth-barrier" role="dialog" aria-modal="true" aria-labelledby="authBarrierTitle" aria-describedby="authBarrierDesc" hidden>
+<div id="authBarrier" class="auth-barrier" role="dialog" aria-modal="true" aria-labelledby="authBarrierTitle" aria-describedby="authBarrierDesc">
     <div class="auth-barrier__card">
         <div class="auth-barrier__logo" aria-hidden="true">
             <img src="img/toured-logo-transparent.svg" alt="" />
