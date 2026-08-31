@@ -2,10 +2,11 @@ using Api.Dto;
 using Api.Managers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TourEd.Lib.Extensions;
 
 namespace Api.Controllers.Providers;
 
-[ApiController, AllowAnonymous, Route("api/providers")]
+[Authorize, ApiController, Route("api/providers")]
 public sealed class ProvidersController : ControllerBase
 {
     private readonly StampingProviderManager _manager;
@@ -19,7 +20,12 @@ public sealed class ProvidersController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<GetStampingProvidersResponse>> GetStampingProviders()
     {
-        var providers = await _manager.GetStampingProvidersAsync(User.Identity?.IsAuthenticated == true);
+        if (!User.TryGetUser(out _))
+        {
+            return Unauthorized();
+        }
+
+        var providers = await _manager.GetStampingProvidersAsync(includeRestrictedProviders: true);
         return Ok(new GetStampingProvidersResponse(
             providers.Count,
             providers.Select(StampingProviderDetailsDto.Create)));
@@ -33,6 +39,10 @@ public sealed class ProvidersController : ControllerBase
         string providerSlug,
         CancellationToken cancellationToken)
     {
+        if (!User.TryGetUser(out _))
+        {
+            return Unauthorized();
+        }
         var result = await _manager.GetPublicProviderDataAsync(providerSlug, cancellationToken);
         if (result is not { } providerData)
         {

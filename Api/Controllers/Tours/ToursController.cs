@@ -1,11 +1,13 @@
-﻿using Api.Dto;
+using Api.Dto;
 using Api.Managers;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TourEd.Lib.Abstractions.Models;
+using TourEd.Lib.Extensions;
 
 namespace Api.Controllers.Tours;
 
-[ApiController, Route("api/[controller]")]
+[Authorize, ApiController, Route("api/[controller]")]
 public class ToursController : ControllerBase
 {
     private readonly TourDataManager _manager;
@@ -18,6 +20,11 @@ public class ToursController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetHikingTours([FromQuery] HikingTourQuery query)
     {
+        if (!User.TryGetUser(out _))
+        {
+            return Unauthorized();
+        }
+
         var result = await _manager.GetHikingToursAsync(query.Longitude != default && query.Latitude != default && query.Radius != default ? (new Position(query.Longitude, query.Latitude), query.Radius * 1000) : null);
         return Ok(new GetHikingToursResponse(result.Count, result.SelectMany(p => p.Points.Select(q => q.Id)).Distinct().Count(), result.Select(CreateDto)));
     }
