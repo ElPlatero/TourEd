@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Runtime.Serialization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -55,12 +55,6 @@ public partial class ImportManager : IImportManager
         var standardImportData = importData
             .Where(area => !TouringenNaturalTreasureAreaIds.Contains(area.Id))
             .ToArray();
-        var ambiguousVisitedNumbers = await _repository.GetAmbiguousVisitedTouringenNumbersAsync(stampingPoints, cancellationToken);
-        if (ambiguousVisitedNumbers.Count > 0)
-        {
-            throw new InvalidOperationException(
-                $"Touringen points {string.Join(", ", ambiguousVisitedNumbers)} contain visits but differ from the canonical standard GPX data. Resolve whether those visits belong to the standard or Naturschätze series before importing.");
-        }
         var savedStampingPoints = await _repository.SaveStampingPointsAsync(stampingPoints);
         var stampingPointIdsByNumber = savedStampingPoints
             .Where(p => p.SeriesId == StampingSeries.TouringenStandardId && p.Number.HasValue)
