@@ -753,14 +753,14 @@ input:focus-visible,
     bottom: max(0.25rem, env(safe-area-inset-bottom)) !important;
 }
 
-.ol-attribution .privacy-link {
+.ol-attribution .footer-link {
     color: inherit;
     opacity: 0.65;
     text-decoration: none;
 }
 
-.ol-attribution .privacy-link:hover,
-.ol-attribution .privacy-link:focus {
+.ol-attribution .footer-link:hover,
+.ol-attribution .footer-link:focus {
     opacity: 1;
     text-decoration: underline;
 }

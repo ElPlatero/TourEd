@@ -690,7 +690,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var privacyNotice = await privacyResponse.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
-        Assert.Contains("&copy; TourEd 2023 · <a class=\"privacy-link\" href=\"datenschutz/\">Datenschutz</a>", frontendScript, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("href=\"https://github.com/ElPlatero/TourEd\"", frontendScript, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Quellcode (AGPL-3.0)", frontendScript, StringComparison.Ordinal);
+        Assert.Contains("rel=\"noopener noreferrer\"", frontendScript, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<a class=\"footer-link\" href=\"datenschutz/\">Datenschutz</a>", frontendScript, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("tino@schuettpelz.org", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);
@@ -700,6 +703,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("Beim bewussten Öffnen eines externen Anbieterlinks", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("serverseitig aus OpenStreetMap übernommen", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("keine Konto-, Sitzungs- oder Besuchsdaten an OpenStreetMap", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Quellcode-Link führt zum öffentlichen TourEd-Repository auf GitHub", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("weder die E-Mail-Adresse noch gespeicherte Stempelbesuche an GitHub", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("GeoJSON-Download", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("keine Konto- oder Besuchsdaten an den Stempelanbieter übermittelt", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Ein Besuch kann auch ohne Datum und Uhrzeit eingetragen werden", privacyNotice, StringComparison.Ordinal);
