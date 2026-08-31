@@ -231,5 +231,26 @@
         </div>
     </dialog>
 </main>
+
+<div id="authBarrier" class="auth-barrier" role="dialog" aria-modal="true" aria-labelledby="authBarrierTitle" aria-describedby="authBarrierDesc" hidden>
+    <div class="auth-barrier__card">
+        <div class="auth-barrier__logo" aria-hidden="true">
+            <img src="img/toured-logo-transparent.svg" alt="" />
+        </div>
+        <h2 id="authBarrierTitle" class="auth-barrier__title">Willkommen bei TourEd</h2>
+        <p id="authBarrierDesc" class="auth-barrier__description">
+            TourEd ist ein privates Projekt zur Erfassung von Stempelstellen und Wanderfortschritten. Bitte melde dich mit deinem Google-Konto an, um die Stempelkarte zu nutzen.
+        </p>
+        <a id="authBarrierLoginButton" class="action action--primary auth-barrier__login" href="auth/login">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false" width="20" height="20">
+                <path fill="currentColor" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0" />
+            </svg>
+            <span>Mit Google anmelden</span>
+        </a>
+        <div class="auth-barrier__footer">
+            <a href="datenschutz/index.html" class="auth-barrier__privacy-link">Datenschutzerklärung</a>
+        </div>
+    </div>
+</div>
 </body>
 </html>

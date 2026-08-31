@@ -855,3 +855,95 @@ input:focus-visible,
         animation: none;
     }
 }
+
+.auth-barrier {
+    position: fixed;
+    inset: 0;
+    z-index: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    background: rgb(25 25 24 / 65%);
+    backdrop-filter: blur(8px);
+}
+
+.auth-barrier__card {
+    width: 100%;
+    max-width: 26rem;
+    padding: 2rem 1.75rem 1.5rem;
+    border: 1px solid rgb(37 37 34 / 20%);
+    border-radius: 1rem;
+    background: var(--surface);
+    box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 30%);
+    text-align: center;
+}
+
+.auth-barrier__logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.auth-barrier__logo img {
+    width: 4.5rem;
+    height: 4.5rem;
+}
+
+.auth-barrier__title {
+    margin: 0 0 0.75rem;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.auth-barrier__description {
+    margin: 0 0 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+.auth-barrier__login {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.85rem 1.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 0.5rem;
+}
+
+.auth-barrier__footer {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgb(37 37 34 / 12%);
+    font-size: 0.85rem;
+}
+
+.auth-barrier__privacy-link {
+    color: var(--text-muted);
+    text-decoration: underline;
+}
+
+.auth-barrier__privacy-link:hover,
+.auth-barrier__privacy-link:focus {
+    color: var(--text);
+}
+
+#appShell[inert] {
+    filter: blur(3px) grayscale(30%);
+    pointer-events: none;
+    user-select: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    .auth-barrier {
+        background: var(--surface-muted);
+        backdrop-filter: none;
+    }
+}
+

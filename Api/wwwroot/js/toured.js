@@ -4,6 +4,9 @@
     const elements = {
         accountMenuButton: document.getElementById("accountMenuButton"),
         accountPanel: document.getElementById("accountPanel"),
+        appShell: document.getElementById("appShell"),
+        authBarrier: document.getElementById("authBarrier"),
+        authBarrierLoginButton: document.getElementById("authBarrierLoginButton"),
         cancelDeleteVisitButton: document.getElementById("cancelDeleteVisitButton"),
         cancelVisitButton: document.getElementById("cancelVisitButton"),
         closeDeleteVisitButton: document.getElementById("closeDeleteVisitButton"),
@@ -228,6 +231,19 @@
             }, 4000);
         }
     });
+
+    const showAuthBarrier = () => {
+        elements.authBarrier.hidden = false;
+        elements.appShell.setAttribute("inert", "");
+        elements.appShell.setAttribute("aria-hidden", "true");
+        elements.authBarrierLoginButton?.focus({ preventScroll: true });
+    };
+
+    const hideAuthBarrier = () => {
+        elements.authBarrier.hidden = true;
+        elements.appShell.removeAttribute("inert");
+        elements.appShell.removeAttribute("aria-hidden");
+    };
 
     const setSession = (session) => {
         const authenticated = session?.authenticated === true;
@@ -660,15 +676,6 @@
         }
     };
 
-    const loadAnonymousPoints = async generation => {
-        const points = await getJson("api/points?provider=all");
-        if (generation !== app.loadGeneration) {
-            return null;
-        }
-        cachePoints(points, VisitState.unknown);
-        return renderSelectedPoints();
-    };
-
     const loadAuthenticatedPoints = async generation => {
         try {
             const [unvisited, visited] = await Promise.all([
@@ -685,12 +692,14 @@
             if (generation !== app.loadGeneration) {
                 return null;
             }
-            if (response.status !== 401) {
-                throw response;
+            if (response?.status === 401) {
+                setSession({ authenticated: false });
+                resetPointCache();
+                clearMarkers();
+                showAuthBarrier();
+                return null;
             }
-            setSession({ authenticated: false });
-            resetPointCache();
-            return await loadAnonymousPoints(generation);
+            throw response;
         }
     };
 
@@ -1160,7 +1169,6 @@
             window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
         }
 
-        setMapStatus("Karte wird geladen …", "loading");
         hideInfo(true);
         clearMarkers();
         resetPointCache();
@@ -1170,12 +1178,21 @@
         try {
             session = await getJson("auth/session");
         } catch {
-            // Anonymous map use remains available when the session check fails.
+            session = { authenticated: false };
         }
         if (generation !== app.loadGeneration) {
             return;
         }
         setSession(session);
+
+        if (!session.authenticated) {
+            showAuthBarrier();
+            setMapStatus("");
+            return;
+        }
+
+        hideAuthBarrier();
+        setMapStatus("Karte wird geladen …", "loading");
 
         try {
             const providers = await getJson("api/providers");
@@ -1183,9 +1200,7 @@
                 return;
             }
             setProviderCatalog(providers);
-            const pointCount = session.authenticated === true
-                ? await loadAuthenticatedPoints(generation)
-                : await loadAnonymousPoints(generation);
+            const pointCount = await loadAuthenticatedPoints(generation);
             if (pointCount === null || generation !== app.loadGeneration) {
                 return;
             }
@@ -1196,9 +1211,17 @@
                     setMapStatus("");
                 }
             }, 1800);
-        } catch {
+        } catch (error) {
             if (generation === app.loadGeneration) {
-                setMapStatus("Anbieter und Stempelstellen konnten nicht geladen werden.", "error");
+                if (error?.status === 401) {
+                    setSession({ authenticated: false });
+                    resetPointCache();
+                    clearMarkers();
+                    showAuthBarrier();
+                    setMapStatus("");
+                } else {
+                    setMapStatus("Anbieter und Stempelstellen konnten nicht geladen werden.", "error");
+                }
             }
         }
     };
@@ -1211,8 +1234,8 @@
                 setMapStatus("Abmelden ist fehlgeschlagen. Bitte erneut versuchen.", "error");
                 return;
             }
-            await initialize();
             closeAccountMenu();
+            await initialize();
         } catch {
             setMapStatus("Abmelden ist fehlgeschlagen. Bitte erneut versuchen.", "error");
         } finally {
