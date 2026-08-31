@@ -233,6 +233,78 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task TouringenImportPreservesVisitsWhenCorrectingStandardPointsOneThroughEight()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new TouredRepository(context);
+
+        var oldPoints = Enumerable.Range(1, 8).Select(number =>
+            CreatePoint($"Old Naturschatz {number}", StampingProvider.TouringenId, $"standard-{number}", number) with
+            {
+                SeriesId = StampingSeries.TouringenStandardId,
+                Latitude = 50.0m + number,
+                Longitude = 11.0m + number
+            }).ToArray();
+        var savedOld = await repository.SaveStampingPointsAsync(oldPoints);
+
+        var user = new User { Email = "hiker@example.test", DefaultStampingProviderId = StampingProvider.TouringenId };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        foreach (var p in savedOld)
+        {
+            context.UserVisits.Add(new UserVisit
+            {
+                UserId = user.Id,
+                StampingPointId = p.Id,
+                Visited = new DateTime(2026, 8, 1),
+                HasVisitedTime = false,
+                EntryCreated = DateTime.UtcNow
+            });
+        }
+        await context.SaveChangesAsync();
+
+        var canonicalStandard = Enumerable.Range(1, 8).Select(number =>
+            CreatePoint($"Canonical Standard {number}", StampingProvider.TouringenId, $"standard-{number}", number) with
+            {
+                SeriesId = StampingSeries.TouringenStandardId,
+                Latitude = 51.0m + number,
+                Longitude = 12.0m + number
+            }).ToArray();
+        var canonicalNaturschaetze = Enumerable.Range(1, 8).Select(number =>
+            CreatePoint($"Naturschatz {number}", StampingProvider.TouringenId, $"naturschaetze-{number}", number) with
+            {
+                SeriesId = StampingSeries.TouringenNaturalTreasuresId,
+                Latitude = 52.0m + number,
+                Longitude = 13.0m + number
+            }).ToArray();
+
+        var reimported = await repository.SaveStampingPointsAsync(canonicalStandard.Concat(canonicalNaturschaetze).ToArray());
+
+        Assert.Equal(16, reimported.Count);
+        Assert.Equal(16, await context.StampingPoints.CountAsync());
+
+        for (var i = 0; i < 8; i++)
+        {
+            var oldId = savedOld[i].Id;
+            var standardPoint = await context.StampingPoints.SingleAsync(p => p.Id == oldId);
+            Assert.Equal($"Canonical Standard {i + 1}", standardPoint.Name);
+            Assert.Equal(51.0m + (i + 1), standardPoint.Latitude);
+            Assert.Equal(12.0m + (i + 1), standardPoint.Longitude);
+            Assert.Equal(StampingSeries.TouringenStandardId, standardPoint.SeriesId);
+
+            var visit = await context.UserVisits.SingleAsync(v => v.StampingPointId == oldId && v.UserId == user.Id);
+            Assert.NotNull(visit.Visited);
+        }
+
+        var naturalPoints = await context.StampingPoints
+            .Where(p => p.SeriesId == StampingSeries.TouringenNaturalTreasuresId)
+            .ToListAsync();
+        Assert.Equal(8, naturalPoints.Count);
+        Assert.All(naturalPoints, p => Assert.DoesNotContain(p.Id, savedOld.Select(o => o.Id)));
+    }
+
+    [Fact]
     public async Task UserImportUsesUsersDefaultProvider()
     {
         await using var context = await CreateContextAsync();
@@ -361,13 +433,13 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task TouringenImportRefusesToSilentlyReassignAmbiguousVisitsOnNumbersOneThroughEight()
+    public async Task TouringenImportPreservesExistingVisitsWhenUpdatingCanonicalStandardPoints()
     {
         await using var context = await CreateContextAsync();
         var repository = new TouredRepository(context);
         var existing = Assert.Single(await repository.SaveStampingPointsAsync(
             CreatePoint("Urwaldpfad Leutenberg", StampingProvider.TouringenId, "976", 1)));
-        var user = new User { Email = "ambiguous@example.test" };
+        var user = new User { Email = "visited@example.test" };
         context.Users.Add(user);
         await context.SaveChangesAsync();
         await repository.AddUserVisitAsync(user, existing.Id, null, false);
@@ -382,12 +454,11 @@ public sealed class ImportServiceTests : IDisposable
         var rawData = JsonSerializer.Serialize(new[] { new RawArea(1, "Area", [rawTour], []) });
         var manager = CreateImportManager(context, repository, null, rawData);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => manager.ImportTouringenDataAsync());
+        await manager.ImportTouringenDataAsync();
 
-        Assert.Contains("Resolve whether those visits belong", exception.Message, StringComparison.Ordinal);
-        var unchanged = await context.StampingPoints.AsNoTracking().SingleAsync();
-        Assert.Equal(existing.Id, unchanged.Id);
-        Assert.Equal("Urwaldpfad Leutenberg", unchanged.Name);
+        var updated = await context.StampingPoints.AsNoTracking().SingleAsync();
+        Assert.Equal(existing.Id, updated.Id);
+        Assert.Equal("Schleifkotengrund", updated.Name);
         Assert.Equal(existing.Id, (await context.UserVisits.AsNoTracking().SingleAsync()).StampingPointId);
     }
 

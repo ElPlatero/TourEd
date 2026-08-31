@@ -224,32 +224,6 @@ public class TouredRepository : IUserService
         return savedPoints;
     }
 
-    public async Task<IReadOnlyList<int>> GetAmbiguousVisitedTouringenNumbersAsync(
-        IReadOnlyCollection<StampingPoint> importedStandardPoints,
-        CancellationToken cancellationToken = default)
-    {
-        var canonicalPoints = importedStandardPoints
-            .Where(point => point.SeriesId == StampingSeries.TouringenStandardId && point.Number is >= 1 and <= 8)
-            .ToDictionary(point => point.Number!.Value);
-        if (canonicalPoints.Count == 0) return [];
-
-        var numbers = canonicalPoints.Keys.ToArray();
-        var existingPoints = await _dbContext.StampingPoints.AsNoTracking()
-            .Where(point => point.SeriesId == StampingSeries.TouringenStandardId &&
-                            point.Number.HasValue && numbers.Contains(point.Number.Value) &&
-                            _dbContext.UserVisits.Any(visit => visit.StampingPointId == point.Id))
-            .ToArrayAsync(cancellationToken);
-
-        return existingPoints
-            .Where(existing => existing.Number.HasValue && canonicalPoints.TryGetValue(existing.Number.Value, out var canonical) &&
-                               (existing.Name != canonical.Name ||
-                                existing.Longitude != canonical.Longitude ||
-                                existing.Latitude != canonical.Latitude))
-            .Select(point => point.Number!.Value)
-            .OrderBy(number => number)
-            .ToArray();
-    }
-
     public async Task SaveStampingPointSourceImportAsync(
         int providerId,
         StampingPointSourceSnapshot snapshot,
