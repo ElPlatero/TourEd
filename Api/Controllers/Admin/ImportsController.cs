@@ -24,11 +24,11 @@ public class ImportsController : ControllerBase
     }
     
     [HttpPost("touringen")]
-    public async Task<IActionResult> CreateNewTouringenImport([FromServices] IUnitOfWork unitOfWork)
+    public async Task<IActionResult> CreateNewTouringenImport([FromServices] IUnitOfWork unitOfWork, CancellationToken cancellationToken)
     {
         using (unitOfWork)
         {
-            await _importManager.ImportTouringenDataAsync();
+            await _importManager.ImportTouringenDataAsync(cancellationToken);
             await unitOfWork.CommitAsync();
             return Ok();
         }

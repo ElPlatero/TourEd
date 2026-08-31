@@ -11,6 +11,7 @@ public class DataContext : DbContext
 
     public DbSet<Import> Imports { get; set; } = null!;
     public DbSet<StampingProvider> StampingProviders { get; set; } = null!;
+    public DbSet<StampingSeries> StampingSeries { get; set; } = null!;
     public DbSet<StampingPoint> StampingPoints { get; set; } = null!;
     public DbSet<SortedStampingPoint> StampingPointsInTours { get; set; } = null!;
     public DbSet<HikingTour> HikingTours { get; set; } = null!;
@@ -67,9 +68,30 @@ public class DataContext : DbContext
             dto.Property(p => p.ProviderId).HasDefaultValue(StampingProvider.TouringenId);
             dto.Property(p => p.ExternalId).IsRequired();
             dto.HasOne(p => p.Provider).WithMany().OnDelete(DeleteBehavior.Restrict);
-            dto.HasIndex(p => new { p.ProviderId, p.Number }).IsUnique();
+            dto.HasOne(p => p.Series).WithMany()
+                .HasForeignKey(p => new { p.SeriesId, p.ProviderId })
+                .HasPrincipalKey(p => new { p.Id, p.ProviderId })
+                .OnDelete(DeleteBehavior.Restrict);
+            dto.HasIndex(p => new { p.SeriesId, p.Number }).IsUnique();
             dto.HasIndex(p => new { p.ProviderId, p.ExternalId }).IsUnique();
             dto.Ignore(p => p.Position);
+        });
+
+        modelBuilder.Entity<StampingSeries>(dto =>
+        {
+            dto.HasKey(p => p.Id);
+            dto.HasAlternateKey(p => new { p.Id, p.ProviderId });
+            dto.Property(p => p.Id).ValueGeneratedOnAdd();
+            dto.Property(p => p.Slug).IsRequired();
+            dto.Property(p => p.Name).IsRequired();
+            dto.HasOne(p => p.Provider).WithMany().OnDelete(DeleteBehavior.Restrict);
+            dto.HasIndex(p => new { p.ProviderId, p.Slug }).IsUnique();
+            dto.HasData(
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenStandardId, ProviderId = StampingProvider.TouringenId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenStandardSlug, Name = "Standard", ExpectedPointCount = 430 },
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenNaturalTreasuresId, ProviderId = StampingProvider.TouringenId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenNaturalTreasuresSlug, Name = "Naturschätze", ExpectedPointCount = 8 },
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenRhoenFamilyTrailsId, ProviderId = StampingProvider.TouringenId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenRhoenFamilyTrailsSlug, Name = "Familienwanderwege Rhön", ExpectedPointCount = 13 },
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenSpecialStampsId, ProviderId = StampingProvider.TouringenId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.TouringenSpecialStampsSlug, Name = "Sonderstempel", IsTemporary = true },
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerWandernadelStandardId, ProviderId = StampingProvider.HarzerWandernadelId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerWandernadelStandardSlug, Name = "Standard", ExpectedPointCount = 222 });
         });
 
         modelBuilder.Entity<SortedStampingPoint>(dto =>

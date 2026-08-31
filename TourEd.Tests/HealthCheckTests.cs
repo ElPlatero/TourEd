@@ -48,6 +48,9 @@ public sealed class HealthCheckTests : IDisposable
         {
             await context.Database.MigrateAsync();
             await context.Database.ExecuteSqlRawAsync(
+                "DELETE FROM StampingSeries WHERE ProviderId = {0};",
+                StampingProvider.TouringenId);
+            await context.Database.ExecuteSqlRawAsync(
                 "DELETE FROM StampingProviders WHERE Id = {0};",
                 StampingProvider.TouringenId);
         }

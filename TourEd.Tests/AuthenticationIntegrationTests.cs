@@ -64,6 +64,13 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             Description = "Provider with a non-public website scheme.",
             WebsiteUri = new Uri("ftp://provider.example.test/info")
         });
+        context.StampingSeries.Add(new StampingSeries
+        {
+            Id = 30,
+            ProviderId = OtherProviderId,
+            Slug = "standard",
+            Name = "Standard"
+        });
         var user = new User { Email = FakeGoogleHandler.Email };
         var visitedPoint = CreatePoint(VisitedPointNumber, StampingProvider.TouringenId);
         context.Users.Add(user);
@@ -297,7 +304,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         Assert.NotNull(anonymousResponse);
         Assert.Contains(anonymousResponse.StampingPoints, point =>
-            point.Provider.Slug == StampingProvider.TouringenSlug);
+            point.Provider.Slug == StampingProvider.TouringenSlug &&
+            point.Series.Slug == StampingSeries.TouringenStandardSlug);
         Assert.Contains(anonymousResponse.StampingPoints, point =>
             point.Provider.Slug == "other" && point.Number == OtherProviderPointNumber);
         Assert.DoesNotContain(anonymousResponse.StampingPoints, point =>
@@ -459,6 +467,45 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task StablePointIdCanRecordVisitForUnnumberedTemporarySpecial()
+    {
+        int pointId;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            var point = new StampingPoint(
+                default,
+                "Temporary special",
+                11.3m,
+                50.6m,
+                null,
+                0,
+                StampingProvider.TouringenId,
+                "temporary-special-2026")
+            {
+                SeriesId = StampingSeries.TouringenSpecialStampsId,
+                ValidFrom = new DateOnly(2026, 6, 1)
+            };
+            context.StampingPoints.Add(point);
+            await context.SaveChangesAsync();
+            pointId = point.Id;
+        }
+
+        using var client = CreateClient(_factory);
+        await LoginAsync(client);
+        var response = await client.PutAsJsonAsync(
+            $"/api/points/id/{pointId}?provider={StampingProvider.TouringenSlug}",
+            new SaveVisitRequest(null, null));
+        var points = await client.GetFromJsonAsync<GetStampingPointsResponse>("/api/points?provider=all&vis=true");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var special = Assert.Single(points!.StampingPoints, point => point.Id == pointId);
+        Assert.Null(special.Number);
+        Assert.Equal(StampingSeries.TouringenSpecialStampsSlug, special.Series.Slug);
+        Assert.True(special.IsVisited);
+    }
+
+    [Fact]
     public async Task VisitTimestampValidationRejectsTimeWithoutDateAndFutureValues()
     {
         using var client = CreateClient(_factory);
@@ -598,7 +645,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("provider.hasPublicDataDownload", script, StringComparison.Ordinal);
         Assert.Contains("points.geojson", script, StringComparison.Ordinal);
         Assert.Contains("stampingPoint.provider?.name", script, StringComparison.Ordinal);
-        Assert.Contains("stampingPoint.provider?.abbreviation", script, StringComparison.Ordinal);
+        Assert.Contains("getPointNumberLabel(stampingPoint)", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
         Assert.DoesNotContain("localStorage", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sessionStorage", script, StringComparison.OrdinalIgnoreCase);
@@ -674,7 +721,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains(".visit-controls", css, StringComparison.Ordinal);
         Assert.Contains("min-height: 2.75rem", css, StringComparison.Ordinal);
         Assert.Contains("saveVisit(\"PUT\"", script, StringComparison.Ordinal);
-        Assert.Contains("?provider=${provider}", script, StringComparison.Ordinal);
+        Assert.Contains("api/points/id/${stampingPoint.id}?provider=${provider}", script, StringComparison.Ordinal);
         Assert.Contains("? \"PATCH\" : \"PUT\"", script, StringComparison.Ordinal);
         Assert.Contains("sendVisitRequest(\"DELETE\"", script, StringComparison.Ordinal);
         Assert.Contains("elements.deleteVisitDialog.showModal()", script, StringComparison.Ordinal);
@@ -831,7 +878,15 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             number,
             number,
             providerId,
-            $"test-{providerId}-{number}");
+            $"test-{providerId}-{number}")
+        {
+            SeriesId = providerId switch
+            {
+                StampingProvider.TouringenId => StampingSeries.TouringenStandardId,
+                StampingProvider.HarzerWandernadelId => StampingSeries.HarzerWandernadelStandardId,
+                _ => 30
+            }
+        };
 
     private static string CreateSessionCookie(IServiceProvider services, ClaimsIdentity identity)
     {

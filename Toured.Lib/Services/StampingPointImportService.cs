@@ -4,33 +4,12 @@ using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Lib.Services;
 
-public class StampingPointImportService : IImportService<StampingPoint>
-{
-    public IEnumerable<StampingPoint> Import(RawArea[]? inputData)
-    {
-        if (inputData == null)
-        {
-            yield break;
-        }
-
-        var normalizedStampingPoints = inputData
-            .SelectMany(p => p.Touren.SelectMany(q => q.StampPoints))
-            .Union(inputData.SelectMany(p => p.OrphanedStampPoints))
-            .DistinctBy(p => p.Id)
-            .GroupBy(p => p.StampPointNumber)
-            .Select(p => p.MaxBy(q => q.Id)!)
-            .OrderBy(p => p.StampPointNumber);
-
-        foreach (var rawStampPoint in normalizedStampingPoints)
-        {
-            yield return rawStampPoint.CreateStampingPoint();
-        }
-    }
-}
-
 public static class AdapterExtensions
 {
-    public static StampingPoint CreateStampingPoint(this RawStampPoint rawStampPoint) => new(default, string.IsNullOrWhiteSpace(rawStampPoint.Name) ? rawStampPoint.Title.Trim('"', ' ') : rawStampPoint.Name.Trim('"', ' '), rawStampPoint.Longitude, rawStampPoint.Latitude, rawStampPoint.StampPointNumber, rawStampPoint.StampPointExtendedNumber, StampingProvider.TouringenId, rawStampPoint.Id.ToString(CultureInfo.InvariantCulture));
+    public static StampingPoint CreateStampingPoint(this RawStampPoint rawStampPoint) => new(default, string.IsNullOrWhiteSpace(rawStampPoint.Name) ? rawStampPoint.Title.Trim('"', ' ') : rawStampPoint.Name.Trim('"', ' '), rawStampPoint.Longitude, rawStampPoint.Latitude, rawStampPoint.StampPointNumber, rawStampPoint.StampPointExtendedNumber, StampingProvider.TouringenId, rawStampPoint.Id.ToString(CultureInfo.InvariantCulture))
+    {
+        SeriesId = StampingSeries.TouringenStandardId
+    };
 }
 
 public class HikingToursImportService : IImportService<HikingTour>
