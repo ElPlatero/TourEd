@@ -247,8 +247,8 @@ The server then:
 4. backs up the complete previous application and SQLite database;
 5. installs the new application and applies EF Core migrations as the runtime user;
 6. starts the service and waits for the configured `/health` readiness check;
-7. checks the sibling `/api/points` endpoint and `index.html` once as API and frontend smoke tests.
+7. checks `/auth/session` and `index.html` once as API and frontend smoke tests.
 
-The API and frontend smoke-test URLs are derived from `HEALTH_URL`, so a value such as `https://server.example/toured/health` checks `https://server.example/toured/api/points` and `https://server.example/toured/index.html`. During rollback, the script waits for the points API instead of `/health`, which keeps rollback compatible with an older application version that does not yet provide the health endpoint.
+The API and frontend smoke-test URLs are derived from `HEALTH_URL`, so a value such as `https://server.example/toured/health` checks `https://server.example/toured/auth/session` and `https://server.example/toured/index.html`. During rollback, the script waits for `/health`.
 
 If migration, startup, readiness, or smoke checking fails, the previous application and database are restored and the old service is restarted. Successful deployments retain the configured number of backups under `BACKUP_ROOT`.

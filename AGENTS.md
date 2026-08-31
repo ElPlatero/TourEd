@@ -270,7 +270,7 @@ Production deployment is manual through `.github/workflows/deploy.yml` and only 
 - `deploy/server/toured-deploy.conf.example` records the current production values without embedding them in deployment logic.
 - `deploy/server/toured-api.service.template` is rendered by the server setup from that configuration.
 
-The workflow builds and tests the solution, publishes the API together with the bundled frontend, creates the configured Linux EF migration bundle, and uploads a checksummed release. The root-owned server command stops the service, backs up the application and SQLite database, applies migrations as the configured runtime user, restarts the service, waits for `/health`, and checks `/api/points` and `index.html` once as smoke tests. It restores both application and database if deployment, readiness, or smoke checking fails.
+The workflow builds and tests the solution, publishes the API together with the bundled frontend, creates the configured Linux EF migration bundle, and uploads a checksummed release. The root-owned server command stops the service, backs up the application and SQLite database, applies migrations as the configured runtime user, restarts the service, waits for `/health`, and checks `/auth/session` and `index.html` once as smoke tests. It restores both application and database if deployment, readiness, or smoke checking fails.
 
 Server bootstrap and operational details are documented in `docs/deployment.md`. The GitHub secrets are `TOURED_DEPLOY_SSH_PRIVATE_KEY` and `TOURED_DEPLOY_KNOWN_HOSTS`.
 

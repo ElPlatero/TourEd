@@ -65,7 +65,7 @@ load_configuration
 readonly DEPLOY_USER DEPLOY_HOME RUNTIME_USER RUNTIME_GROUP APP_DIR BACKUP_ROOT DATABASE_FILE
 readonly SERVICE_NAME DOTNET_PATH LISTEN_URL HEALTH_URL RUNTIME_ENV_FILE DATA_PROTECTION_KEYS_DIR KEEP_BACKUPS
 readonly PUBLIC_BASE_URL="${HEALTH_URL%/health}"
-readonly API_SMOKE_URL="$PUBLIC_BASE_URL/api/points"
+readonly AUTH_SESSION_SMOKE_URL="$PUBLIC_BASE_URL/auth/session"
 readonly FRONTEND_SMOKE_URL="$PUBLIC_BASE_URL/index.html"
 readonly APPS_ROOT="$(dirname "$APP_DIR")"
 readonly DB_PATH="$APP_DIR/$DATABASE_FILE"
@@ -160,11 +160,11 @@ rollback() {
     set_app_permissions
     systemctl start "$SERVICE_NAME"
 
-    if wait_for_endpoint "$API_SMOKE_URL"; then
-        log "Rollback completed and API smoke check passed"
+    if wait_for_endpoint "$HEALTH_URL"; then
+        log "Rollback completed and healthcheck passed"
     else
         journalctl --unit "$SERVICE_NAME" --lines 30 --no-pager >&2 || true
-        fail "Rollback completed, but the API smoke check still fails"
+        fail "Rollback completed, but the healthcheck still fails"
     fi
 }
 
@@ -284,8 +284,8 @@ if ! wait_for_endpoint "$HEALTH_URL"; then
     fail "Production healthcheck failed"
 fi
 
-log "Checking production points API"
-check_endpoint "$API_SMOKE_URL" || fail "Production points API smoke check failed"
+log "Checking production session API"
+check_endpoint "$AUTH_SESSION_SMOKE_URL" || fail "Production session API smoke check failed"
 
 log "Checking production frontend"
 check_endpoint "$FRONTEND_SMOKE_URL" || fail "Production frontend smoke check failed"
