@@ -137,7 +137,7 @@ public sealed class GoogleLoginServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task UnknownEmailIsRejectedWithoutCreatingUser()
+    public async Task UnknownEmailCreatesPendingRegistrationRequestWithoutCreatingUser()
     {
         await using var context = await CreateInitializedContextAsync();
         var service = CreateService(context);
@@ -145,8 +145,80 @@ public sealed class GoogleLoginServiceTests : IDisposable
         var exception = await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.AuthenticateAsync(
             new GoogleLoginClaims("google-subject-1", "unknown@example.test", true)));
 
-        Assert.Equal(GoogleLoginRejectionReason.UnknownUser, exception.Reason);
+        Assert.Equal(GoogleLoginRejectionReason.RegistrationPending, exception.Reason);
         Assert.Empty(await context.Users.AsNoTracking().ToListAsync());
+
+        var requests = await context.RegistrationRequests.AsNoTracking().ToListAsync();
+        var request = Assert.Single(requests);
+        Assert.Equal("google-subject-1", request.GoogleSubject);
+        Assert.Equal("unknown@example.test", request.Email);
+        Assert.Equal(RegistrationRequestStatus.Pending, request.Status);
+    }
+
+    [Fact]
+    public async Task RepeatedLoginWithPendingRequestDoesNotDuplicateAndUpdatesChangedEmail()
+    {
+        await using var context = await CreateInitializedContextAsync();
+        var service = CreateService(context);
+
+        await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.AuthenticateAsync(
+            new GoogleLoginClaims("google-subject-1", "initial@example.test", true)));
+
+        var initialRequest = await context.RegistrationRequests.AsNoTracking().SingleAsync();
+        var initialCreatedAt = initialRequest.CreatedAt;
+
+        await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.AuthenticateAsync(
+            new GoogleLoginClaims("google-subject-1", "updated-address@example.test", true)));
+
+        var requests = await context.RegistrationRequests.AsNoTracking().ToListAsync();
+        var updatedRequest = Assert.Single(requests);
+        Assert.Equal(initialRequest.Id, updatedRequest.Id);
+        Assert.Equal("google-subject-1", updatedRequest.GoogleSubject);
+        Assert.Equal("updated-address@example.test", updatedRequest.Email);
+        Assert.Equal(RegistrationRequestStatus.Pending, updatedRequest.Status);
+        Assert.Equal(initialCreatedAt, updatedRequest.CreatedAt);
+        Assert.NotNull(updatedRequest.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task RepeatedLoginWithRejectedRequestReAppliesAsPending()
+    {
+        await using var context = await CreateInitializedContextAsync();
+        var service = CreateService(context);
+        var repository = new TouredRepository(context);
+
+        await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.AuthenticateAsync(
+            new GoogleLoginClaims("google-subject-1", "applicant@example.test", true)));
+
+        var initialRequest = await context.RegistrationRequests.SingleAsync();
+        await repository.RejectRegistrationRequestAsync(initialRequest.Id, actorUserId: 1);
+
+        var rejectedRequest = await context.RegistrationRequests.AsNoTracking().SingleAsync();
+        Assert.Equal(RegistrationRequestStatus.Rejected, rejectedRequest.Status);
+        Assert.NotNull(rejectedRequest.DecidedAt);
+
+        await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.AuthenticateAsync(
+            new GoogleLoginClaims("google-subject-1", "applicant@example.test", true)));
+
+        var reAppliedRequest = await context.RegistrationRequests.AsNoTracking().SingleAsync();
+        Assert.Equal(RegistrationRequestStatus.Pending, reAppliedRequest.Status);
+        Assert.Null(reAppliedRequest.DecidedAt);
+    }
+
+    [Fact]
+    public async Task ProcessLoginReturnsPendingResultForNewRegistration()
+    {
+        await using var context = await CreateInitializedContextAsync();
+        var service = CreateService(context);
+
+        var result = await service.ProcessLoginAsync(
+            new GoogleLoginClaims("google-subject-99", "new-hiker@example.test", true));
+
+        Assert.Equal(GoogleLoginStatus.Pending, result.Status);
+        Assert.Null(result.User);
+        Assert.Null(result.Principal);
+        Assert.NotNull(result.RegistrationRequest);
+        Assert.Equal("google-subject-99", result.RegistrationRequest.GoogleSubject);
     }
 
     [Fact]

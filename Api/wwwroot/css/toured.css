@@ -897,6 +897,29 @@ input:focus-visible,
     color: var(--text);
 }
 
+.auth-barrier__notice {
+    margin: 0 0 1.25rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    text-align: left;
+    background: rgba(39, 156, 223, 0.15);
+    border: 1px solid rgba(39, 156, 223, 0.35);
+    color: var(--text);
+}
+
+.auth-barrier__notice strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+}
+
+.auth-barrier__notice--rejected {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.35);
+}
+
 .auth-barrier__description {
     margin: 0 0 1.5rem;
     font-size: 0.95rem;

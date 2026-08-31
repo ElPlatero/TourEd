@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using Api.Authentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.DataProtection;
+using TourEd.Lib.Abstractions.Models;
 using TourEd.Lib.Extensions;
 
 namespace Api.Extensions;
@@ -61,9 +63,20 @@ internal static class AuthenticationServiceCollectionExtensions
                     OnCreatingTicket = async context =>
                     {
                         var ticketService = context.HttpContext.RequestServices.GetRequiredService<GoogleOAuthTicketService>();
-                        context.Principal = await ticketService.CreatePrincipalAsync(
+                        var result = await ticketService.ProcessTicketAsync(
                             context.User,
                             context.HttpContext.RequestAborted);
+
+                        if (result.Status == GoogleLoginStatus.Authenticated && result.Principal is not null)
+                        {
+                            context.Principal = result.Principal;
+                        }
+                        else
+                        {
+                            context.Principal = new ClaimsPrincipal(new ClaimsIdentity());
+                            var pathBase = context.HttpContext.Request.PathBase.Value ?? string.Empty;
+                            context.Properties.RedirectUri = $"{pathBase}/?registration=pending";
+                        }
                     },
                     OnRemoteFailure = context =>
                     {
