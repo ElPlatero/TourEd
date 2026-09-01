@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Api.Authentication;
 using Api.Controllers.Auth;
 using Api.Controllers.Points;
@@ -949,6 +950,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("<main id=\"appShell\" inert aria-hidden=\"true\">", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("id=\"authBarrier\" class=\"auth-barrier\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"authBarrierTitle\" aria-describedby=\"authBarrierDesc\" hidden", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".auth-barrier", css, StringComparison.Ordinal);
+        Assert.Contains("width: min(14rem, 80%);", css, StringComparison.Ordinal);
         Assert.Contains("showAuthBarrier", script, StringComparison.Ordinal);
         Assert.Contains("hideAuthBarrier", script, StringComparison.Ordinal);
         Assert.True(
@@ -958,6 +960,33 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("elements.authBarrierDesc.hidden = registrationDecisionVisible", script, StringComparison.Ordinal);
         Assert.Contains("Solange diese Entscheidung gespeichert ist", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BundledFrontendDeclaresEveryReferencedDomElement()
+    {
+        using var client = CreateClient(_factory);
+        var script = await client.GetStringAsync("/js/toured.js");
+        var registry = Regex.Match(
+            script,
+            @"const elements = \{(?<body>.*?)^\s{4}\};",
+            RegexOptions.Multiline | RegexOptions.Singleline);
+        Assert.True(registry.Success);
+        var declarations = Regex.Matches(
+                registry.Groups["body"].Value,
+                @"^\s*(?<name>[A-Za-z_$][\w$]*):",
+                RegexOptions.Multiline)
+            .Select(match => match.Groups["name"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        declarations.UnionWith(Regex.Matches(
+                script,
+                @"\belements\.(?<name>[A-Za-z_$][\w$]*)\s*=(?!=)")
+            .Select(match => match.Groups["name"].Value));
+        var references = Regex.Matches(script, @"\belements\.(?<name>[A-Za-z_$][\w$]*)\b")
+            .Select(match => match.Groups["name"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Empty(references.Except(declarations));
     }
 
     [Fact]
