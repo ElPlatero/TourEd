@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.DataProtection;
+using TourEd.Lib.Abstractions.Interfaces.Services;
 using TourEd.Lib.Abstractions.Models;
 using TourEd.Lib.Extensions;
 
@@ -35,13 +36,25 @@ internal static class AuthenticationServiceCollectionExtensions
                 options.LoginPath = "/auth/login";
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.SlidingExpiration = true;
-                options.Events.OnValidatePrincipal = context =>
+                options.Events.OnValidatePrincipal = async context =>
                 {
-                    if (context.Principal?.TryGetUser(out _) != true)
+                    if (context.Principal?.TryGetUser(out var claimedUser) != true)
                     {
                         context.RejectPrincipal();
+                        return;
                     }
-                    return Task.CompletedTask;
+
+                    var validClaimedUser = claimedUser!;
+                    var userService = context.HttpContext.RequestServices.GetRequiredService<IUserService>();
+                    var storedUser = await userService.GetUserByIdOrDefaultAsync(
+                        validClaimedUser.Id,
+                        context.HttpContext.RequestAborted);
+                    if (storedUser is null ||
+                        !string.Equals(storedUser.Email, validClaimedUser.Email, StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.RejectPrincipal();
+                        await context.HttpContext.SignOutAsync(TouredAuthenticationSchemes.Cookie);
+                    }
                 };
                 options.Events.OnRedirectToLogin = context => SetApiStatusOrRedirect(context, StatusCodes.Status401Unauthorized);
                 options.Events.OnRedirectToAccessDenied = context => SetApiStatusOrRedirect(context, StatusCodes.Status403Forbidden);

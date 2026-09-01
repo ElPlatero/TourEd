@@ -5,7 +5,8 @@ public sealed record AdminUserDto(
     string Email,
     bool IsGoogleLinked,
     string? DefaultProvider,
-    IReadOnlyList<string> Providers);
+    IReadOnlyList<string> Providers,
+    int VisitCount);
 
 public sealed record UpdateAdminUserProvidersRequestDto(
     IReadOnlyList<string> Providers,

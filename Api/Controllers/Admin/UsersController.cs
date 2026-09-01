@@ -21,6 +21,24 @@ public sealed class UsersController : ControllerBase
     public Task<List<AdminUserDto>> GetUsers(CancellationToken cancellationToken)
         => _manager.GetUsersAsync(cancellationToken);
 
+    [HttpDelete("{userId:int}")]
+    public async Task<IActionResult> DeleteUser(int userId, CancellationToken cancellationToken)
+    {
+        var actorUserId = User.GetUser().Id;
+        if (userId == actorUserId)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Self-deletion is not allowed",
+                Detail = "The configured administrative CLI user cannot delete itself."
+            });
+        }
+
+        return await _manager.DeleteUserAsync(userId, actorUserId, cancellationToken)
+            ? NoContent()
+            : NotFound();
+    }
+
     [HttpPut("{userId:int}/providers")]
     public async Task<ActionResult<AdminUserDto>> UpdateProviders(
         int userId,

@@ -97,7 +97,8 @@ public class TouredRepository : IUserService
                     .OrderBy(access => access.StampingProvider.Name)
                     .ThenBy(access => access.StampingProvider.Slug)
                     .Select(access => access.StampingProvider.Slug)
-                    .ToList()))
+                    .ToList(),
+                user.VisitedStampingPoints.Count))
             .ToListAsync(cancellationToken);
 
     public async Task<AdminUserDto?> UpdateAdminUserProvidersAsync(
@@ -191,8 +192,36 @@ public class TouredRepository : IUserService
                     .OrderBy(access => access.StampingProvider.Name)
                     .ThenBy(access => access.StampingProvider.Slug)
                     .Select(access => access.StampingProvider.Slug)
-                    .ToList()))
+                    .ToList(),
+                item.VisitedStampingPoints.Count))
             .SingleAsync(cancellationToken);
+    }
+
+    public async Task<bool> DeleteAdminUserAsync(
+        int userId,
+        int actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var user = await _dbContext.Users.SingleOrDefaultAsync(item => item.Id == userId, cancellationToken);
+        if (user is null)
+        {
+            return false;
+        }
+
+        var normalizedEmail = user.Email.Trim().ToLowerInvariant();
+        var registrationRequests = await _dbContext.RegistrationRequests
+            .Where(request =>
+                (user.GoogleSubject != null && request.GoogleSubject == user.GoogleSubject) ||
+                request.Email.ToLower() == normalizedEmail)
+            .ToListAsync(cancellationToken);
+
+        _dbContext.RegistrationRequests.RemoveRange(registrationRequests);
+        _dbContext.Users.Remove(user);
+        _dbContext.AdminAuditEntries.Add(CreateAudit(actorUserId, "user.deleted", userId, null));
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     private static AdminAuditEntry CreateAudit(
@@ -544,6 +573,9 @@ public class TouredRepository : IUserService
         return _dbContext.Users.AsNoTracking()
             .FirstOrDefaultAsync(user => user.Email.ToLower() == normalizedEmail, cancellationToken);
     }
+
+    public Task<User?> GetUserByIdOrDefaultAsync(int userId, CancellationToken cancellationToken = default)
+        => _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(user => user.Id == userId, cancellationToken);
 
     public Task<User?> GetUserByGoogleSubjectOrDefaultAsync(string googleSubject, CancellationToken cancellationToken = default)
         => _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(p => p.GoogleSubject == googleSubject, cancellationToken);

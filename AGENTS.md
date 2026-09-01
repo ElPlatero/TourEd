@@ -133,6 +133,7 @@ The main runtime composition happens in `Api/Program.cs`.
 Authentication is scheme-separated:
 
 - Browser requests authenticate only through the encrypted `toured-session` cookie, which is the default scheme, is `Secure`, `HttpOnly`, `SameSite=Lax`, expires after eight hours, and uses sliding expiration.
+- Cookie principals are revalidated against the stored user on every authenticated request; deleting a user therefore invalidates already issued sessions.
 - Google is used only by the explicit `/auth/login` challenge. Its callback binds through `GoogleLoginService`, discards Google claims/tokens, and stores only internal user-id and email claims in the TourEd cookie.
 - Import routes use the separate `TouredCliImport` policy and `TouredCliBearer` scheme. Only the configured bearer token can resolve the configured existing user; cookie identities do not satisfy this policy.
 - Arbitrary request headers and URL query parameters never establish a browser identity.
@@ -238,6 +239,8 @@ Other endpoints:
   - Upserts one or more stamping points (e.g. temporary Sonderstempel) from a JSON payload.
   - Existing points matched by `(series, number)` or `(provider, externalId)` are updated in place while retaining internal IDs and user visits; new points are created.
   - Requires the dedicated CLI bearer token and is intended for manual/admin use.
+- `DELETE /api/admin/users/{id}`
+  - Permanently removes a non-administrative target user together with visits, provider entitlements, Google binding, and matching registration request while retaining global stamping points and a minimal `user.deleted` audit entry. The configured CLI user cannot delete itself.
 - `GET /api/admin/users`
   - Lists existing users with Google-link state, provider entitlements, and optional entitled default provider.
   - Requires the dedicated CLI bearer token.
