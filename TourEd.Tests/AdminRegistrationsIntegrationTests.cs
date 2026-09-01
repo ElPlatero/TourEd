@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Api.Dto;
 using Api.Repositories;
+using Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -268,9 +269,20 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
                     Status = RegistrationRequestStatus.Rejected,
                     CreatedAt = DateTime.UtcNow.AddDays(-40),
                     DecidedAt = DateTime.UtcNow.AddDays(-31)
+                },
+                new RegistrationRequest
+                {
+                    GoogleSubject = "old-approved",
+                    Email = "old-approved@example.test",
+                    Status = RegistrationRequestStatus.Approved,
+                    CreatedAt = DateTime.UtcNow.AddDays(-40),
+                    DecidedAt = DateTime.UtcNow.AddDays(-31)
                 });
             await context.SaveChangesAsync();
         }
+
+        var cleanupService = _factory.Services.GetRequiredService<RegistrationRequestCleanupService>();
+        Assert.True(await cleanupService.RunCleanupSafelyAsync());
 
         using var client = CreateAuthorizedClient();
         var list = await client.GetFromJsonAsync<List<AdminRegistrationRequestDto>>("/api/admin/registrations");
@@ -278,6 +290,50 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
         Assert.NotNull(list);
         var single = Assert.Single(list);
         Assert.Equal("fresh-pending@example.test", single.Email);
+    }
+
+    [Fact]
+    public async Task CleanupUsesStrictThirtyDayBoundaryForEveryStatus()
+    {
+        var now = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+        context.RegistrationRequests.AddRange(
+            new RegistrationRequest
+            {
+                GoogleSubject = "boundary-pending",
+                Email = "boundary-pending@example.test",
+                Status = RegistrationRequestStatus.Pending,
+                CreatedAt = now.AddDays(-30)
+            },
+            new RegistrationRequest
+            {
+                GoogleSubject = "boundary-rejected",
+                Email = "boundary-rejected@example.test",
+                Status = RegistrationRequestStatus.Rejected,
+                CreatedAt = now.AddDays(-40),
+                DecidedAt = now.AddDays(-30)
+            },
+            new RegistrationRequest
+            {
+                GoogleSubject = "expired-approved",
+                Email = "expired-approved@example.test",
+                Status = RegistrationRequestStatus.Approved,
+                CreatedAt = now.AddDays(-40),
+                DecidedAt = now.AddDays(-30).AddTicks(-1)
+            });
+        await context.SaveChangesAsync();
+
+        var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+        await repository.CleanupExpiredRegistrationRequestsAsync(now);
+
+        var subjects = await context.RegistrationRequests
+            .AsNoTracking()
+            .Select(request => request.GoogleSubject)
+            .ToListAsync();
+        Assert.Contains("boundary-pending", subjects);
+        Assert.Contains("boundary-rejected", subjects);
+        Assert.DoesNotContain("expired-approved", subjects);
     }
 
     private HttpClient CreateAuthorizedClient()

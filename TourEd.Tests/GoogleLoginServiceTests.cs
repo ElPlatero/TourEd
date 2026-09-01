@@ -181,7 +181,7 @@ public sealed class GoogleLoginServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task RepeatedLoginWithRejectedRequestReAppliesAsPending()
+    public async Task RepeatedLoginWithRejectedRequestPreservesDecision()
     {
         await using var context = await CreateInitializedContextAsync();
         var service = CreateService(context);
@@ -197,12 +197,46 @@ public sealed class GoogleLoginServiceTests : IDisposable
         Assert.Equal(RegistrationRequestStatus.Rejected, rejectedRequest.Status);
         Assert.NotNull(rejectedRequest.DecidedAt);
 
-        await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.AuthenticateAsync(
-            new GoogleLoginClaims("google-subject-1", "applicant@example.test", true)));
+        var result = await service.ProcessLoginAsync(
+            new GoogleLoginClaims("google-subject-1", "changed@example.test", true));
 
-        var reAppliedRequest = await context.RegistrationRequests.AsNoTracking().SingleAsync();
-        Assert.Equal(RegistrationRequestStatus.Pending, reAppliedRequest.Status);
-        Assert.Null(reAppliedRequest.DecidedAt);
+        Assert.Equal(GoogleLoginStatus.Rejected, result.Status);
+        var preservedRequest = await context.RegistrationRequests.AsNoTracking().SingleAsync();
+        Assert.Equal(RegistrationRequestStatus.Rejected, preservedRequest.Status);
+        Assert.Equal("applicant@example.test", preservedRequest.Email);
+        Assert.Equal(rejectedRequest.CreatedAt, preservedRequest.CreatedAt);
+        Assert.Equal(rejectedRequest.UpdatedAt, preservedRequest.UpdatedAt);
+        Assert.Equal(rejectedRequest.DecidedAt, preservedRequest.DecidedAt);
+
+        var exception = await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.AuthenticateAsync(
+            new GoogleLoginClaims("google-subject-1", "changed@example.test", true)));
+        Assert.Equal(GoogleLoginRejectionReason.RegistrationRejected, exception.Reason);
+    }
+
+    [Fact]
+    public async Task RejectedIdentityCanApplyAgainAfterRetentionCleanup()
+    {
+        await using var context = await CreateInitializedContextAsync();
+        var service = CreateService(context);
+        var repository = new TouredRepository(context);
+
+        await service.ProcessLoginAsync(
+            new GoogleLoginClaims("expired-rejection", "applicant@example.test", true));
+        var request = await context.RegistrationRequests.SingleAsync();
+        await repository.RejectRegistrationRequestAsync(request.Id, actorUserId: 1);
+        request.CreatedAt = DateTime.UtcNow.AddDays(-40);
+        request.DecidedAt = DateTime.UtcNow.AddDays(-31);
+        request.UpdatedAt = request.DecidedAt;
+        await context.SaveChangesAsync();
+        await repository.CleanupExpiredRegistrationRequestsAsync();
+
+        var result = await service.ProcessLoginAsync(
+            new GoogleLoginClaims("expired-rejection", "applicant@example.test", true));
+
+        Assert.Equal(GoogleLoginStatus.Pending, result.Status);
+        var newRequest = await context.RegistrationRequests.AsNoTracking().SingleAsync();
+        Assert.Equal(RegistrationRequestStatus.Pending, newRequest.Status);
+        Assert.Null(newRequest.DecidedAt);
     }
 
     [Fact]

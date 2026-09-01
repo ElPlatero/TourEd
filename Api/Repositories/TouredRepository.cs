@@ -597,7 +597,6 @@ public class TouredRepository : IUserService
         string googleSubject,
         CancellationToken cancellationToken = default)
     {
-        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
         return await _dbContext.RegistrationRequests
             .FirstOrDefaultAsync(r => r.GoogleSubject == googleSubject, cancellationToken);
     }
@@ -607,7 +606,6 @@ public class TouredRepository : IUserService
         string email,
         CancellationToken cancellationToken = default)
     {
-        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
         var normalizedEmail = email.Trim().ToLowerInvariant();
 
         var existing = await _dbContext.RegistrationRequests
@@ -637,6 +635,11 @@ public class TouredRepository : IUserService
                     throw;
                 }
             }
+        }
+
+        if (existing.Status == RegistrationRequestStatus.Rejected)
+        {
+            return existing;
         }
 
         if (existing.Status == RegistrationRequestStatus.Pending)
@@ -678,8 +681,6 @@ public class TouredRepository : IUserService
         string? status = null,
         CancellationToken cancellationToken = default)
     {
-        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
-
         var query = _dbContext.RegistrationRequests.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -713,8 +714,6 @@ public class TouredRepository : IUserService
         int actorUserId,
         CancellationToken cancellationToken = default)
     {
-        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
-
         var request = await _dbContext.RegistrationRequests
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
         if (request is null)
@@ -791,8 +790,6 @@ public class TouredRepository : IUserService
         int actorUserId,
         CancellationToken cancellationToken = default)
     {
-        await CleanupExpiredRegistrationRequestsAsync(cancellationToken: cancellationToken);
-
         var request = await _dbContext.RegistrationRequests
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
         if (request is null)

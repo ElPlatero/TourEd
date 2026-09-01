@@ -11,7 +11,7 @@ namespace Api.Extensions;
 
 internal static class AuthenticationServiceCollectionExtensions
 {
-    private const string PendingRegistrationProperty = "toured:registration-pending";
+    private const string RegistrationOutcomeProperty = "toured:registration-outcome";
 
     public static IServiceCollection AddTouredAuthentication(
         this IServiceCollection services,
@@ -88,16 +88,19 @@ internal static class AuthenticationServiceCollectionExtensions
                         else
                         {
                             var pathBase = context.HttpContext.Request.PathBase.Value ?? string.Empty;
-                            context.Properties.Items[PendingRegistrationProperty] = bool.TrueString;
-                            context.Properties.RedirectUri = $"{pathBase}/?registration=pending";
+                            var outcome = result.Status == GoogleLoginStatus.Rejected ? "rejected" : "pending";
+                            context.Properties.Items[RegistrationOutcomeProperty] = outcome;
+                            context.Properties.RedirectUri = $"{pathBase}/?registration={outcome}";
                         }
                     },
                     OnTicketReceived = context =>
                     {
-                        if (context.Properties?.Items.Remove(PendingRegistrationProperty) == true)
+                        if (context.Properties?.Items.TryGetValue(RegistrationOutcomeProperty, out var outcome) == true)
                         {
+                            context.Properties.Items.Remove(RegistrationOutcomeProperty);
                             context.HandleResponse();
-                            context.Response.Redirect(context.Properties.RedirectUri ?? "/?registration=pending");
+                            var pathBase = context.HttpContext.Request.PathBase.Value ?? string.Empty;
+                            context.Response.Redirect($"{pathBase}/?registration={outcome}");
                         }
 
                         return Task.CompletedTask;

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Api.Extensions;
 using Api.Managers;
 using Api.Repositories;
+using Api.Services;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using TourEd.Lib.Abstractions;
@@ -35,6 +36,9 @@ builder.Services
     .AddImportServices()
     .AddRepositories()
     .AddManagers()
+    .AddSingleton<TimeProvider>(TimeProvider.System)
+    .AddSingleton<RegistrationRequestCleanupService>()
+    .AddHostedService(serviceProvider => serviceProvider.GetRequiredService<RegistrationRequestCleanupService>())
     .AddTransient<IUnitOfWork, UnitOfWork>()
     .AddTouredAuthentication(builder.Configuration)
     .AddTouredDataProtection(builder.Configuration)

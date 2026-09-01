@@ -7,7 +7,8 @@ public enum GoogleLoginRejectionReason
     UnknownUser,
     SubjectAlreadyBound,
     UserAlreadyBound,
-    RegistrationPending
+    RegistrationPending,
+    RegistrationRejected
 }
 
 public sealed class GoogleLoginRejectedException : InvalidOperationException
@@ -29,6 +30,7 @@ public sealed class GoogleLoginRejectedException : InvalidOperationException
             GoogleLoginRejectionReason.SubjectAlreadyBound => "The Google identity is assigned to another TourEd user.",
             GoogleLoginRejectionReason.UserAlreadyBound => "The TourEd user is assigned to another Google identity.",
             GoogleLoginRejectionReason.RegistrationPending => "The registration request is pending administrator approval.",
+            GoogleLoginRejectionReason.RegistrationRejected => "The registration request was rejected.",
             _ => "The Google identity cannot be used to sign in."
         };
 }
