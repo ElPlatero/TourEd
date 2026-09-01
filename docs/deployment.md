@@ -67,7 +67,7 @@ The root-owned runtime environment file contains the Google credentials, CLI ide
 
 Before deploying this version for the first time, the new notification environment entries must be added to `/etc/toured-api.env` so that deployment validation succeeds.
 
-Generate a 256-bit CLI token on the server and enter the Google client secret and SMTP password interactively without placing literals in shell history or shell arguments (alternatively edit `/etc/toured-api.env` using `sudoedit` and verify `root:root` with mode `0600` afterwards). The CLI email must already exist in the TourEd database. For IONOS SMTP (`smtp.ionos.de:465` with implicit SSL/TLS), the authenticated mailbox account (e.g. `mail.admin@baelgun.de`) must belong to the sender domain (e.g. `toured@baelgun.de`):
+Generate a 256-bit CLI token on the server and enter the Google client secret and SMTP password interactively without placing literals in shell history or shell arguments (alternatively edit `/etc/toured-api.env` using `sudoedit` and verify `root:root` with mode `0600` afterwards). The CLI email must already exist in the TourEd database. For IONOS SMTP (`smtp.ionos.de:587` with mandatory STARTTLS), the authenticated mailbox account (e.g. `mail.admin@baelgun.de`) must belong to the sender domain (e.g. `toured@baelgun.de`):
 
 ```bash
 TOURED_GOOGLE_CLIENT_ID='client-id.apps.googleusercontent.com'
@@ -88,7 +88,7 @@ printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecre
     'https://www.touringen.de/stempelstellen' \
     'true' \
     'smtp.ionos.de' \
-    '465' \
+    '587' \
     'mail.admin@baelgun.de' \
     "$TOURED_SMTP_PASSWORD" \
     'toured@baelgun.de' \

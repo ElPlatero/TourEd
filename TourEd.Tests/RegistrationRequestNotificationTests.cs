@@ -43,7 +43,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
         {
             Enabled = true,
             SmtpHost = "   ",
-            SmtpPort = 465,
+            SmtpPort = 587,
             SmtpUsername = "user@example.test",
             SmtpPassword = "secret-password",
             SenderAddress = "sender@example.test",
@@ -63,7 +63,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
         {
             Enabled = true,
             SmtpHost = "smtp.ionos.de",
-            SmtpPort = 465,
+            SmtpPort = 587,
             SmtpUsername = "user@example.test",
             SmtpPassword = "",
             SenderAddress = "sender@example.test",
@@ -109,7 +109,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
         {
             Enabled = true,
             SmtpHost = "smtp.ionos.de",
-            SmtpPort = 465,
+            SmtpPort = 587,
             SmtpUsername = "user@example.test",
             SmtpPassword = "secret-password",
             SenderAddress = sender,
@@ -877,7 +877,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
     {
         Enabled = true,
         SmtpHost = "smtp.ionos.de",
-        SmtpPort = 465,
+        SmtpPort = 587,
         SmtpUsername = "mail.admin@baelgun.de",
         SmtpPassword = "test-secret-password",
         SenderAddress = "toured@baelgun.de",
