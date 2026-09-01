@@ -157,6 +157,53 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RealGoogleHandlerRedirectsPendingRegistrationWithoutCreatingSessionCookie()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"toured-google-callback-{Guid.NewGuid():N}.db");
+        var keysPath = Path.Combine(Path.GetTempPath(), $"toured-google-callback-keys-{Guid.NewGuid():N}");
+        await using var factory = new TouredWebApplicationFactory(
+            databasePath,
+            keysPath,
+            useFakeGoogle: false,
+            useStubGoogleBackchannel: true);
+
+        try
+        {
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<DataContext>().Database.MigrateAsync();
+            }
+
+            using var client = CreateClient(factory);
+            var challengeResponse = await client.GetAsync("/auth/login");
+            Assert.Equal(HttpStatusCode.Redirect, challengeResponse.StatusCode);
+            var state = QueryHelpers.ParseQuery(challengeResponse.Headers.Location!.Query)["state"].ToString();
+
+            var callbackResponse = await client.GetAsync($"/signin-google?code=test-code&state={Uri.EscapeDataString(state)}");
+
+            Assert.Equal(HttpStatusCode.Redirect, callbackResponse.StatusCode);
+            Assert.Equal("/?registration=pending", callbackResponse.Headers.Location?.OriginalString);
+            Assert.DoesNotContain(
+                callbackResponse.Headers.TryGetValues("Set-Cookie", out var cookies) ? cookies : [],
+                cookie => cookie.StartsWith("toured-session=", StringComparison.Ordinal));
+
+            var session = await client.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+            Assert.NotNull(session);
+            Assert.False(session.Authenticated);
+
+            await using var verificationScope = factory.Services.CreateAsyncScope();
+            var context = verificationScope.ServiceProvider.GetRequiredService<DataContext>();
+            Assert.NotNull(await context.RegistrationRequests.SingleOrDefaultAsync(
+                request => request.GoogleSubject == "google-sub-real-handler"));
+        }
+        finally
+        {
+            DeleteFile(databasePath);
+            DeleteDirectory(keysPath);
+        }
+    }
+
+    [Fact]
     public async Task SessionDistinguishesAnonymousAndLogoutRemovesCookieSession()
     {
         using var client = CreateClient(_factory);
@@ -1056,7 +1103,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         string databasePath,
         string keysPath,
         bool useFakeGoogle,
-        string? pathBase = null) : WebApplicationFactory<Program>
+        string? pathBase = null,
+        bool useStubGoogleBackchannel = false) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -1083,6 +1131,38 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
                         options => options.ForwardDefault = FakeGoogleHandler.AuthenticationSchemeName);
                 });
             }
+            else if (useStubGoogleBackchannel)
+            {
+                builder.ConfigureTestServices(services => services.PostConfigure<GoogleOptions>(
+                    TouredAuthenticationSchemes.Google,
+                    options =>
+                    {
+                        options.AuthorizationEndpoint = "https://google.test/authorize";
+                        options.TokenEndpoint = "https://google.test/token";
+                        options.UserInformationEndpoint = "https://google.test/userinfo";
+                        options.Backchannel = new HttpClient(new StubGoogleBackchannelHandler());
+                    }));
+            }
+        }
+    }
+
+    private sealed class StubGoogleBackchannelHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var json = request.RequestUri?.AbsolutePath switch
+            {
+                "/token" => "{\"access_token\":\"test-access-token\",\"token_type\":\"Bearer\",\"expires_in\":3600}",
+                "/userinfo" => "{\"id\":\"google-sub-real-handler\",\"email\":\"real-handler@example.test\",\"verified_email\":true}",
+                _ => throw new InvalidOperationException($"Unexpected Google backchannel request: {request.RequestUri}")
+            };
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            });
         }
     }
 
