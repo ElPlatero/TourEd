@@ -6,6 +6,7 @@
         accountPanel: document.getElementById("accountPanel"),
         appShell: document.getElementById("appShell"),
         authBarrier: document.getElementById("authBarrier"),
+        authBarrierDesc: document.getElementById("authBarrierDesc"),
         authBarrierLoginButton: document.getElementById("authBarrierLoginButton"),
         authBarrierNotice: document.getElementById("authBarrierNotice"),
         cancelDeleteVisitButton: document.getElementById("cancelDeleteVisitButton"),

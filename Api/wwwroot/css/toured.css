@@ -886,8 +886,8 @@ input:focus-visible,
 }
 
 .auth-barrier__logo img {
-    width: 4.5rem;
-    height: 4.5rem;
+    width: min(14rem, 80%);
+    height: auto;
 }
 
 .auth-barrier__title {
