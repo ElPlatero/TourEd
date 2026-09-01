@@ -139,9 +139,8 @@ if ! grep -Fqx 'RegistrationNotifications__Enabled=true' "$RUNTIME_ENV_FILE"; th
     printf 'RegistrationNotifications__Enabled must be true.\n' >&2
     exit 1
 fi
-smtp_port="$(awk -F= '$1 == "RegistrationNotifications__SmtpPort" { print $2 }' "$RUNTIME_ENV_FILE")"
-if [[ ! "$smtp_port" =~ ^[0-9]+$ ]] || (( smtp_port < 1 || smtp_port > 65535 )); then
-    printf 'RegistrationNotifications__SmtpPort must be a valid port number between 1 and 65535.\n' >&2
+if ! grep -Fqx 'RegistrationNotifications__SmtpPort=587' "$RUNTIME_ENV_FILE"; then
+    printf 'RegistrationNotifications__SmtpPort must be 587 for mandatory IONOS STARTTLS.\n' >&2
     exit 1
 fi
 if [[ -e "$DATA_PROTECTION_KEYS_DIR" && ( ! -d "$DATA_PROTECTION_KEYS_DIR" || -L "$DATA_PROTECTION_KEYS_DIR" ) ]]; then

@@ -26,7 +26,7 @@ internal sealed class SmtpRegistrationNotificationSender(
         using var client = new SmtpClient();
         client.Timeout = 10000; // 10 seconds
 
-        await client.ConnectAsync(_options.SmtpHost, _options.SmtpPort, SecureSocketOptions.SslOnConnect, cancellationToken);
+        await client.ConnectAsync(_options.SmtpHost, _options.SmtpPort, SecureSocketOptions.StartTls, cancellationToken);
         await client.AuthenticateAsync(_options.SmtpUsername, _options.SmtpPassword, cancellationToken);
         await client.SendAsync(message, cancellationToken);
         await client.DisconnectAsync(true, cancellationToken);

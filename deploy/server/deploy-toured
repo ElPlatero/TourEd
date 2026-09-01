@@ -111,9 +111,8 @@ grep -Fqx 'touringen__StempelstellenUri=https://www.touringen.de/stempelstellen'
     fail "touringen__StempelstellenUri must use the supported Touringen source URL"
 grep -Fqx 'RegistrationNotifications__Enabled=true' "$RUNTIME_ENV_FILE" || \
     fail "RegistrationNotifications__Enabled must be true"
-smtp_port="$(awk -F= '$1 == "RegistrationNotifications__SmtpPort" { print $2 }' "$RUNTIME_ENV_FILE")"
-[[ "$smtp_port" =~ ^[0-9]+$ ]] && (( smtp_port >= 1 && smtp_port <= 65535 )) || \
-    fail "RegistrationNotifications__SmtpPort must be a valid port number between 1 and 65535"
+grep -Fqx 'RegistrationNotifications__SmtpPort=587' "$RUNTIME_ENV_FILE" || \
+    fail "RegistrationNotifications__SmtpPort must be 587 for mandatory IONOS STARTTLS"
 [[ -d "$DATA_PROTECTION_KEYS_DIR" && ! -L "$DATA_PROTECTION_KEYS_DIR" ]] || \
     fail "Data-Protection keys directory is missing or is a symlink: $DATA_PROTECTION_KEYS_DIR"
 [[ "$(stat --format '%u' "$DATA_PROTECTION_KEYS_DIR")" == "$(id -u "$RUNTIME_USER")" ]] || \
