@@ -88,15 +88,92 @@
     });
     const VisitFilterOrder = [VisitFilter.all, VisitFilter.open, VisitFilter.visited];
 
-    const createMarkerLayer = iconSource => new ol.layer.Vector({
-        source: new ol.source.Vector(),
-        style: new ol.style.Style({
-            image: new ol.style.Icon({
-                anchor: [0.5, 1],
-                src: iconSource,
-                scale: 0.32
-            })
+    const createMarkerStyle = iconSource => new ol.style.Style({
+        image: new ol.style.Icon({
+            anchor: [0.5, 1],
+            src: iconSource,
+            scale: 0.32
         })
+    });
+
+    const markerStyles = {
+        [VisitState.unknown]: createMarkerStyle("img/pin_icon_neutral.svg?v=3"),
+        [VisitState.open]: createMarkerStyle("img/pin_icon_neutral.svg?v=3"),
+        [VisitState.visited]: createMarkerStyle("img/pin_icon_visited.svg?v=3")
+    };
+    const clusterStyleCache = new Map();
+    const markerSource = new ol.source.Vector();
+    const clusterSource = new ol.source.Cluster({
+        distance: 44,
+        source: markerSource
+    });
+
+    const getClusterSize = count => count < 10 ? 40 : count < 50 ? 46 : 52;
+
+    const getClusterVisitState = features => {
+        const visitedCount = features.filter(feature => feature.visitState === VisitState.visited).length;
+        if (visitedCount === features.length) {
+            return VisitState.visited;
+        }
+        return visitedCount === 0 ? VisitState.open : "mixed";
+    };
+
+    const createClusterIconSource = (displayCount, visitState, size) => {
+        const center = size / 2;
+        const outerRadius = center - 1;
+        const innerRadius = center - 8;
+        const fill = visitState === "mixed"
+            ? "url(#mixed)"
+            : visitState === VisitState.visited ? "#123e65" : "#279cdf";
+        const mixedDefinition = visitState === "mixed"
+            ? [
+                '<defs><linearGradient id="mixed" x1="0" y1="1" x2="1" y2="0">',
+                '<stop offset="0%" stop-color="#123e65"/>',
+                '<stop offset="50%" stop-color="#123e65"/>',
+                '<stop offset="50%" stop-color="#279cdf"/>',
+                '<stop offset="100%" stop-color="#279cdf"/>',
+                "</linearGradient></defs>"
+            ].join("")
+            : "";
+        const check = visitState === VisitState.visited
+            ? `<circle cx="${size - 9}" cy="${size - 9}" r="7" fill="#123e65" stroke="#fff" stroke-width="1.5"/><path d="M${size - 13} ${size - 9}l3 3 5-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`
+            : "";
+        const fontSize = displayCount.length > 2 ? 12 : 14;
+        const svg = [
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
+            mixedDefinition,
+            `<circle cx="${center}" cy="${center}" r="${outerRadius}" fill="${fill}" stroke="#123e65" stroke-width="1.5"/>`,
+            `<circle cx="${center}" cy="${center}" r="${innerRadius}" fill="#fff"/>`,
+            `<text x="${center}" y="${center + 0.5}" fill="#123e65" font-family="system-ui,sans-serif" font-size="${fontSize}" font-weight="700" text-anchor="middle" dominant-baseline="middle">${displayCount}</text>`,
+            check,
+            "</svg>"
+        ].join("");
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    };
+
+    const getClusterStyle = features => {
+        const displayCount = features.length > 99 ? "99+" : String(features.length);
+        const visitState = getClusterVisitState(features);
+        const size = getClusterSize(features.length);
+        const cacheKey = `${visitState}-${displayCount}-${size}`;
+        if (!clusterStyleCache.has(cacheKey)) {
+            clusterStyleCache.set(cacheKey, new ol.style.Style({
+                image: new ol.style.Icon({
+                    src: createClusterIconSource(displayCount, visitState, size)
+                })
+            }));
+        }
+        return clusterStyleCache.get(cacheKey);
+    };
+
+    const markerLayer = new ol.layer.Vector({
+        source: clusterSource,
+        style: feature => {
+            const features = feature.get("features") ?? [];
+            return features.length === 1
+                ? markerStyles[features[0].visitState]
+                : getClusterStyle(features);
+        }
     });
 
     const locationSource = new ol.source.Vector();
@@ -144,7 +221,8 @@
         infoPixel: null,
         loadGeneration: 0,
         providerInfoTrigger: null,
-        neutralMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3"),
+        markerLayer,
+        markerSource,
         pointCache: {
             [VisitState.unknown]: [],
             [VisitState.open]: [],
@@ -153,9 +231,7 @@
         providers: [],
         selectedProviderSlugs: new Set(),
         userLocationLayer,
-        visitFilter: VisitFilter.all,
-        visitedMarkers: createMarkerLayer("img/pin_icon_visited.svg?v=3"),
-        unvisitedMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3")
+        visitFilter: VisitFilter.all
     };
 
     app.map = new ol.Map({
@@ -178,9 +254,7 @@
                 })
             }),
             userLocationLayer,
-            app.neutralMarkers,
-            app.unvisitedMarkers,
-            app.visitedMarkers
+            app.markerLayer
         ],
         target: elements.map,
         view: new ol.View({
@@ -349,9 +423,7 @@
     };
 
     const clearMarkers = () => {
-        app.neutralMarkers.getSource().clear();
-        app.visitedMarkers.getSource().clear();
-        app.unvisitedMarkers.getSource().clear();
+        app.markerSource.clear();
     };
 
     const resetPointCache = () => {
@@ -503,16 +575,9 @@
         return feature;
     };
 
-    const getMarkerLayer = visitState => visitState === VisitState.visited
-            ? app.visitedMarkers
-            : visitState === VisitState.open
-                ? app.unvisitedMarkers
-                : app.neutralMarkers;
-
     const addPoints = (stampingPoints, visitState) => {
-        const layer = getMarkerLayer(visitState);
         const features = stampingPoints.map(point => createMarker(point, visitState));
-        layer.getSource().addFeatures(features);
+        app.markerSource.addFeatures(features);
         return features.length;
     };
 
@@ -547,8 +612,7 @@
             .filter(point => app.selectedProviderSlugs.has(point.provider?.slug))
             .map(point => ({ point, visitState })) : []);
 
-    const findRenderedFeature = result => getMarkerLayer(result.visitState)
-        .getSource()
+    const findRenderedFeature = result => app.markerSource
         .getFeatures()
         .find(feature => pointMatches(feature.stampingPoint, result.point));
 
@@ -811,8 +875,6 @@
                 !pointMatches(point, stampingPoint));
         }
 
-        const previousLayer = getMarkerLayer(feature.visitState);
-        previousLayer.getSource().removeFeature(feature);
         stampingPoint.isVisited = isVisited;
         stampingPoint.visitedOn = visitedOn;
         stampingPoint.visitedAt = visitedAt;
@@ -1012,16 +1074,45 @@
         }
     };
 
-    const featureAt = (pixel) => app.map.forEachFeatureAtPixel(
+    const clusterFeatureAt = (pixel) => app.map.forEachFeatureAtPixel(
         pixel,
-        feature => feature.stampingPoint ? feature : undefined,
-        { hitTolerance: finePointer.matches ? 3 : 10 }
+        feature => feature.get("features") ? feature : undefined,
+        {
+            hitTolerance: finePointer.matches ? 3 : 10,
+            layerFilter: layer => layer === app.markerLayer
+        }
     );
 
+    const zoomToCluster = clusterFeature => {
+        const features = clusterFeature.get("features") ?? [];
+        if (features.length < 2) {
+            return;
+        }
+
+        const view = app.map.getView();
+        const currentZoom = view.getZoom() ?? 0;
+        const maxZoom = view.getMaxZoom();
+        if (currentZoom >= maxZoom) {
+            return;
+        }
+
+        const extent = ol.extent.boundingExtent(features.map(feature =>
+            feature.getGeometry().getCoordinates()));
+        const targetMaxZoom = Math.min(maxZoom, currentZoom + 3);
+        view.fit(extent, {
+            duration: reducedMotion.matches ? 0 : 450,
+            maxZoom: targetMaxZoom,
+            padding: [80, 80, 80, 80]
+        });
+    };
+
     app.map.on("click", event => {
-        const feature = featureAt(event.pixel);
-        if (feature) {
-            showInfo(feature, event.pixel, true);
+        const clusterFeature = clusterFeatureAt(event.pixel);
+        const features = clusterFeature?.get("features") ?? [];
+        if (features.length > 1) {
+            zoomToCluster(clusterFeature);
+        } else if (features.length === 1) {
+            showInfo(features[0], event.pixel, true);
         } else {
             hideInfo(true);
         }
@@ -1031,13 +1122,23 @@
         if (!finePointer.matches || app.infoLocked) {
             return;
         }
-        const feature = featureAt(event.pixel);
-        elements.map.style.cursor = feature ? "pointer" : "";
-        if (feature) {
-            showInfo(feature, event.pixel, false);
+        const clusterFeature = clusterFeatureAt(event.pixel);
+        const features = clusterFeature?.get("features") ?? [];
+        elements.map.style.cursor = features.length > 0 ? "pointer" : "";
+        if (features.length === 1) {
+            showInfo(features[0], event.pixel, false);
         } else {
             hideInfo();
         }
+    });
+
+    app.map.on("moveend", () => {
+        if (elements.infoCard.hidden || !app.activeFeature) {
+            return;
+        }
+        const pixel = app.map.getPixelFromCoordinate(app.activeFeature.getGeometry().getCoordinates());
+        app.infoPixel = pixel;
+        positionInfo(pixel);
     });
 
     elements.closeInfoButton.addEventListener("click", () => {

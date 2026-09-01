@@ -927,6 +927,27 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BundledFrontendClustersVisiblePointsClientSide()
+    {
+        using var client = CreateClient(_factory);
+
+        var script = await client.GetStringAsync("/js/toured.js");
+
+        Assert.Contains("new ol.source.Cluster", script, StringComparison.Ordinal);
+        Assert.Contains("distance: 44", script, StringComparison.Ordinal);
+        Assert.Contains("source: markerSource", script, StringComparison.Ordinal);
+        Assert.Contains("app.markerSource.addFeatures(features)", script, StringComparison.Ordinal);
+        Assert.Contains("features.length > 99 ? \"99+\"", script, StringComparison.Ordinal);
+        Assert.Contains("getClusterVisitState", script, StringComparison.Ordinal);
+        Assert.Contains("linearGradient id=\"mixed\"", script, StringComparison.Ordinal);
+        Assert.Contains("layerFilter: layer => layer === app.markerLayer", script, StringComparison.Ordinal);
+        Assert.Contains("zoomToCluster", script, StringComparison.Ordinal);
+        Assert.Contains("duration: reducedMotion.matches ? 0 : 450", script, StringComparison.Ordinal);
+        Assert.Contains("maxZoom: targetMaxZoom", script, StringComparison.Ordinal);
+        Assert.Contains("app.map.on(\"moveend\"", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task BundledFrontendSupportsAccessibleVisitCreationEditingAndConfirmedDeletion()
     {
         using var client = CreateClient(_factory);
