@@ -28,6 +28,8 @@
         mapLegend: document.getElementById("mapLegend"),
         mapStatus: document.getElementById("mapStatus"),
         newVisitActions: document.getElementById("newVisitActions"),
+        offlineBadge: document.getElementById("offlineBadge"),
+        offlineNotice: document.getElementById("offlineNotice"),
         openVisitFormButton: document.getElementById("openVisitFormButton"),
         pointName: document.getElementById("pointName"),
         pointNumber: document.getElementById("pointNumber"),
@@ -52,9 +54,13 @@
         searchPanel: document.getElementById("searchPanel"),
         searchResults: document.getElementById("searchResults"),
         searchResultsStatus: document.getElementById("searchResultsStatus"),
+        saveVisitButton: document.getElementById("saveVisitButton"),
         selectAllProvidersButton: document.getElementById("selectAllProvidersButton"),
         selectNoProvidersButton: document.getElementById("selectNoProvidersButton"),
         sessionStatus: document.getElementById("sessionStatus"),
+        tileErrorBanner: document.getElementById("tileErrorBanner"),
+        updatePrompt: document.getElementById("updatePrompt"),
+        updateReloadButton: document.getElementById("updateReloadButton"),
         stampingPointSearchInput: document.getElementById("stampingPointSearchInput"),
         userSession: document.getElementById("userSession"),
         visitActionStatus: document.getElementById("visitActionStatus"),
@@ -71,6 +77,154 @@
         elements.mapStatus.dataset.state = "error";
         elements.mapStatus.textContent = "Die Kartenbibliothek konnte nicht geladen werden.";
         return;
+    }
+
+    const DB_NAME = "toured-db";
+    const DB_VERSION = 1;
+    const STORE_NAME = "snapshots";
+    const SNAPSHOT_KEY = "current";
+    let snapshotOperations = Promise.resolve();
+
+    const queueSnapshotOperation = operation => {
+        const result = snapshotOperations.then(operation, operation);
+        snapshotOperations = result.catch(() => {});
+        return result;
+    };
+
+    const openDatabase = () => new Promise(resolve => {
+        if (!("indexedDB" in window)) {
+            resolve(null);
+            return;
+        }
+        try {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: "key" });
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => resolve(null);
+        } catch {
+            resolve(null);
+        }
+    });
+
+    const readStoredSnapshot = async () => {
+        const db = await openDatabase();
+        if (!db) return null;
+        return new Promise(resolve => {
+            try {
+                const tx = db.transaction(STORE_NAME, "readonly");
+                const store = tx.objectStore(STORE_NAME);
+                const request = store.get(SNAPSHOT_KEY);
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => resolve(null);
+            } catch {
+                resolve(null);
+            }
+        });
+    };
+
+    const writeStoredSnapshot = async snapshot => {
+        const db = await openDatabase();
+        if (!db) return;
+        return new Promise(resolve => {
+            try {
+                const tx = db.transaction(STORE_NAME, "readwrite");
+                const store = tx.objectStore(STORE_NAME);
+                store.put({ ...snapshot, key: SNAPSHOT_KEY });
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+            } catch {
+                resolve();
+            }
+        });
+    };
+
+    const deleteStoredSnapshot = async () => {
+        const db = await openDatabase();
+        if (!db) return;
+        return new Promise(resolve => {
+            try {
+                const tx = db.transaction(STORE_NAME, "readwrite");
+                const store = tx.objectStore(STORE_NAME);
+                store.delete(SNAPSHOT_KEY);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+            } catch {
+                resolve();
+            }
+        });
+    };
+
+    const getStoredSnapshot = () => queueSnapshotOperation(readStoredSnapshot);
+
+    const saveStoredSnapshot = snapshot => queueSnapshotOperation(
+        () => writeStoredSnapshot(snapshot));
+
+    const clearStoredSnapshot = () => queueSnapshotOperation(deleteStoredSnapshot);
+
+    const isSnapshotValid = snapshot => {
+        if (!snapshot || typeof snapshot !== "object") return false;
+        if (snapshot.schemaVersion !== 1) return false;
+        if (!snapshot.email || typeof snapshot.email !== "string") return false;
+        if (!snapshot.expiresAt) return false;
+        const expiresDate = new Date(snapshot.expiresAt);
+        if (isNaN(expiresDate.getTime()) || expiresDate <= new Date()) return false;
+        if (!snapshot.providers || !Array.isArray(snapshot.providers.stampingProviders)) return false;
+        if (!snapshot.unvisitedPoints || !Array.isArray(snapshot.unvisitedPoints.stampingPoints)) return false;
+        if (!snapshot.visitedPoints || !Array.isArray(snapshot.visitedPoints.stampingPoints)) return false;
+        return true;
+    };
+
+    let waitingWorker = null;
+    let updateReloadRequested = false;
+
+    const showUpdatePrompt = worker => {
+        waitingWorker = worker;
+        if (elements.updatePrompt) {
+            elements.updatePrompt.hidden = false;
+        }
+    };
+
+    if (elements.updateReloadButton) {
+        elements.updateReloadButton.addEventListener("click", () => {
+            if (waitingWorker) {
+                updateReloadRequested = true;
+                elements.updateReloadButton.disabled = true;
+                waitingWorker.postMessage({ type: "SKIP_WAITING" });
+            }
+        });
+    }
+
+    if ("serviceWorker" in navigator) {
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+            if (updateReloadRequested && !refreshing) {
+                refreshing = true;
+                window.location.reload();
+            }
+        });
+
+        const swUrl = new URL("service-worker.js", document.baseURI || window.location.href).href;
+        navigator.serviceWorker.register(swUrl, { scope: "./" }).then(registration => {
+            if (registration.waiting && navigator.serviceWorker.controller) {
+                showUpdatePrompt(registration.waiting);
+            }
+
+            registration.addEventListener("updatefound", () => {
+                const newWorker = registration.installing;
+                if (!newWorker) return;
+
+                newWorker.addEventListener("statechange", () => {
+                    if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                        showUpdatePrompt(newWorker);
+                    }
+                });
+            });
+        }).catch(() => {});
     }
 
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
@@ -216,6 +370,9 @@
     const app = {
         activeFeature: null,
         authenticated: false,
+        isOffline: false,
+        sessionEmail: null,
+        sessionExpiresAt: null,
         centerOnNextPosition: false,
         infoLocked: false,
         infoPixel: null,
@@ -234,6 +391,29 @@
         visitFilter: VisitFilter.all
     };
 
+    const osmSource = new ol.source.OSM({
+        url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attributions: [
+            ol.source.OSM.ATTRIBUTION,
+            '<a class="footer-link" href="https://github.com/ElPlatero/TourEd" target="_blank" rel="noopener noreferrer" aria-label="TourEd-Quellcode auf GitHub (AGPL-3.0)" title="TourEd-Quellcode auf GitHub (AGPL-3.0)">&copy; TourEd</a> · <a class="footer-link" href="datenschutz/">Datenschutz</a>'
+        ],
+        maxZoom: 18
+    });
+
+    osmSource.on("tileloaderror", () => {
+        if (app.isOffline || !navigator.onLine) {
+            if (elements.tileErrorBanner) {
+                elements.tileErrorBanner.hidden = false;
+            }
+        }
+    });
+
+    osmSource.on("tileloadend", () => {
+        if (elements.tileErrorBanner && !app.isOffline && navigator.onLine) {
+            elements.tileErrorBanner.hidden = true;
+        }
+    });
+
     app.map = new ol.Map({
         controls: ol.control.defaults({ attribution: false, zoom: false }).extend([new ol.control.Attribution({
             collapsible: false
@@ -244,14 +424,7 @@
         }),
         layers: [
             new ol.layer.Tile({
-                source: new ol.source.OSM({
-                    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                    attributions: [
-                        ol.source.OSM.ATTRIBUTION,
-                        '<a class="footer-link" href="https://github.com/ElPlatero/TourEd" target="_blank" rel="noopener noreferrer" aria-label="TourEd-Quellcode auf GitHub (AGPL-3.0)" title="TourEd-Quellcode auf GitHub (AGPL-3.0)">&copy; TourEd</a> · <a class="footer-link" href="datenschutz/">Datenschutz</a>'
-                    ],
-                    maxZoom: 18
-                })
+                source: osmSource
             }),
             userLocationLayer,
             app.markerLayer
@@ -336,13 +509,89 @@
         elements.appShell.removeAttribute("aria-hidden");
     };
 
+    let sessionExpiryTimer = null;
+
+    const scheduleSessionExpiry = expiresAt => {
+        if (sessionExpiryTimer !== null) {
+            window.clearTimeout(sessionExpiryTimer);
+            sessionExpiryTimer = null;
+        }
+
+        const expiresAtMilliseconds = Date.parse(expiresAt ?? "");
+        if (!Number.isFinite(expiresAtMilliseconds)) {
+            return;
+        }
+
+        const remainingMilliseconds = expiresAtMilliseconds - Date.now();
+        if (remainingMilliseconds <= 0) {
+            window.queueMicrotask(() => {
+                if (app.isOffline) {
+                    showOfflineUnavailable("Deine gespeicherte Sitzung ist abgelaufen. Bitte verbinde dich mit dem Internet und melde dich erneut an.");
+                } else {
+                    initialize();
+                }
+            });
+            return;
+        }
+
+        sessionExpiryTimer = window.setTimeout(() => {
+            sessionExpiryTimer = null;
+            if (app.isOffline) {
+                showOfflineUnavailable("Deine gespeicherte Sitzung ist abgelaufen. Bitte verbinde dich mit dem Internet und melde dich erneut an.");
+            } else {
+                initialize();
+            }
+        }, remainingMilliseconds);
+    };
+
     const setSession = (session) => {
         const authenticated = session?.authenticated === true;
         app.authenticated = authenticated;
+        app.sessionEmail = authenticated ? session.email : null;
+        app.sessionExpiresAt = authenticated ? session.expiresAt ?? null : null;
         elements.sessionStatus.textContent = authenticated ? session.email : "Nicht angemeldet";
         elements.loginLink.hidden = authenticated;
         elements.logoutButton.hidden = !authenticated;
         elements.mapLegend.hidden = !authenticated;
+        scheduleSessionExpiry(app.sessionExpiresAt);
+    };
+
+    const setOfflineMode = offline => {
+        app.isOffline = offline;
+        if (elements.offlineBadge) {
+            elements.offlineBadge.hidden = !offline;
+        }
+        if (!offline) {
+            if (elements.tileErrorBanner) {
+                elements.tileErrorBanner.hidden = true;
+            }
+        }
+        if (app.activeFeature && !elements.infoCard.hidden) {
+            updateVisitControls(app.activeFeature, app.infoLocked);
+        }
+    };
+
+    const showOfflineUnavailable = async message => {
+        ++app.loadGeneration;
+        await clearStoredSnapshot();
+        hideInfo(true);
+        resetPointCache();
+        clearMarkers();
+        setSession({ authenticated: false });
+        setOfflineMode(true);
+        elements.authBarrierLoginButton.hidden = true;
+        elements.authBarrierDesc.hidden = true;
+        if (elements.authBarrierNotice) {
+            elements.authBarrierNotice.className = "auth-barrier__notice";
+            elements.authBarrierNotice.textContent = "";
+            const strong = document.createElement("strong");
+            strong.textContent = "Offline nicht verfügbar";
+            elements.authBarrierNotice.appendChild(strong);
+            elements.authBarrierNotice.appendChild(document.createTextNode(message));
+            elements.authBarrierNotice.hidden = false;
+        }
+        showAuthBarrier();
+        setMapStatus("Keine Internetverbindung.", "error");
     };
 
     const closeAccountMenu = (restoreFocus = false) => {
@@ -802,33 +1051,6 @@
         }
     };
 
-    const loadAuthenticatedPoints = async generation => {
-        try {
-            const [unvisited, visited] = await Promise.all([
-                getJson("api/points?provider=all&vis=false"),
-                getJson("api/points?provider=all&vis=true")
-            ]);
-            if (generation !== app.loadGeneration) {
-                return null;
-            }
-            cachePoints(unvisited, VisitState.open);
-            cachePoints(visited, VisitState.visited);
-            return renderSelectedPoints();
-        } catch (response) {
-            if (generation !== app.loadGeneration) {
-                return null;
-            }
-            if (response?.status === 401) {
-                setSession({ authenticated: false });
-                resetPointCache();
-                clearMarkers();
-                showAuthBarrier();
-                return null;
-            }
-            throw response;
-        }
-    };
-
     const hideInfo = (force = false) => {
         if (app.infoLocked && !force) {
             return;
@@ -867,6 +1089,23 @@
 
     const pointMatches = (left, right) => left.id === right.id;
 
+    const synchronizeStoredSnapshot = () => queueSnapshotOperation(async () => {
+        const snapshot = await readStoredSnapshot();
+        if (!snapshot ||
+            !app.authenticated ||
+            app.isOffline ||
+            snapshot.email !== app.sessionEmail) {
+            return;
+        }
+
+        await writeStoredSnapshot({
+            ...snapshot,
+            unvisitedPoints: { stampingPoints: app.pointCache[VisitState.open] },
+            visitedPoints: { stampingPoints: app.pointCache[VisitState.visited] },
+            savedAt: new Date().toISOString()
+        });
+    });
+
     const updatePointVisit = (feature, isVisited, visitedOn = null, visitedAt = null) => {
         const stampingPoint = feature.stampingPoint;
         const infoPixel = app.infoPixel;
@@ -890,6 +1129,8 @@
         } else {
             announceFilteredPointCount(pointCount);
         }
+
+        return synchronizeStoredSnapshot();
     };
 
     const setVisitActionStatus = (message, state) => {
@@ -897,22 +1138,29 @@
         elements.visitActionStatus.dataset.state = state ?? "ready";
     };
 
-    const setVisitBusy = busy => {
-        for (const control of [
-            elements.visitNowButton,
-            elements.openVisitFormButton,
-            elements.editVisitButton,
-            elements.deleteVisitButton,
-            elements.visitedOnInput,
-            elements.visitedAtInput,
-            elements.cancelVisitButton,
-            elements.confirmDeleteVisitButton,
-            elements.cancelDeleteVisitButton,
-            elements.closeDeleteVisitButton
-        ]) {
-            control.disabled = busy;
+    const visitEditableControls = () => [
+        elements.visitNowButton,
+        elements.openVisitFormButton,
+        elements.editVisitButton,
+        elements.deleteVisitButton,
+        elements.visitedOnInput,
+        elements.visitedAtInput,
+        elements.saveVisitButton,
+        elements.cancelVisitButton,
+        elements.confirmDeleteVisitButton,
+        elements.cancelDeleteVisitButton,
+        elements.closeDeleteVisitButton
+    ];
+
+    const setVisitControlsDisabled = disabled => {
+        for (const control of visitEditableControls()) {
+            control.disabled = disabled;
         }
-        if (!busy) {
+    };
+
+    const setVisitBusy = busy => {
+        setVisitControlsDisabled(busy || app.isOffline);
+        if (!busy && !app.isOffline) {
             elements.visitedAtInput.disabled = !elements.visitedOnInput.value;
         }
     };
@@ -939,6 +1187,9 @@
     };
 
     const openVisitForm = () => {
+        if (app.isOffline) {
+            return;
+        }
         const stampingPoint = app.activeFeature?.stampingPoint;
         if (!stampingPoint) {
             return;
@@ -975,6 +1226,10 @@
     };
 
     const saveVisit = async (method, visitedOn, visitedAt) => {
+        if (app.isOffline) {
+            setVisitActionStatus("Offline nur ansehen.", "error");
+            return;
+        }
         const feature = app.activeFeature;
         if (!feature) {
             return;
@@ -987,7 +1242,7 @@
                 visitedAt,
                 utcOffsetMinutes: -new Date().getTimezoneOffset()
             });
-            updatePointVisit(feature, true, visitedOn, visitedAt);
+            await updatePointVisit(feature, true, visitedOn, visitedAt);
             setVisitActionStatus("Eintrag wurde gespeichert.", "ready");
         } catch (response) {
             if (response?.status === 401) {
@@ -1005,6 +1260,19 @@
         const visited = feature.visitState === VisitState.visited;
         elements.visitControls.hidden = !locked;
         elements.visitLoginLink.hidden = !locked || app.authenticated;
+        if (elements.offlineNotice) {
+            elements.offlineNotice.hidden = !locked || !app.isOffline;
+        }
+        setVisitControlsDisabled(app.isOffline);
+
+        if (app.isOffline) {
+            elements.newVisitActions.hidden = !locked || !app.authenticated || visited;
+            elements.existingVisitActions.hidden = !locked || !app.authenticated || !visited;
+            elements.visitForm.hidden = true;
+            setVisitActionStatus("");
+            return;
+        }
+
         elements.newVisitActions.hidden = !locked || !app.authenticated || visited;
         elements.existingVisitActions.hidden = !locked || !app.authenticated || !visited;
         elements.visitForm.hidden = true;
@@ -1147,6 +1415,7 @@
     });
 
     elements.visitNowButton.addEventListener("click", () => {
+        if (app.isOffline) return;
         const now = new Date();
         saveVisit("PUT", toLocalDateInput(now), `${toLocalTimeInput(now)}:00`);
     });
@@ -1185,6 +1454,7 @@
     };
 
     elements.deleteVisitButton.addEventListener("click", () => {
+        if (app.isOffline) return;
         const stampingPoint = app.activeFeature?.stampingPoint;
         if (!stampingPoint) {
             return;
@@ -1197,6 +1467,10 @@
     elements.closeDeleteVisitButton.addEventListener("click", closeDeleteVisitDialog);
     elements.cancelDeleteVisitButton.addEventListener("click", closeDeleteVisitDialog);
     elements.confirmDeleteVisitButton.addEventListener("click", async () => {
+        if (app.isOffline) {
+            closeDeleteVisitDialog();
+            return;
+        }
         const feature = app.activeFeature;
         if (!feature) {
             closeDeleteVisitDialog();
@@ -1205,7 +1479,7 @@
         setVisitBusy(true);
         try {
             await sendVisitRequest("DELETE", feature.stampingPoint);
-            updatePointVisit(feature, false);
+            await updatePointVisit(feature, false);
             closeDeleteVisitDialog();
             setVisitActionStatus("Stempeleintrag wurde entfernt.", "ready");
         } catch (response) {
@@ -1376,21 +1650,84 @@
             elements.authBarrierNotice.hidden = false;
         }
 
-        let session = { authenticated: false };
+        setOfflineMode(false);
+
+        let session = null;
+        let isNetworkError = false;
+        let isHttpError = false;
+
         try {
             session = await getJson("auth/session");
-        } catch {
-            session = { authenticated: false };
+        } catch (error) {
+            if (error instanceof Response) {
+                isHttpError = true;
+            } else {
+                isNetworkError = true;
+            }
         }
+
         if (generation !== app.loadGeneration) {
             return;
         }
-        setSession(session);
 
-        if (!session.authenticated) {
+        if (isNetworkError) {
+            const snapshot = await getStoredSnapshot();
+            if (generation !== app.loadGeneration) {
+                return;
+            }
+
+            if (isSnapshotValid(snapshot)) {
+                setSession({
+                    authenticated: true,
+                    email: snapshot.email,
+                    expiresAt: snapshot.expiresAt
+                });
+                setOfflineMode(true);
+                if (elements.authBarrierNotice) {
+                    elements.authBarrierNotice.hidden = true;
+                }
+                hideAuthBarrier();
+                setProviderCatalog(snapshot.providers);
+                cachePoints(snapshot.unvisitedPoints, VisitState.open);
+                cachePoints(snapshot.visitedPoints, VisitState.visited);
+                const pointCount = renderSelectedPoints();
+                renderSearchResults();
+                setMapStatus(`${formatPointCount(pointCount)} offline geladen.`, "ready");
+                window.setTimeout(() => {
+                    if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {
+                        setMapStatus("");
+                    }
+                }, 1800);
+                return;
+            }
+
+            await showOfflineUnavailable(
+                "Es ist kein gültiger gespeicherter Datenstand vorhanden oder deine Sitzung ist abgelaufen. Bitte verbinde dich mit dem Internet und melde dich an.");
+            return;
+        }
+
+        if (isHttpError) {
+            setSession({ authenticated: false });
+            showAuthBarrier();
+            setMapStatus("Sitzungsprüfung fehlgeschlagen. Bitte versuche es erneut.", "error");
+            return;
+        }
+
+        if (!session || !session.authenticated) {
+            await clearStoredSnapshot();
+            setSession({ authenticated: false });
             showAuthBarrier();
             setMapStatus("");
             return;
+        }
+
+        setSession(session);
+
+        const existingSnapshot = await getStoredSnapshot();
+        if (existingSnapshot &&
+            existingSnapshot.email &&
+            existingSnapshot.email.toLocaleLowerCase() !== session.email.toLocaleLowerCase()) {
+            await clearStoredSnapshot();
         }
 
         if (elements.authBarrierNotice) {
@@ -1405,11 +1742,32 @@
                 return;
             }
             setProviderCatalog(providers);
-            const pointCount = await loadAuthenticatedPoints(generation);
-            if (pointCount === null || generation !== app.loadGeneration) {
+
+            const [unvisited, visited] = await Promise.all([
+                getJson("api/points?provider=all&vis=false"),
+                getJson("api/points?provider=all&vis=true")
+            ]);
+            if (generation !== app.loadGeneration) {
                 return;
             }
+
+            cachePoints(unvisited, VisitState.open);
+            cachePoints(visited, VisitState.visited);
+            const pointCount = renderSelectedPoints();
             renderSearchResults();
+
+            if (session.expiresAt) {
+                await saveStoredSnapshot({
+                    schemaVersion: 1,
+                    email: session.email,
+                    expiresAt: session.expiresAt,
+                    providers,
+                    unvisitedPoints: unvisited,
+                    visitedPoints: visited,
+                    savedAt: new Date().toISOString()
+                });
+            }
+
             setMapStatus(`${formatPointCount(pointCount)} geladen.`, "ready");
             window.setTimeout(() => {
                 if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {
@@ -1419,6 +1777,7 @@
         } catch (error) {
             if (generation === app.loadGeneration) {
                 if (error?.status === 401) {
+                    await clearStoredSnapshot();
                     setSession({ authenticated: false });
                     resetPointCache();
                     clearMarkers();
@@ -1433,19 +1792,46 @@
 
     elements.logoutButton.addEventListener("click", async () => {
         elements.logoutButton.disabled = true;
+        await clearStoredSnapshot();
+        ++app.loadGeneration;
+        hideInfo(true);
+        resetPointCache();
+        clearMarkers();
+        setSession({ authenticated: false });
+        closeAccountMenu();
+        showAuthBarrier();
         try {
             const response = await fetch("auth/logout", { method: "POST" });
             if (!response.ok && response.status !== 401) {
                 setMapStatus("Abmelden ist fehlgeschlagen. Bitte erneut versuchen.", "error");
                 return;
             }
-            closeAccountMenu();
             await initialize();
         } catch {
-            setMapStatus("Abmelden ist fehlgeschlagen. Bitte erneut versuchen.", "error");
+            await showOfflineUnavailable(
+                "Deine lokalen Daten wurden gelöscht. Die serverseitige Abmeldung konnte ohne Verbindung nicht bestätigt werden.");
         } finally {
             elements.logoutButton.disabled = false;
         }
+    });
+
+    window.addEventListener("offline", () => {
+        if (!app.authenticated || app.isOffline) {
+            return;
+        }
+
+        if (!app.sessionExpiresAt || Date.parse(app.sessionExpiresAt) <= Date.now()) {
+            showOfflineUnavailable(
+                "Deine gespeicherte Sitzung ist abgelaufen. Bitte verbinde dich mit dem Internet und melde dich erneut an.");
+            return;
+        }
+
+        setOfflineMode(true);
+        setMapStatus("Offline: Gespeicherter Datenstand wird angezeigt.", "ready");
+    });
+
+    window.addEventListener("online", () => {
+        initialize();
     });
 
     initialize();

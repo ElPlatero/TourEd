@@ -20,10 +20,11 @@ The page calls the backend with relative URLs:
 
 - `GET auth/session`
   - Loaded first to determine whether the browser has a valid TourEd session.
+  - Returns authenticated state, authenticated email, and ticket expiration timestamp (`expiresAt`).
 - `GET auth/login`
   - Used by the “Mit Google anmelden” link/button to start the Google challenge.
 - `POST auth/logout`
-  - Ends the TourEd cookie session and returns the UI to the login lock screen.
+  - Ends the TourEd cookie session, purges local snapshot data, and returns the UI to the login lock screen.
 - `GET api/providers`
   - Requires an authenticated session (`401` otherwise).
   - Loads only providers explicitly enabled for the authenticated user before point data.
@@ -34,6 +35,10 @@ The page calls the backend with relative URLs:
 - `GET api/points?provider=all&vis=true`
   - Requires an authenticated session (`401` otherwise).
   - Loads visited points from every provider enabled for the authenticated user into the in-memory frontend cache.
+
+The frontend is a Progressive Web App (PWA) installable on Android, iOS, and desktop with standalone display. It includes a web app manifest (`manifest.webmanifest`), signet app icons (`icon-192.png`, `icon-512.png`, maskable `icon-maskable-512.png`, `apple-touch-icon.png`, `favicon.ico`), and a dedicated service worker (`service-worker.js`). The service worker caches exclusively the versioned app shell (HTML, CSS, JS, manifest, images, privacy notice) and the exact external OpenLayers CSS and JavaScript assets. It never caches `/auth`, `/api`, `/health`, non-GET requests, or OpenStreetMap tiles. Service worker installation is atomic and each worker reads only its own named cache; increment the cache version whenever a cached asset changes. When an updated version is installed and waiting, a non-intrusive update banner offers a "Neu laden" button that sends `SKIP_WAITING`, claims the current clients, and reloads the application exactly once upon the resulting controller change. Initial service-worker installation never reloads the page automatically.
+
+Offline support stores exactly one unencrypted personal snapshot in IndexedDB (`toured-db`, store `snapshots`, key `current`) containing schema version 1, bound email, the effective server session expiration timestamp (including a sliding renewal), complete provider response, complete unvisited points response, and complete visited points response with visit dates/times. The snapshot is saved atomically only after all three data requests succeed, and all later snapshot writes and deletions are serialized. During network interruptions with an unexpired snapshot or an already loaded in-memory data set, the application immediately enters read-only offline mode: a discrete accessible offline badge appears on the logo, point details display "Offline nur ansehen", mutation actions are disabled, and search/filtering/clustering continue working locally. An expiration timer purges and locks personal offline data even when the page remains open. OpenStreetMap tiles are not stored offline; missing tiles trigger an accessible offline banner. Reconnection triggers a fresh session check and online data reload. Snapshots are purged on logout, account switch, expired session, or `401` response. Online visit mutations atomically synchronize the stored snapshot.
 
 The frontend starts fail-closed: the accessible login barrier (`#authBarrier`) is visible in the initial HTML and the main container (`#appShell`) is already `inert` and `aria-hidden="true"`. A confirmed authenticated session unlocks the application; unauthenticated use sends zero provider or point requests.
 
@@ -47,7 +52,7 @@ A three-state icon-only visit filter button between geolocation and search cycle
 
 Visible stamping points are clustered client-side through OpenLayers when their markers would overlap. Single points retain their normal pin styles; clusters show a capped total in a white center with a size-scaled outer ring: light blue for entirely open, dark blue with a check for entirely visited, and a fixed diagonal light/dark split for mixed visit states. Provider and visit filters are applied before clustering, searches still open their concrete point, the user-location layer is excluded, and no additional API request is made. Clicking or tapping a cluster animates the map up to three zoom levels toward its extent, respects reduced-motion preferences, and does nothing when an inseparable cluster remains at maximum zoom. Locked point details stay open and follow their point after map movement.
 
-The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map and login barrier. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and user-initiated navigation to external provider websites and the public GitHub source repository. Keep it synchronized whenever these data flows or their retention rules change.
+The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map and login barrier. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, IndexedDB offline snapshot, service-worker caching, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and user-initiated navigation to external provider websites and the public GitHub source repository. Keep it synchronized whenever these data flows or their retention rules change.
 
 The map attribution permanently links its compact `© TourEd` label to the public TourEd source repository, with an accessible AGPL-3.0 source-link label, next to the privacy link.
 
@@ -65,6 +70,10 @@ The map uses logo-colored SVG pin assets stored in `Api/wwwroot/img`:
 - `img/pin_icon_neutral.svg`
 - `img/pin_icon_visited.svg`
 - `img/toured-logo-transparent.svg`
+- `img/icon-192.png`
+- `img/icon-512.png`
+- `img/icon-maskable-512.png`
+- `img/apple-touch-icon.png`
 
 The login barrier hides the visit-state legend. Open points use the logo's light blue; visited points use its dark blue and carry a white check matching the logo. The bundled map omits OpenLayers' on-map zoom buttons while retaining its touch, mouse, and keyboard zoom interactions and the cluster click-to-zoom behavior. Map rotation is disabled at both the interaction and view levels, including Alt/Shift drag and two-finger rotation.
 
