@@ -123,7 +123,7 @@ curl --fail-with-body --request PUT \
     https://server.example/toured/api/admin/users/42/providers
 ```
 
-The update replaces the complete entitlement set atomically. Its default provider must be included in that set. Grants, revocations, and default-provider changes are written to the database audit log using internal actor/target ids, action, timestamp, and optional provider slug; tokens and email addresses are not duplicated there.
+The update replaces the complete entitlement set atomically. Its default provider must be included in that set. Grants, revocations, and default-provider changes are written to the database audit log using internal actor/target ids, action, timestamp, and optional provider slug; tokens and email addresses are not duplicated there. Audit entries are retained for 90 days and cleaned up automatically upon application startup and every 24 hours thereafter, requiring no manual administrative operations. Database backups retain audit entries according to the configured backup rotation; restoring a backup causes the startup cleanup to delete already expired audit entries immediately.
 
 Use the token without writing its literal value into shell history. For the Touringen import:
 

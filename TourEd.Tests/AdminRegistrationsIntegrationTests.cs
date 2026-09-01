@@ -281,7 +281,7 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
             await context.SaveChangesAsync();
         }
 
-        var cleanupService = _factory.Services.GetRequiredService<RegistrationRequestCleanupService>();
+        var cleanupService = _factory.Services.GetRequiredService<DataRetentionCleanupService>();
         Assert.True(await cleanupService.RunCleanupSafelyAsync());
 
         using var client = CreateAuthorizedClient();
