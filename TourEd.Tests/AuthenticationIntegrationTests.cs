@@ -204,6 +204,60 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RealGoogleHandlerPreservesRejectedRegistrationAndShowsRejectedOutcome()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"toured-google-rejected-{Guid.NewGuid():N}.db");
+        var keysPath = Path.Combine(Path.GetTempPath(), $"toured-google-rejected-keys-{Guid.NewGuid():N}");
+        await using var factory = new TouredWebApplicationFactory(
+            databasePath,
+            keysPath,
+            useFakeGoogle: false,
+            useStubGoogleBackchannel: true);
+        var decidedAt = DateTime.UtcNow.AddDays(-2);
+
+        try
+        {
+            await using (var scope = factory.Services.CreateAsyncScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+                await context.Database.MigrateAsync();
+                context.RegistrationRequests.Add(new RegistrationRequest
+                {
+                    GoogleSubject = "google-sub-real-handler",
+                    Email = "real-handler@example.test",
+                    Status = RegistrationRequestStatus.Rejected,
+                    CreatedAt = decidedAt.AddDays(-1),
+                    UpdatedAt = decidedAt,
+                    DecidedAt = decidedAt
+                });
+                await context.SaveChangesAsync();
+            }
+
+            using var client = CreateClient(factory);
+            var challengeResponse = await client.GetAsync("/auth/login");
+            var state = QueryHelpers.ParseQuery(challengeResponse.Headers.Location!.Query)["state"].ToString();
+            var callbackResponse = await client.GetAsync($"/signin-google?code=test-code&state={Uri.EscapeDataString(state)}");
+
+            Assert.Equal(HttpStatusCode.Redirect, callbackResponse.StatusCode);
+            Assert.Equal("/?registration=rejected", callbackResponse.Headers.Location?.OriginalString);
+            Assert.DoesNotContain(
+                callbackResponse.Headers.TryGetValues("Set-Cookie", out var cookies) ? cookies : [],
+                cookie => cookie.StartsWith("toured-session=", StringComparison.Ordinal));
+
+            await using var verificationScope = factory.Services.CreateAsyncScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<DataContext>();
+            var request = await verificationContext.RegistrationRequests.SingleAsync();
+            Assert.Equal(RegistrationRequestStatus.Rejected, request.Status);
+            Assert.Equal(decidedAt, request.DecidedAt);
+        }
+        finally
+        {
+            DeleteFile(databasePath);
+            DeleteDirectory(keysPath);
+        }
+    }
+
+    [Fact]
     public async Task SessionDistinguishesAnonymousAndLogoutRemovesCookieSession()
     {
         using var client = CreateClient(_factory);
@@ -897,6 +951,12 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains(".auth-barrier", css, StringComparison.Ordinal);
         Assert.Contains("showAuthBarrier", script, StringComparison.Ordinal);
         Assert.Contains("hideAuthBarrier", script, StringComparison.Ordinal);
+        Assert.True(
+            script.IndexOf("const registrationParam = urlParams.get(\"registration\")", StringComparison.Ordinal) <
+            script.IndexOf("window.history.replaceState", StringComparison.Ordinal));
+        Assert.Contains("elements.authBarrierLoginButton.hidden = registrationDecisionVisible", script, StringComparison.Ordinal);
+        Assert.Contains("elements.authBarrierDesc.hidden = registrationDecisionVisible", script, StringComparison.Ordinal);
+        Assert.Contains("Solange diese Entscheidung gespeichert ist", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
     }
 
@@ -952,7 +1012,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("den einzelnen Besuch nach einer Bestätigung vollständig löschen", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("die freigeschalteten Stempelanbieter", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Registrierungsantrag", privacyNotice, StringComparison.Ordinal);
-        Assert.Contains("nach Ablauf von 30 Tagen automatisch", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Die Bereinigung läuft nach dem Anwendungsstart und anschließend täglich", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("kann das betroffene Google-Konto keinen neuen Antrag stellen", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("administrative Änderungen an Anbieterfreigaben", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Google-Kontokennungen und E-Mail-Adressen werden nicht in dieses Änderungsprotokoll", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Mit der Kontolöschung werden die Anbieterfreigaben", privacyNotice, StringComparison.Ordinal);
@@ -1211,7 +1272,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             }
             else
             {
-                Response.Redirect($"{Request.PathBase}/?registration=pending");
+                var outcome = result.Status == GoogleLoginStatus.Rejected ? "rejected" : "pending";
+                Response.Redirect($"{Request.PathBase}/?registration={outcome}");
             }
             return true;
         }

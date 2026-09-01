@@ -29,6 +29,11 @@ public sealed class GoogleLoginService : IGoogleLoginService
             throw new GoogleLoginRejectedException(GoogleLoginRejectionReason.RegistrationPending);
         }
 
+        if (result.Status == GoogleLoginStatus.Rejected)
+        {
+            throw new GoogleLoginRejectedException(GoogleLoginRejectionReason.RegistrationRejected);
+        }
+
         throw new GoogleLoginRejectedException(GoogleLoginRejectionReason.UnknownUser);
     }
 
@@ -95,7 +100,9 @@ public sealed class GoogleLoginService : IGoogleLoginService
             cancellationToken);
 
         return new GoogleLoginResult(
-            GoogleLoginStatus.Pending,
+            registrationRequest.Status == RegistrationRequestStatus.Rejected
+                ? GoogleLoginStatus.Rejected
+                : GoogleLoginStatus.Pending,
             null,
             registrationRequest,
             null);

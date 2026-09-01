@@ -237,7 +237,9 @@
         elements.authBarrier.hidden = false;
         elements.appShell.setAttribute("inert", "");
         elements.appShell.setAttribute("aria-hidden", "true");
-        elements.authBarrierLoginButton?.focus({ preventScroll: true });
+        if (elements.authBarrierLoginButton?.hidden !== true) {
+            elements.authBarrierLoginButton?.focus({ preventScroll: true });
+        }
     };
 
     const hideAuthBarrier = () => {
@@ -1166,6 +1168,8 @@
 
     const initialize = async () => {
         const generation = ++app.loadGeneration;
+        const urlParams = new URLSearchParams(window.location.search);
+        const registrationParam = urlParams.get("registration");
         if (window.location.search) {
             window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
         }
@@ -1176,8 +1180,9 @@
         elements.stampingPointSearchInput.value = "";
         renderSearchResults();
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const registrationParam = urlParams.get("registration");
+        const registrationDecisionVisible = registrationParam === "pending" || registrationParam === "rejected";
+        elements.authBarrierLoginButton.hidden = registrationDecisionVisible;
+        elements.authBarrierDesc.hidden = registrationDecisionVisible;
         if (registrationParam === "pending" && elements.authBarrierNotice) {
             elements.authBarrierNotice.className = "auth-barrier__notice";
             elements.authBarrierNotice.textContent = "";
@@ -1195,7 +1200,7 @@
             strong.textContent = "Registrierungsantrag abgelehnt";
             elements.authBarrierNotice.appendChild(strong);
             elements.authBarrierNotice.appendChild(document.createTextNode(
-                "Dein Registrierungsantrag wurde abgelehnt. Du kannst dich erneut mit Google anmelden, um einen neuen Antrag zu stellen."
+                "Dein Registrierungsantrag wurde abgelehnt. Solange diese Entscheidung gespeichert ist, ist keine erneute Registrierung möglich."
             ));
             elements.authBarrierNotice.hidden = false;
         }
