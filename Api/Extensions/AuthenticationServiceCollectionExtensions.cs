@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Api.Authentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -11,6 +10,8 @@ namespace Api.Extensions;
 
 internal static class AuthenticationServiceCollectionExtensions
 {
+    private const string PendingRegistrationProperty = "toured:registration-pending";
+
     public static IServiceCollection AddTouredAuthentication(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -73,10 +74,20 @@ internal static class AuthenticationServiceCollectionExtensions
                         }
                         else
                         {
-                            context.Principal = new ClaimsPrincipal(new ClaimsIdentity());
                             var pathBase = context.HttpContext.Request.PathBase.Value ?? string.Empty;
+                            context.Properties.Items[PendingRegistrationProperty] = bool.TrueString;
                             context.Properties.RedirectUri = $"{pathBase}/?registration=pending";
                         }
+                    },
+                    OnTicketReceived = context =>
+                    {
+                        if (context.Properties?.Items.Remove(PendingRegistrationProperty) == true)
+                        {
+                            context.HandleResponse();
+                            context.Response.Redirect(context.Properties.RedirectUri ?? "/?registration=pending");
+                        }
+
+                        return Task.CompletedTask;
                     },
                     OnRemoteFailure = context =>
                     {
