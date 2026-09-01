@@ -1,6 +1,7 @@
 using Api.Authentication;
 using Api.Dto;
 using Api.Managers;
+using Api.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TourEd.Lib.Extensions;
@@ -28,12 +29,19 @@ public sealed class RegistrationsController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
-        var updated = await _manager.ApproveRegistrationRequestAsync(
-            id,
-            User.GetUser().Id,
-            cancellationToken);
+        try
+        {
+            var updated = await _manager.ApproveRegistrationRequestAsync(
+                id,
+                User.GetUser().Id,
+                cancellationToken);
 
-        return updated is null ? NotFound() : Ok(updated);
+            return updated is null ? NotFound() : Ok(updated);
+        }
+        catch (RegistrationRequestAlreadyDecidedException)
+        {
+            return Conflict();
+        }
     }
 
     [HttpPost("{id:int}/reject")]
@@ -41,11 +49,18 @@ public sealed class RegistrationsController : ControllerBase
         int id,
         CancellationToken cancellationToken)
     {
-        var updated = await _manager.RejectRegistrationRequestAsync(
-            id,
-            User.GetUser().Id,
-            cancellationToken);
+        try
+        {
+            var updated = await _manager.RejectRegistrationRequestAsync(
+                id,
+                User.GetUser().Id,
+                cancellationToken);
 
-        return updated is null ? NotFound() : Ok(updated);
+            return updated is null ? NotFound() : Ok(updated);
+        }
+        catch (RegistrationRequestAlreadyDecidedException)
+        {
+            return Conflict();
+        }
     }
 }

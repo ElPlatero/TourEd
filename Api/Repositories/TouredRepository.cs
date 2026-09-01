@@ -690,6 +690,13 @@ public class TouredRepository : IUserService
             return null;
         }
 
+        if (request.Status != RegistrationRequestStatus.Pending)
+        {
+            throw new RegistrationRequestAlreadyDecidedException(id);
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
         var existingUser = await _dbContext.Users
             .FirstOrDefaultAsync(u => u.GoogleSubject == request.GoogleSubject, cancellationToken);
 
@@ -736,6 +743,7 @@ public class TouredRepository : IUserService
             request.Id));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new AdminRegistrationRequestDto(
             request.Id,
@@ -760,6 +768,13 @@ public class TouredRepository : IUserService
             return null;
         }
 
+        if (request.Status != RegistrationRequestStatus.Pending)
+        {
+            throw new RegistrationRequestAlreadyDecidedException(id);
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
         request.Status = RegistrationRequestStatus.Rejected;
         request.DecidedAt = DateTime.UtcNow;
         request.UpdatedAt = DateTime.UtcNow;
@@ -772,6 +787,7 @@ public class TouredRepository : IUserService
             request.Id));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new AdminRegistrationRequestDto(
             request.Id,
