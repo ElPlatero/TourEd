@@ -24,6 +24,9 @@ public sealed class AdminUserManager
         CancellationToken cancellationToken)
         => _repository.GetAdminAuditEntriesAsync(offset, limit, cancellationToken);
 
+    public Task<bool> DeleteUserAsync(int userId, int actorUserId, CancellationToken cancellationToken)
+        => _repository.DeleteAdminUserAsync(userId, actorUserId, cancellationToken);
+
     public Task<AdminUserDto?> UpdateProvidersAsync(
         int userId,
         UpdateAdminUserProvidersRequestDto request,

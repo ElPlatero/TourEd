@@ -1,13 +1,20 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using Api.Authentication;
+using Api.Controllers.Auth;
 using Api.Dto;
 using Api.Repositories;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using TourEd.Lib.Abstractions;
 using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
@@ -63,6 +70,7 @@ public sealed class AdminUsersIntegrationTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/admin/users")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/admin/providers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.DeleteAsync($"/api/admin/users/{_targetUserId}")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PutAsJsonAsync(
             $"/api/admin/users/{_targetUserId}/providers",
             new UpdateAdminUserProvidersRequestDto([], null))).StatusCode);
@@ -152,11 +160,116 @@ public sealed class AdminUsersIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, invalidDefault.StatusCode);
     }
 
+    [Fact]
+    public async Task DeletesUserPersonalDataAndInvalidatesExistingSession()
+    {
+        int userId;
+        int pointCount;
+        string sessionCookie;
+        await using (var setupScope = _factory.Services.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<DataContext>();
+            var pointId = await context.StampingPoints.Select(point => point.Id).FirstAsync();
+            pointCount = await context.StampingPoints.CountAsync();
+            var user = new User
+            {
+                Email = "delete-me@example.test",
+                GoogleSubject = "delete-me-google-subject",
+                DefaultStampingProviderId = StampingProvider.TouringenId
+            };
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+            userId = user.Id;
+            context.UserStampingProviders.Add(new UserStampingProvider
+            {
+                UserId = userId,
+                StampingProviderId = StampingProvider.TouringenId
+            });
+            context.UserVisits.Add(new UserVisit
+            {
+                UserId = userId,
+                StampingPointId = pointId,
+                EntryCreated = DateTime.UtcNow
+            });
+            context.RegistrationRequests.Add(new RegistrationRequest
+            {
+                GoogleSubject = user.GoogleSubject,
+                Email = user.Email,
+                Status = RegistrationRequestStatus.Approved,
+                CreatedAt = DateTime.UtcNow,
+                DecidedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            sessionCookie = CreateSessionCookie(
+                setupScope.ServiceProvider,
+                new ClaimsIdentity(
+                [
+                    new Claim(Constants.ClaimsNames.UserId, userId.ToString()),
+                    new Claim(Constants.ClaimsNames.UserEmail, user.Email)
+                ],
+                TouredAuthenticationSchemes.Cookie));
+        }
+
+        using var browserClient = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = false,
+            BaseAddress = new Uri("https://localhost")
+        });
+        browserClient.DefaultRequestHeaders.Add("Cookie", sessionCookie);
+        var sessionBeforeDeletion = await browserClient.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        Assert.NotNull(sessionBeforeDeletion);
+        Assert.True(sessionBeforeDeletion.Authenticated);
+
+        using var adminClient = CreateAuthorizedClient();
+        var response = await adminClient.DeleteAsync($"/api/admin/users/{userId}");
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var sessionAfterDeletion = await browserClient.GetFromJsonAsync<AuthSessionResponse>("/auth/session");
+        Assert.NotNull(sessionAfterDeletion);
+        Assert.False(sessionAfterDeletion.Authenticated);
+
+        await using var verifyScope = _factory.Services.CreateAsyncScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<DataContext>();
+        Assert.False(await verifyContext.Users.AnyAsync(user => user.Id == userId));
+        Assert.False(await verifyContext.UserVisits.AnyAsync(visit => visit.UserId == userId));
+        Assert.False(await verifyContext.UserStampingProviders.AnyAsync(access => access.UserId == userId));
+        Assert.False(await verifyContext.RegistrationRequests.AnyAsync(request =>
+            request.GoogleSubject == "delete-me-google-subject"));
+        Assert.Equal(pointCount, await verifyContext.StampingPoints.CountAsync());
+        Assert.True(await verifyContext.AdminAuditEntries.AnyAsync(entry =>
+            entry.Action == "user.deleted" &&
+            entry.ActorUserId == _adminUserId &&
+            entry.TargetUserId == userId));
+    }
+
+    [Fact]
+    public async Task RejectsAdministrativeSelfDeletionAndReturnsNotFoundForUnknownUser()
+    {
+        using var client = CreateAuthorizedClient();
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            (await client.DeleteAsync($"/api/admin/users/{_adminUserId}")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await client.DeleteAsync("/api/admin/users/2147483647")).StatusCode);
+    }
+
     private HttpClient CreateAuthorizedClient()
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CliToken);
         return client;
+    }
+
+    private static string CreateSessionCookie(IServiceProvider services, ClaimsIdentity identity)
+    {
+        var options = services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(TouredAuthenticationSchemes.Cookie);
+        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), TouredAuthenticationSchemes.Cookie);
+        return $"{options.Cookie.Name}={options.TicketDataFormat.Protect(ticket)}";
     }
 
     private sealed class AdminWebApplicationFactory(string databasePath, string keysPath) : WebApplicationFactory<Program>
