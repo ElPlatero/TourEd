@@ -844,6 +844,17 @@ public class TouredRepository : IUserService
         return deletedCount;
     }
 
+    public async Task<int> CleanupExpiredAdminAuditEntriesAsync(
+        DateTime createdBefore,
+        CancellationToken cancellationToken = default)
+    {
+        var deletedCount = await _dbContext.AdminAuditEntries
+            .Where(entry => entry.CreatedAt < createdBefore)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        return deletedCount;
+    }
+
     public async Task<UserVisit?> GetUserVisitOrDefaultAsync(User currentUser, int stampingPointId) 
         => await _dbContext.UserVisits.FirstOrDefaultAsync(p => p.StampingPointId == stampingPointId && p.UserId == currentUser.Id);
 
