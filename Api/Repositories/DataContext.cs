@@ -702,6 +702,7 @@ public class DataContext : DbContext
             dto.Property(p => p.Action).IsRequired();
             dto.HasIndex(p => p.CreatedAt);
             dto.HasIndex(p => p.TargetUserId);
+            dto.HasIndex(p => p.RegistrationRequestId);
         });
 
         modelBuilder.Entity<RegistrationRequest>(dto =>
