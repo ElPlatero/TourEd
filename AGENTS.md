@@ -43,6 +43,8 @@ Authenticated users can record a stamp directly from a locked point-detail dialo
 
 A magnifier button to the left of the provider and account controls opens a mutually exclusive search flyout. A crosshair button to the left of the search button starts client-side geolocation only after it is pressed, centers the map on the user's current device location, and keeps the marker current while the page remains open. It renders a logo-colored blue marker with a dark blue outline and a soft accuracy area. TourEd does not transmit the coordinates to its backend or store them; centering still causes the normal OpenStreetMap tile requests for the displayed map area. The client searches only the already loaded points of currently selected providers, normalizing case and diacritics across point name, number, provider name, and abbreviation. Search results are capped, contain provider-scoped number labels, and selecting one centers and zooms the existing map before opening its locked point-detail dialog. Search terms and results are not persisted and require no additional backend endpoint.
 
+A three-state icon-only visit filter button between geolocation and search cycles through all, only open, and only visited stamping points. It filters the existing in-memory point caches together with the provider selection, updates search results to the currently visible visit states, and never issues another point request. The filter resets to all after each page initialization and uses distinct icons, colors, tooltips, and accessible labels for every state.
+
 The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map and login barrier. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and user-initiated navigation to external provider websites and the public GitHub source repository. Keep it synchronized whenever these data flows or their retention rules change.
 
 The map attribution permanently links its compact `© TourEd` label to the public TourEd source repository, with an accessible AGPL-3.0 source-link label, next to the privacy link.
@@ -62,7 +64,7 @@ The map uses logo-colored SVG pin assets stored in `Api/wwwroot/img`:
 - `img/pin_icon_visited.svg`
 - `img/toured-logo-transparent.svg`
 
-The login barrier hides the visit-state legend. Open points use the logo's light blue; visited points use its dark blue and carry a white check matching the logo. The bundled map omits OpenLayers' on-map zoom buttons while retaining its touch, mouse, and keyboard zoom interactions.
+The login barrier hides the visit-state legend. Open points use the logo's light blue; visited points use its dark blue and carry a white check matching the logo. The bundled map omits OpenLayers' on-map zoom buttons while retaining its touch, mouse, and keyboard zoom interactions. Map rotation is disabled at both the interaction and view levels, including Alt/Shift drag and two-finger rotation.
 
 The current static map does not use the tours endpoint or admin/import endpoints.
 

@@ -62,6 +62,7 @@
         visitedAtInput: document.getElementById("visitedAtInput"),
         visitedOnInput: document.getElementById("visitedOnInput"),
         visitForm: document.getElementById("visitForm"),
+        visitFilterButton: document.getElementById("visitFilterButton"),
         visitLoginLink: document.getElementById("visitLoginLink"),
         visitNowButton: document.getElementById("visitNowButton")
     };
@@ -80,6 +81,12 @@
         open: "open",
         visited: "visited"
     });
+    const VisitFilter = Object.freeze({
+        all: "all",
+        open: "open",
+        visited: "visited"
+    });
+    const VisitFilterOrder = [VisitFilter.all, VisitFilter.open, VisitFilter.visited];
 
     const createMarkerLayer = iconSource => new ol.layer.Vector({
         source: new ol.source.Vector(),
@@ -146,6 +153,7 @@
         providers: [],
         selectedProviderSlugs: new Set(),
         userLocationLayer,
+        visitFilter: VisitFilter.all,
         visitedMarkers: createMarkerLayer("img/pin_icon_visited.svg?v=3"),
         unvisitedMarkers: createMarkerLayer("img/pin_icon_neutral.svg?v=3")
     };
@@ -154,6 +162,10 @@
         controls: ol.control.defaults({ attribution: false, zoom: false }).extend([new ol.control.Attribution({
             collapsible: false
         })]),
+        interactions: ol.interaction.defaults({
+            altShiftDragRotate: false,
+            pinchRotate: false
+        }),
         layers: [
             new ol.layer.Tile({
                 source: new ol.source.OSM({
@@ -173,6 +185,7 @@
         target: elements.map,
         view: new ol.View({
             center: ol.proj.fromLonLat([11.816394330314203, 50.972084944877366]),
+            enableRotation: false,
             maxZoom: 18,
             zoom: 12
         })
@@ -347,6 +360,32 @@
         app.pointCache[VisitState.visited] = [];
     };
 
+    const isVisitStateVisible = visitState => app.visitFilter === VisitFilter.all
+        || app.visitFilter === visitState;
+
+    const updateVisitFilterButton = () => {
+        const filterDetails = {
+            [VisitFilter.all]: {
+                label: "Alle Stempelstellen",
+                next: "Nur offene Stempelstellen"
+            },
+            [VisitFilter.open]: {
+                label: "Nur offene Stempelstellen",
+                next: "Nur gestempelte Stempelstellen"
+            },
+            [VisitFilter.visited]: {
+                label: "Nur gestempelte Stempelstellen",
+                next: "Alle Stempelstellen"
+            }
+        };
+        const details = filterDetails[app.visitFilter];
+        elements.visitFilterButton.dataset.visitFilter = app.visitFilter;
+        elements.visitFilterButton.title = `${details.label} anzeigen`;
+        elements.visitFilterButton.setAttribute(
+            "aria-label",
+            `Besuchsfilter: ${details.label}. Nächster Zustand: ${details.next}.`);
+    };
+
     const getSafeExternalUrl = value => {
         if (typeof value !== "string") {
             return null;
@@ -504,9 +543,9 @@
     };
 
     const getSearchablePoints = () => Object.values(VisitState).flatMap(visitState =>
-        app.pointCache[visitState]
+        isVisitStateVisible(visitState) ? app.pointCache[visitState]
             .filter(point => app.selectedProviderSlugs.has(point.provider?.slug))
-            .map(point => ({ point, visitState })));
+            .map(point => ({ point, visitState })) : []);
 
     const findRenderedFeature = result => getMarkerLayer(result.visitState)
         .getSource()
@@ -545,13 +584,13 @@
         elements.searchResults.replaceChildren();
         const query = normalizeSearchText(elements.stampingPointSearchInput.value);
         if (!query) {
-            elements.searchResultsStatus.textContent = "Suche innerhalb der ausgewählten Anbieter.";
+            elements.searchResultsStatus.textContent = "Suche innerhalb der angezeigten Stempelstellen.";
             return;
         }
 
         const searchablePoints = getSearchablePoints();
         if (searchablePoints.length === 0) {
-            elements.searchResultsStatus.textContent = "In den ausgewählten Anbietern sind keine Stempelstellen verfügbar.";
+            elements.searchResultsStatus.textContent = "Mit den aktuellen Filtern sind keine Stempelstellen verfügbar.";
             return;
         }
 
@@ -619,6 +658,9 @@
         hideInfo(true);
         clearMarkers();
         return Object.values(VisitState).reduce((count, visitState) => {
+            if (!isVisitStateVisible(visitState)) {
+                return count;
+            }
             const selectedPoints = app.pointCache[visitState].filter(point =>
                 app.selectedProviderSlugs.has(point.provider?.slug));
             return count + addPoints(selectedPoints, visitState);
@@ -630,11 +672,16 @@
         return renderSelectedPoints();
     };
 
+    const formatPointCount = pointCount => pointCount === 1
+        ? "1 Stempelstelle"
+        : `${pointCount} Stempelstellen`;
+
     const announceFilteredPointCount = pointCount => {
-        setMapStatus(`${pointCount} Stempelstellen angezeigt.`, "ready");
+        const message = `${formatPointCount(pointCount)} angezeigt.`;
+        setMapStatus(message, "ready");
         if (pointCount > 0) {
             window.setTimeout(() => {
-                if (elements.mapStatus.textContent === `${pointCount} Stempelstellen angezeigt.`) {
+                if (elements.mapStatus.textContent === message) {
                     setMapStatus("");
                 }
             }, 1800);
@@ -654,6 +701,17 @@
             checkbox.checked = selected;
         }
         applyProviderSelection();
+    };
+
+    const cycleVisitFilter = () => {
+        closeSearchMenu();
+        closeProviderMenu();
+        closeAccountMenu();
+        const currentIndex = VisitFilterOrder.indexOf(app.visitFilter);
+        app.visitFilter = VisitFilterOrder[(currentIndex + 1) % VisitFilterOrder.length];
+        updateVisitFilterButton();
+        announceFilteredPointCount(renderSelectedPoints());
+        renderSearchResults();
     };
 
     const getJson = async (url) => {
@@ -747,6 +805,7 @@
 
     const updatePointVisit = (feature, isVisited, visitedOn = null, visitedAt = null) => {
         const stampingPoint = feature.stampingPoint;
+        const infoPixel = app.infoPixel;
         for (const visitState of Object.values(VisitState)) {
             app.pointCache[visitState] = app.pointCache[visitState].filter(point =>
                 !pointMatches(point, stampingPoint));
@@ -759,9 +818,16 @@
         stampingPoint.visitedAt = visitedAt;
         feature.visitState = isVisited ? VisitState.visited : VisitState.open;
         app.pointCache[feature.visitState].push(stampingPoint);
-        getMarkerLayer(feature.visitState).getSource().addFeature(feature);
+        const pointCount = renderSelectedPoints();
         renderSearchResults();
-        showInfo(feature, app.infoPixel, true);
+        if (isVisitStateVisible(feature.visitState)) {
+            const renderedFeature = findRenderedFeature({ point: stampingPoint, visitState: feature.visitState });
+            if (renderedFeature) {
+                showInfo(renderedFeature, infoPixel, true);
+            }
+        } else {
+            announceFilteredPointCount(pointCount);
+        }
     };
 
     const setVisitActionStatus = (message, state) => {
@@ -1119,6 +1185,7 @@
         }
     });
 
+    elements.visitFilterButton.addEventListener("click", cycleVisitFilter);
     elements.accountMenuButton.addEventListener("click", toggleAccountMenu);
     elements.providerMenuButton.addEventListener("click", toggleProviderMenu);
     elements.searchMenuButton.addEventListener("click", toggleSearchMenu);
@@ -1178,6 +1245,8 @@
         hideInfo(true);
         clearMarkers();
         resetPointCache();
+        app.visitFilter = VisitFilter.all;
+        updateVisitFilterButton();
         elements.stampingPointSearchInput.value = "";
         renderSearchResults();
 
@@ -1240,7 +1309,7 @@
                 return;
             }
             renderSearchResults();
-            setMapStatus(`${pointCount} Stempelstellen geladen.`, "ready");
+            setMapStatus(`${formatPointCount(pointCount)} geladen.`, "ready");
             window.setTimeout(() => {
                 if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {
                     setMapStatus("");

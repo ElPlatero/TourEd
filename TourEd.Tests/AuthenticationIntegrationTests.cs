@@ -881,14 +881,25 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var script = await client.GetStringAsync("/js/toured.js");
 
         var locateButtonPosition = html.IndexOf("id=\"locateButton\"", StringComparison.OrdinalIgnoreCase);
+        var visitFilterButtonPosition = html.IndexOf("id=\"visitFilterButton\"", StringComparison.OrdinalIgnoreCase);
         var searchButtonPosition = html.IndexOf("id=\"searchMenuButton\"", StringComparison.OrdinalIgnoreCase);
         var providerButtonPosition = html.IndexOf("id=\"providerMenuButton\"", StringComparison.OrdinalIgnoreCase);
-        Assert.True(locateButtonPosition >= 0 && locateButtonPosition < searchButtonPosition);
+        Assert.True(locateButtonPosition >= 0 && locateButtonPosition < visitFilterButtonPosition);
+        Assert.True(visitFilterButtonPosition >= 0 && visitFilterButtonPosition < searchButtonPosition);
         Assert.True(searchButtonPosition >= 0 && searchButtonPosition < providerButtonPosition);
         Assert.Contains("aria-label=\"Auf meinen Standort zentrieren\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("tracking: false", script, StringComparison.Ordinal);
         Assert.Contains("geolocation.setTracking(true)", script, StringComparison.Ordinal);
         Assert.Contains("geolocation.setTracking(false)", script, StringComparison.Ordinal);
+        Assert.Contains("altShiftDragRotate: false", script, StringComparison.Ordinal);
+        Assert.Contains("pinchRotate: false", script, StringComparison.Ordinal);
+        Assert.Contains("enableRotation: false", script, StringComparison.Ordinal);
+        Assert.Contains("data-visit-filter=\"all\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Besuchsfilter: Alle Stempelstellen", html, StringComparison.Ordinal);
+        Assert.Contains("const VisitFilterOrder = [VisitFilter.all, VisitFilter.open, VisitFilter.visited]", script, StringComparison.Ordinal);
+        Assert.Contains("isVisitStateVisible(visitState)", script, StringComparison.Ordinal);
+        Assert.Contains("elements.visitFilterButton.addEventListener(\"click\", cycleVisitFilter)", script, StringComparison.Ordinal);
+        Assert.Contains("app.visitFilter = VisitFilter.all", script, StringComparison.Ordinal);
         Assert.Contains("aria-controls=\"searchPanel\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-label=\"Stempelstellensuche öffnen\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("<circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\"", html, StringComparison.OrdinalIgnoreCase);

@@ -137,6 +137,30 @@ input:focus-visible,
     background: var(--surface-muted);
 }
 
+.visit-filter-button[data-visit-filter="open"] {
+    color: #123e65;
+    background: rgb(215 239 252 / 96%);
+}
+
+.visit-filter-button[data-visit-filter="visited"] {
+    color: #fff;
+    background: rgb(18 62 101 / 96%);
+}
+
+.visit-filter-button[data-visit-filter="visited"]:hover {
+    background: #123e65;
+}
+
+.visit-filter-icon {
+    display: none;
+}
+
+.visit-filter-button[data-visit-filter="all"] .visit-filter-icon--all,
+.visit-filter-button[data-visit-filter="open"] .visit-filter-icon--open,
+.visit-filter-button[data-visit-filter="visited"] .visit-filter-icon--visited {
+    display: inline;
+}
+
 .account-menu-button--icon-only {
     padding: 0.45rem;
 }
@@ -797,6 +821,10 @@ input:focus-visible,
 }
 
 @media (max-width: 27rem) {
+    .account-menu-button {
+        padding: 0.45rem;
+    }
+
     .account-menu-button > span {
         position: absolute;
         width: 1px;

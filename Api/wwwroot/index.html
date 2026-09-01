@@ -31,6 +31,27 @@
             </svg>
         </button>
         <button
+            id="visitFilterButton"
+            class="account-menu-button account-menu-button--icon-only visit-filter-button"
+            type="button"
+            data-visit-filter="all"
+            aria-label="Besuchsfilter: Alle Stempelstellen. Nächster Zustand: Nur offene Stempelstellen."
+            title="Alle Stempelstellen anzeigen">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                <g class="visit-filter-icon visit-filter-icon--all">
+                    <path d="M4 5h16l-6 7v5l-4 2v-7z" />
+                </g>
+                <g class="visit-filter-icon visit-filter-icon--open">
+                    <path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" />
+                    <circle cx="12" cy="10" r="2" />
+                </g>
+                <g class="visit-filter-icon visit-filter-icon--visited">
+                    <path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z" />
+                    <path d="m9 10 2 2 4-4" />
+                </g>
+            </svg>
+        </button>
+        <button
             id="searchMenuButton"
             class="account-menu-button"
             type="button"
@@ -84,7 +105,7 @@
                     aria-describedby="searchResultsStatus" />
             </label>
             <p id="searchResultsStatus" class="search-results-status" role="status" aria-live="polite">
-                Suche innerhalb der ausgewählten Anbieter.
+                Suche innerhalb der angezeigten Stempelstellen.
             </p>
             <ul id="searchResults" class="search-results" aria-label="Suchergebnisse"></ul>
         </div>
