@@ -45,6 +45,8 @@ A magnifier button to the left of the provider and account controls opens a mutu
 
 A three-state icon-only visit filter button between geolocation and search cycles through all, only open, and only visited stamping points. It filters the existing in-memory point caches together with the provider selection, updates search results to the currently visible visit states, and never issues another point request. The filter resets to all after each page initialization and uses distinct icons, colors, tooltips, and accessible labels for every state.
 
+Visible stamping points are clustered client-side through OpenLayers when their markers would overlap. Single points retain their normal pin styles; clusters show a capped total in a white center with a size-scaled outer ring: light blue for entirely open, dark blue with a check for entirely visited, and a fixed diagonal light/dark split for mixed visit states. Provider and visit filters are applied before clustering, searches still open their concrete point, the user-location layer is excluded, and no additional API request is made. Clicking or tapping a cluster animates the map up to three zoom levels toward its extent, respects reduced-motion preferences, and does nothing when an inseparable cluster remains at maximum zoom. Locked point details stay open and follow their point after map movement.
+
 The public privacy notice is served at `Api/wwwroot/datenschutz/index.html` and linked permanently from the map and login barrier. It is available without authentication and carries a `noindex` directive to reduce search-engine discoverability. The notice documents the current Google login, cookies, account/visit storage, hosting logs, OpenStreetMap tiles, external OpenLayers CDN, and user-initiated navigation to external provider websites and the public GitHub source repository. Keep it synchronized whenever these data flows or their retention rules change.
 
 The map attribution permanently links its compact `© TourEd` label to the public TourEd source repository, with an accessible AGPL-3.0 source-link label, next to the privacy link.
@@ -64,7 +66,7 @@ The map uses logo-colored SVG pin assets stored in `Api/wwwroot/img`:
 - `img/pin_icon_visited.svg`
 - `img/toured-logo-transparent.svg`
 
-The login barrier hides the visit-state legend. Open points use the logo's light blue; visited points use its dark blue and carry a white check matching the logo. The bundled map omits OpenLayers' on-map zoom buttons while retaining its touch, mouse, and keyboard zoom interactions. Map rotation is disabled at both the interaction and view levels, including Alt/Shift drag and two-finger rotation.
+The login barrier hides the visit-state legend. Open points use the logo's light blue; visited points use its dark blue and carry a white check matching the logo. The bundled map omits OpenLayers' on-map zoom buttons while retaining its touch, mouse, and keyboard zoom interactions and the cluster click-to-zoom behavior. Map rotation is disabled at both the interaction and view levels, including Alt/Shift drag and two-finger rotation.
 
 The current static map does not use the tours endpoint or admin/import endpoints.
 
