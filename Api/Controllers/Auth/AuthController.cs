@@ -16,14 +16,22 @@ public sealed class AuthController : ControllerBase
             TouredAuthenticationSchemes.GoogleChallenge);
 
     [HttpGet("session")]
-    public ActionResult<AuthSessionResponse> Session()
+    public async Task<ActionResult<AuthSessionResponse>> Session()
     {
-        if (User.Identity?.IsAuthenticated != true || !User.TryGetUser(out var user))
+        var authenticateResult = await HttpContext.AuthenticateAsync(TouredAuthenticationSchemes.Cookie);
+        if (!authenticateResult.Succeeded ||
+            authenticateResult.Principal?.Identity?.IsAuthenticated != true ||
+            !authenticateResult.Principal.TryGetUser(out var user))
         {
-            return Ok(new AuthSessionResponse(false, null));
+            return Ok(new AuthSessionResponse(false, null, null));
         }
 
-        return Ok(new AuthSessionResponse(true, user.Email));
+        var expiresAt = HttpContext.Items.TryGetValue(
+            TouredAuthenticationSchemes.EffectiveCookieExpiresAtItem,
+            out var effectiveExpiresAt)
+            ? effectiveExpiresAt as DateTimeOffset?
+            : authenticateResult.Properties?.ExpiresUtc;
+        return Ok(new AuthSessionResponse(true, user.Email, expiresAt));
     }
 
     [HttpPost("logout")]
@@ -34,4 +42,4 @@ public sealed class AuthController : ControllerBase
     }
 }
 
-public sealed record AuthSessionResponse(bool Authenticated, string? Email);
+public sealed record AuthSessionResponse(bool Authenticated, string? Email, DateTimeOffset? ExpiresAt);

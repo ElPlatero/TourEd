@@ -24,6 +24,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TourEd.Lib.Abstractions;
 using TourEd.Lib.Abstractions.Interfaces.Services;
 using TourEd.Lib.Abstractions.Models;
 
@@ -127,9 +128,12 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var sessionJson = await client.GetStringAsync("/auth/session");
         using var sessionDocument = JsonDocument.Parse(sessionJson);
         var properties = sessionDocument.RootElement.EnumerateObject().ToList();
-        Assert.Equal(2, properties.Count);
+        Assert.Equal(3, properties.Count);
         Assert.True(sessionDocument.RootElement.GetProperty("authenticated").GetBoolean());
         Assert.Equal(FakeGoogleHandler.Email, sessionDocument.RootElement.GetProperty("email").GetString());
+        Assert.True(sessionDocument.RootElement.TryGetProperty("expiresAt", out var expiresAtProperty));
+        Assert.True(expiresAtProperty.TryGetDateTimeOffset(out var expiresAt));
+        Assert.True(expiresAt > DateTimeOffset.UtcNow);
         Assert.DoesNotContain("token", sessionJson, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("subject", sessionJson, StringComparison.OrdinalIgnoreCase);
     }
@@ -790,7 +794,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("role=\"dialog\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-live=\"polite\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-label=\"Details schließen\"", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("class=\"brand-logo\" aria-hidden=\"true\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("class=\"brand-logo\">", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("class=\"brand-logo\" aria-hidden", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("src=\"img/toured-logo-transparent.svg\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("id=\"accountMenuButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-controls=\"accountPanel\"", html, StringComparison.OrdinalIgnoreCase);
@@ -1078,8 +1083,227 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("administrative Änderungen an Anbieterfreigaben", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Google-Kontokennungen und E-Mail-Adressen werden nicht in dieses Änderungsprotokoll", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Mit der Kontolöschung werden die Anbieterfreigaben", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("Lokale Speicherung, Offline-Nutzung und Service Worker", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("IndexedDB", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("schreibgeschützte Anzeige", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("nicht zusätzlich anwendungsseitig verschlüsselt", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("hängt vom Schutz des jeweiligen Endgeräts", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("bei einem Wechsel des Benutzerkontos sowie nach Ablauf der serverseitigen Sitzungsgültigkeit", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("ausdrücklich keine OpenStreetMap-Kartenkacheln im Service-Worker-Cache", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Die anonyme Kartenansicht ist ohne Benutzerkonto möglich", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WebManifestIsServedCorrectlyAndMatchesPwaContract()
+    {
+        using var client = CreateClient(_factory);
+
+        var response = await client.GetAsync("/manifest.webmanifest");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var manifestJson = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(manifestJson);
+        var root = doc.RootElement;
+
+        Assert.Equal("TourEd", root.GetProperty("name").GetString());
+        Assert.Equal("TourEd", root.GetProperty("short_name").GetString());
+        Assert.Equal("standalone", root.GetProperty("display").GetString());
+        Assert.Equal("de", root.GetProperty("lang").GetString());
+        Assert.Equal("./", root.GetProperty("start_url").GetString());
+        Assert.Equal("./", root.GetProperty("scope").GetString());
+        Assert.Equal("#f7f5ef", root.GetProperty("theme_color").GetString());
+        Assert.Equal("#f7f5ef", root.GetProperty("background_color").GetString());
+
+        var icons = root.GetProperty("icons").EnumerateArray().ToList();
+        Assert.NotEmpty(icons);
+
+        Assert.Contains(icons, icon =>
+            icon.GetProperty("src").GetString() == "img/icon-192.png" &&
+            icon.GetProperty("sizes").GetString() == "192x192" &&
+            icon.GetProperty("purpose").GetString() == "any");
+
+        Assert.Contains(icons, icon =>
+            icon.GetProperty("src").GetString() == "img/icon-512.png" &&
+            icon.GetProperty("sizes").GetString() == "512x512" &&
+            icon.GetProperty("purpose").GetString() == "any");
+
+        Assert.Contains(icons, icon =>
+            icon.GetProperty("src").GetString() == "img/icon-maskable-512.png" &&
+            icon.GetProperty("sizes").GetString() == "512x512" &&
+            icon.GetProperty("purpose").GetString() == "maskable");
+    }
+
+    [Fact]
+    public async Task ServiceWorkerIsServedAndImplementsSecurityAndCachingRules()
+    {
+        using var client = CreateClient(_factory);
+
+        var response = await client.GetAsync("/service-worker.js");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var swScript = await response.Content.ReadAsStringAsync();
+
+        // Core caching rules
+        Assert.Contains("toured-shell-v1", swScript, StringComparison.Ordinal);
+        Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
+        Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
+        Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
+        Assert.Contains("img/toured-logo-transparent.svg", swScript, StringComparison.Ordinal);
+        Assert.Contains("img/pin_icon_neutral.svg", swScript, StringComparison.Ordinal);
+        Assert.Contains("img/pin_icon_visited.svg", swScript, StringComparison.Ordinal);
+        Assert.Contains("img/icon-192.png", swScript, StringComparison.Ordinal);
+        Assert.Contains("img/icon-512.png", swScript, StringComparison.Ordinal);
+        Assert.Contains("img/icon-maskable-512.png", swScript, StringComparison.Ordinal);
+        Assert.Contains("datenschutz/", swScript, StringComparison.Ordinal);
+
+        // Exact OpenLayers assets
+        Assert.Contains("https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css", swScript, StringComparison.Ordinal);
+        Assert.Contains("https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js", swScript, StringComparison.Ordinal);
+
+        // Security boundaries: never cache auth, api, health, or non-GET
+        Assert.Contains("/auth/", swScript, StringComparison.Ordinal);
+        Assert.Contains("/api/", swScript, StringComparison.Ordinal);
+        Assert.Contains("/health", swScript, StringComparison.Ordinal);
+        Assert.Contains("event.request.method !== \"GET\"", swScript, StringComparison.Ordinal);
+
+        // Strict OSM tile exclusion
+        Assert.Contains("tile.openstreetmap.org", swScript, StringComparison.Ordinal);
+        Assert.Contains("if (!CACHEABLE_URLS.has(event.request.url))", swScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("caches.match(", swScript, StringComparison.Ordinal);
+        Assert.Contains("const cached = await cache.match(event.request)", swScript, StringComparison.Ordinal);
+        Assert.Contains("await cache.put(event.request, response.clone())", swScript, StringComparison.Ordinal);
+        Assert.Contains("await caches.delete(CACHE_NAME)", swScript, StringComparison.Ordinal);
+
+        // Update handling with SKIP_WAITING
+        Assert.Contains("SKIP_WAITING", swScript, StringComparison.Ordinal);
+        Assert.Contains("event.waitUntil(self.skipWaiting())", swScript, StringComparison.Ordinal);
+        Assert.Contains("await self.clients.claim()", swScript, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/img/icon-192.png", "image/png")]
+    [InlineData("/img/icon-512.png", "image/png")]
+    [InlineData("/img/icon-maskable-512.png", "image/png")]
+    [InlineData("/img/apple-touch-icon.png", "image/png")]
+    [InlineData("/favicon.ico", "image/x-icon")]
+    public async Task PwaIconsAreServedSuccessfully(string path, string expectedMediaType)
+    {
+        using var client = CreateClient(_factory);
+
+        var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(response.Content.Headers.ContentType);
+        Assert.Equal(expectedMediaType, response.Content.Headers.ContentType.MediaType);
+        Assert.True((response.Content.Headers.ContentLength ?? 0) > 0);
+    }
+
+    [Fact]
+    public async Task IndexHtmlContainsPwaElementsAndIntegrations()
+    {
+        using var client = CreateClient(_factory);
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.Contains("<link rel=\"manifest\" href=\"manifest.webmanifest\"", html, StringComparison.Ordinal);
+        Assert.Contains("<link rel=\"icon\" type=\"image/x-icon\" href=\"favicon.ico\"", html, StringComparison.Ordinal);
+        Assert.Contains("<link rel=\"icon\" type=\"image/png\" sizes=\"192x192\" href=\"img/icon-192.png\"", html, StringComparison.Ordinal);
+        Assert.Contains("<link rel=\"apple-touch-icon\" href=\"img/apple-touch-icon.png\"", html, StringComparison.Ordinal);
+
+        Assert.Contains("id=\"offlineBadge\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"tileErrorBanner\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"offlineNotice\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"updatePrompt\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"updateReloadButton\"", html, StringComparison.Ordinal);
+        Assert.Contains("class=\"brand-logo\">", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"brand-logo\" aria-hidden", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"updatePrompt\" class=\"update-prompt\" hidden role=\"status\" aria-live=\"polite\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FrontendUsesIndexedDbAndNeverUsesLocalStorageOrSessionStorage()
+    {
+        using var client = CreateClient(_factory);
+
+        var script = await client.GetStringAsync("/js/toured.js");
+
+        Assert.DoesNotContain("localStorage", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("sessionStorage", script, StringComparison.Ordinal);
+
+        Assert.Contains("DB_NAME = \"toured-db\"", script, StringComparison.Ordinal);
+        Assert.Contains("indexedDB.open(DB_NAME", script, StringComparison.Ordinal);
+        Assert.Contains("\"snapshots\"", script, StringComparison.Ordinal);
+        Assert.Contains("\"current\"", script, StringComparison.Ordinal);
+        Assert.Contains("Offline nur ansehen", script, StringComparison.Ordinal);
+        Assert.Contains("queueSnapshotOperation", script, StringComparison.Ordinal);
+        Assert.Contains("window.addEventListener(\"offline\"", script, StringComparison.Ordinal);
+        Assert.Contains("scheduleSessionExpiry", script, StringComparison.Ordinal);
+        Assert.Contains("showOfflineUnavailable", script, StringComparison.Ordinal);
+        Assert.Contains("updateReloadRequested", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("getStoredSnapshot().then", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnonymousSessionDoesNotIncludeExpiresAt()
+    {
+        using var client = CreateClient(_factory);
+
+        var response = await client.GetAsync("/auth/session");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.False(doc.RootElement.GetProperty("authenticated").GetBoolean());
+        Assert.False(doc.RootElement.TryGetProperty("expiresAt", out _));
+        Assert.False(doc.RootElement.TryGetProperty("email", out _));
+    }
+
+    [Fact]
+    public async Task SessionReportsTheEffectiveExpirationOfASlidingCookieRenewal()
+    {
+        int userId;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            userId = await scope.ServiceProvider.GetRequiredService<DataContext>().Users
+                .Where(user => user.Email == FakeGoogleHandler.Email)
+                .Select(user => user.Id)
+                .SingleAsync();
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var identity = new ClaimsIdentity(
+            [
+                new Claim(Constants.ClaimsNames.UserId, userId.ToString()),
+                new Claim(Constants.ClaimsNames.UserEmail, FakeGoogleHandler.Email)
+            ],
+            TouredAuthenticationSchemes.Cookie);
+        var properties = new AuthenticationProperties
+        {
+            IssuedUtc = now.AddHours(-5),
+            ExpiresUtc = now.AddHours(3),
+            AllowRefresh = true
+        };
+        using var client = CreateClient(_factory, handleCookies: false);
+        client.DefaultRequestHeaders.Add(
+            "Cookie",
+            CreateSessionCookie(_factory.Services, identity, properties));
+
+        var response = await client.GetAsync("/auth/session");
+        var session = await response.Content.ReadFromJsonAsync<AuthSessionResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(session);
+        Assert.True(session.Authenticated);
+        Assert.NotNull(session.ExpiresAt);
+        Assert.InRange(session.ExpiresAt.Value, now.AddHours(7).AddMinutes(59), now.AddHours(8).AddMinutes(1));
+
+        var setCookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
+        var options = _factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(TouredAuthenticationSchemes.Cookie);
+        var protectedTicket = setCookie.Split(';', 2)[0].Split('=', 2)[1];
+        var renewedTicket = options.TicketDataFormat.Unprotect(protectedTicket);
+        Assert.NotNull(renewedTicket);
+        Assert.Equal(session.ExpiresAt, renewedTicket.Properties.ExpiresUtc);
     }
 
     [Fact]
@@ -1099,14 +1323,18 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         Assert.NotNull(initialSession);
         Assert.False(initialSession.Authenticated);
+        Assert.Null(initialSession.ExpiresAt);
         Assert.Equal(HttpStatusCode.Unauthorized, initialPoints.StatusCode);
         Assert.NotNull(authenticatedSession);
         Assert.True(authenticatedSession.Authenticated);
+        Assert.NotNull(authenticatedSession.ExpiresAt);
+        Assert.True(authenticatedSession.ExpiresAt > DateTimeOffset.UtcNow);
         Assert.Equal(HttpStatusCode.OK, unvisitedPoints.StatusCode);
         Assert.Equal(HttpStatusCode.OK, visitedPoints.StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
         Assert.NotNull(finalSession);
         Assert.False(finalSession.Authenticated);
+        Assert.Null(finalSession.ExpiresAt);
         Assert.Equal(HttpStatusCode.Unauthorized, finalPoints.StatusCode);
     }
 
@@ -1131,6 +1359,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             var neutralPinResponse = await client.GetAsync("/toured/img/pin_icon_neutral.svg");
             var visitedPinResponse = await client.GetAsync("/toured/img/pin_icon_visited.svg");
             var logoResponse = await client.GetAsync("/toured/img/toured-logo-transparent.svg");
+            var manifestResponse = await client.GetAsync("/toured/manifest.webmanifest");
+            var serviceWorkerResponse = await client.GetAsync("/toured/service-worker.js");
+            var appIconResponse = await client.GetAsync("/toured/img/icon-192.png");
             var providersResponse = await client.GetAsync("/toured/api/providers");
             var restrictedPointsResponse = await client.GetAsync("/toured/api/points?provider=harzer-wandernadel");
 
@@ -1141,6 +1372,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.OK, neutralPinResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, visitedPinResponse.StatusCode);
             Assert.Equal(HttpStatusCode.OK, logoResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, manifestResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, serviceWorkerResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, appIconResponse.StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, providersResponse.StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, restrictedPointsResponse.StatusCode);
             Assert.NotNull(response.Headers.Location);
@@ -1197,11 +1431,17 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             }
         };
 
-    private static string CreateSessionCookie(IServiceProvider services, ClaimsIdentity identity)
+    private static string CreateSessionCookie(
+        IServiceProvider services,
+        ClaimsIdentity identity,
+        AuthenticationProperties? properties = null)
     {
         var options = services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(TouredAuthenticationSchemes.Cookie);
-        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), TouredAuthenticationSchemes.Cookie);
+        var ticket = new AuthenticationTicket(
+            new ClaimsPrincipal(identity),
+            properties ?? new AuthenticationProperties(),
+            TouredAuthenticationSchemes.Cookie);
         return $"{options.Cookie.Name}={options.TicketDataFormat.Protect(ticket)}";
     }
 

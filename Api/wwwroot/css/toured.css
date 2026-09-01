@@ -106,6 +106,33 @@ input:focus-visible,
     height: 3rem;
 }
 
+.offline-badge {
+    position: absolute;
+    bottom: 0.2rem;
+    right: 0.2rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1.5px solid #ffffff;
+    border-radius: 50%;
+    background: #9f1d20;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
+    pointer-events: none;
+}
+
+.offline-badge svg {
+    width: 0.75rem;
+    height: 0.75rem;
+    fill: none;
+    stroke: #ffffff;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.2;
+}
+
 #userSession {
     position: fixed;
     top: max(0.5rem, env(safe-area-inset-top));
@@ -476,6 +503,29 @@ input:focus-visible,
     border: 2px solid #9f1d20;
 }
 
+.tile-error-banner {
+    position: fixed;
+    top: max(6.5rem, calc(env(safe-area-inset-top) + 6.5rem));
+    left: 50%;
+    z-index: 185;
+    max-width: calc(100vw - 2rem);
+    margin: 0;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid rgba(159, 29, 32, 0.45);
+    border-radius: 0.6rem;
+    color: var(--text);
+    background: rgb(255 255 255 / 96%);
+    box-shadow: var(--shadow);
+    font-size: 0.825rem;
+    line-height: 1.35;
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.tile-error-banner p {
+    margin: 0;
+}
+
 #mapLegend {
     position: fixed;
     bottom: max(2rem, calc(env(safe-area-inset-bottom) + 2rem));
@@ -564,6 +614,17 @@ input:focus-visible,
     margin-top: 1rem;
     padding-top: 1rem;
     border-top: 1px solid rgb(37 37 34 / 20%);
+}
+
+.offline-notice {
+    margin: 0;
+    padding: 0.45rem 0.65rem;
+    border-radius: 0.45rem;
+    border-left: 0.25rem solid #9f1d20;
+    background: rgba(159, 29, 32, 0.08);
+    color: #8a171a;
+    font-size: 0.85rem;
+    font-weight: 650;
 }
 
 .visit-actions {
@@ -806,6 +867,12 @@ input:focus-visible,
         height: auto;
     }
 
+    .brand-logo .offline-badge {
+        top: 0.35rem;
+        right: 0.5rem;
+        bottom: auto;
+    }
+
     .map-status {
         top: max(6.5rem, calc(env(safe-area-inset-top) + 6.5rem));
     }
@@ -818,6 +885,43 @@ input:focus-visible,
         max-height: min(70vh, 32rem);
         border-radius: 0.75rem;
     }
+}
+
+.update-prompt {
+    position: fixed;
+    bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem));
+    left: 50%;
+    z-index: 650;
+    width: min(26rem, calc(100vw - 2rem));
+    transform: translateX(-50%);
+    animation: account-panel-in 200ms ease-out;
+}
+
+.update-prompt__card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.85rem;
+    background: rgb(255 255 255 / 97%);
+    box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 28%);
+}
+
+.update-prompt__card p {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text);
+}
+
+.update-prompt__card .action {
+    flex-shrink: 0;
+    min-height: 2.35rem;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.875rem;
 }
 
 @media (max-width: 27rem) {

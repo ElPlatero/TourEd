@@ -36,6 +36,19 @@ internal static class AuthenticationServiceCollectionExtensions
                 options.LoginPath = "/auth/login";
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.SlidingExpiration = true;
+                options.Events.OnCheckSlidingExpiration = context =>
+                {
+                    var effectiveExpiresAt = context.ShouldRenew && context.Properties?.ExpiresUtc is { } currentExpiresAt
+                        ? currentExpiresAt.Subtract(context.RemainingTime).Add(context.Options.ExpireTimeSpan)
+                        : context.Properties?.ExpiresUtc;
+                    if (effectiveExpiresAt is not null)
+                    {
+                        context.HttpContext.Items[TouredAuthenticationSchemes.EffectiveCookieExpiresAtItem] =
+                            DateTimeOffset.FromUnixTimeSeconds(effectiveExpiresAt.Value.ToUnixTimeSeconds());
+                    }
+
+                    return Task.CompletedTask;
+                };
                 options.Events.OnValidatePrincipal = async context =>
                 {
                     if (context.Principal?.TryGetUser(out var claimedUser) != true)
