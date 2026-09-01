@@ -63,9 +63,11 @@ The Google account must have a verified email matching an existing, unbound Tour
 
 ## Configure the runtime environment
 
-The root-owned runtime environment file contains the Google credentials, CLI identity, public path base, persistent Data-Protection location, reverse-proxy forwarding switch, and Touringen import source. None of the secret values belongs in the repository, release artifact, visible systemd unit, pull request, issue, or chat.
+The root-owned runtime environment file contains the Google credentials, CLI identity, public path base, persistent Data-Protection location, reverse-proxy forwarding switch, Touringen import source, and SMTP notification settings. None of the secret values belongs in the repository, release artifact, visible systemd unit, pull request, issue, or chat.
 
-Generate a 256-bit CLI token on the server and enter the Google secret without placing either literal in shell history. The CLI email must already exist in the TourEd database:
+Before deploying this version for the first time, the new notification environment entries must be added to `/etc/toured-api.env` so that deployment validation succeeds.
+
+Generate a 256-bit CLI token on the server and enter the Google client secret and SMTP password interactively without placing literals in shell history or shell arguments (alternatively edit `/etc/toured-api.env` using `sudoedit` and verify `root:root` with mode `0600` afterwards). The CLI email must already exist in the TourEd database. For IONOS SMTP (`smtp.ionos.de:465` with implicit SSL/TLS), the authenticated mailbox account (e.g. `mail.admin@baelgun.de`) must belong to the sender domain (e.g. `toured@baelgun.de`):
 
 ```bash
 TOURED_GOOGLE_CLIENT_ID='client-id.apps.googleusercontent.com'
@@ -73,7 +75,9 @@ TOURED_CLI_USER_EMAIL='existing-user@example.com'
 TOURED_CLI_TOKEN="$(openssl rand -hex 32)"
 read -rsp 'Google client secret: ' TOURED_GOOGLE_CLIENT_SECRET
 printf '\n'
-printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecret=%s\nAuthentication__Cli__UserEmail=%s\nAuthentication__Cli__Token=%s\nPathBase=%s\nDataProtection__KeysPath=%s\nASPNETCORE_FORWARDEDHEADERS_ENABLED=%s\ntouringen__StempelstellenUri=%s\n' \
+read -rsp 'SMTP password: ' TOURED_SMTP_PASSWORD
+printf '\n'
+printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecret=%s\nAuthentication__Cli__UserEmail=%s\nAuthentication__Cli__Token=%s\nPathBase=%s\nDataProtection__KeysPath=%s\nASPNETCORE_FORWARDEDHEADERS_ENABLED=%s\ntouringen__StempelstellenUri=%s\nRegistrationNotifications__Enabled=%s\nRegistrationNotifications__SmtpHost=%s\nRegistrationNotifications__SmtpPort=%s\nRegistrationNotifications__SmtpUsername=%s\nRegistrationNotifications__SmtpPassword=%s\nRegistrationNotifications__SenderAddress=%s\nRegistrationNotifications__RecipientAddress=%s\n' \
     "$TOURED_GOOGLE_CLIENT_ID" \
     "$TOURED_GOOGLE_CLIENT_SECRET" \
     "$TOURED_CLI_USER_EMAIL" \
@@ -82,13 +86,21 @@ printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecre
     '/srv/toured/data-protection-keys' \
     'true' \
     'https://www.touringen.de/stempelstellen' \
+    'true' \
+    'smtp.ionos.de' \
+    '465' \
+    'mail.admin@baelgun.de' \
+    "$TOURED_SMTP_PASSWORD" \
+    'toured@baelgun.de' \
+    'YOUR-ADMIN-FORWARDING-ADDRESS@baelgun.de' \
     | sudo tee /etc/toured-api.env >/dev/null
 sudo chown root:root /etc/toured-api.env
 sudo chmod 0600 /etc/toured-api.env
 unset TOURED_GOOGLE_CLIENT_SECRET
+unset TOURED_SMTP_PASSWORD
 ```
 
-`DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` has no trailing slash. The checked-in `touringen` settings supply the official Touringen page and GPX archive URLs used by the terminal-driven import; deployments normally override only `touringen__StempelstellenUri` if necessary.
+Replace `YOUR-ADMIN-FORWARDING-ADDRESS@baelgun.de` with the actual administrative recipient before writing the environment file. `DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` has no trailing slash. The checked-in `touringen` settings supply the official Touringen page and GPX archive URLs used by the terminal-driven import; deployments normally override only `touringen__StempelstellenUri` if necessary. No separate test email is sent; the background notification service evaluates pending requests immediately after application startup and then every five minutes.
 
 The reverse proxy must preserve the `/toured` prefix and send the original host and HTTPS protocol through forwarded headers. For nginx, a location with a path base uses `proxy_pass` without a trailing slash:
 
@@ -181,7 +193,7 @@ Existing points matched by `(series, number)` or `(provider, externalId)` are up
 
 Avoid shell tracing and verbose HTTP output while handling the token. In a later administrator session, load it without echoing it by running `read -rsp 'CLI token: ' TOURED_CLI_TOKEN` and pressing Enter.
 
-To rotate the credential, generate a new token, replace only `Authentication__Cli__Token` in `/etc/toured-api.env`, and restart the service. The old token becomes invalid immediately after restart. Verify the required import calls with the new value, then run `unset TOURED_CLI_TOKEN` in every shell that held it. Rotate the Google client secret the same way and restart the service after replacing `Authentication__Google__ClientSecret`.
+To rotate the credential, generate a new token, replace only `Authentication__Cli__Token` in `/etc/toured-api.env`, and restart the service. The old token becomes invalid immediately after restart. Verify the required import calls with the new value, then run `unset TOURED_CLI_TOKEN` in every shell that held it. Rotate the Google client secret or SMTP password the same way and restart the service after replacing `Authentication__Google__ClientSecret` or `RegistrationNotifications__SmtpPassword`.
 
 ## Run the one-time server setup
 

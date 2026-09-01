@@ -658,6 +658,7 @@ public class TouredRepository : IUserService
         existing.CreatedAt = DateTime.UtcNow;
         existing.UpdatedAt = DateTime.UtcNow;
         existing.DecidedAt = null;
+        existing.AdminNotificationSentAt = null;
         await _dbContext.SaveChangesAsync(cancellationToken);
         return existing;
     }
@@ -842,6 +843,64 @@ public class TouredRepository : IUserService
             .ExecuteDeleteAsync(cancellationToken);
 
         return deletedCount;
+    }
+
+    public async Task<List<int>> GetUnnotifiedPendingRegistrationRequestIdsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.RegistrationRequests
+            .Where(r => r.Status == RegistrationRequestStatus.Pending && r.AdminNotificationSentAt == null)
+            .OrderBy(r => r.Id)
+            .Select(r => r.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<int> CountPendingRegistrationRequestsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.RegistrationRequests
+            .CountAsync(r => r.Status == RegistrationRequestStatus.Pending, cancellationToken);
+    }
+
+    public async Task<DateTime?> GetLastRegistrationNotificationSentAtAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.RegistrationNotificationStates
+            .Where(state => state.Id == RegistrationNotificationState.SingletonId)
+            .Select(state => state.LastSentAt)
+            .SingleAsync(cancellationToken);
+    }
+
+    public async Task<int> MarkRegistrationRequestsAdminNotifiedAsync(
+        IReadOnlyCollection<int> requestIds,
+        DateTime sentAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (requestIds.Count == 0)
+        {
+            return 0;
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var markedCount = await _dbContext.RegistrationRequests
+            .Where(r => requestIds.Contains(r.Id) &&
+                        r.Status == RegistrationRequestStatus.Pending &&
+                        r.AdminNotificationSentAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.AdminNotificationSentAt, sentAt), cancellationToken);
+
+        var updatedStateCount = await _dbContext.RegistrationNotificationStates
+            .Where(state => state.Id == RegistrationNotificationState.SingletonId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(state => state.LastSentAt, sentAt),
+                cancellationToken);
+        if (updatedStateCount != 1)
+        {
+            throw new InvalidOperationException("The registration notification state is missing.");
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return markedCount;
     }
 
     public async Task<int> CleanupExpiredAdminAuditEntriesAsync(
