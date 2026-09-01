@@ -193,6 +193,53 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
         Assert.Null(auditDto.TargetUserId);
     }
 
+    [Theory]
+    [InlineData("approve", "approve")]
+    [InlineData("approve", "reject")]
+    [InlineData("reject", "approve")]
+    [InlineData("reject", "reject")]
+    public async Task RegistrationRequestCanOnlyBeDecidedOnce(string firstDecision, string secondDecision)
+    {
+        int requestId;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            var request = new RegistrationRequest
+            {
+                GoogleSubject = $"single-decision-{firstDecision}-{secondDecision}",
+                Email = $"{firstDecision}-{secondDecision}@example.test",
+                Status = RegistrationRequestStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+            context.RegistrationRequests.Add(request);
+            await context.SaveChangesAsync();
+            requestId = request.Id;
+        }
+
+        using var client = CreateAuthorizedClient();
+        var firstResponse = await client.PostAsync($"/api/admin/registrations/{requestId}/{firstDecision}", null);
+        int auditCountAfterFirstDecision;
+        await using (var auditScope = _factory.Services.CreateAsyncScope())
+        {
+            auditCountAfterFirstDecision = await auditScope.ServiceProvider
+                .GetRequiredService<DataContext>()
+                .AdminAuditEntries.CountAsync();
+        }
+        var secondResponse = await client.PostAsync($"/api/admin/registrations/{requestId}/{secondDecision}", null);
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+
+        await using var verifyScope = _factory.Services.CreateAsyncScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<DataContext>();
+        var requestAfterDecisions = await verifyContext.RegistrationRequests.SingleAsync(r => r.Id == requestId);
+        var expectedStatus = firstDecision == "approve"
+            ? RegistrationRequestStatus.Approved
+            : RegistrationRequestStatus.Rejected;
+        Assert.Equal(expectedStatus, requestAfterDecisions.Status);
+        Assert.Equal(auditCountAfterFirstDecision, await verifyContext.AdminAuditEntries.CountAsync());
+    }
+
     [Fact]
     public async Task ExpiredRegistrationRequestsArePurgedAfter30Days()
     {
