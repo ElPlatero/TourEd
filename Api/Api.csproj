@@ -12,6 +12,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="MailKit" Version="4.17.0" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.*" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">

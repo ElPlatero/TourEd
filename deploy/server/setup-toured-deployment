@@ -111,7 +111,11 @@ fi
 
 for environment_key in Authentication__Google__ClientId Authentication__Google__ClientSecret \
     Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath \
-    ASPNETCORE_FORWARDEDHEADERS_ENABLED touringen__StempelstellenUri; do
+    ASPNETCORE_FORWARDEDHEADERS_ENABLED touringen__StempelstellenUri \
+    RegistrationNotifications__Enabled RegistrationNotifications__SmtpHost \
+    RegistrationNotifications__SmtpPort RegistrationNotifications__SmtpUsername \
+    RegistrationNotifications__SmtpPassword RegistrationNotifications__SenderAddress \
+    RegistrationNotifications__RecipientAddress; do
     if ! awk -F= -v key="$environment_key" \
         '$1 == key && length($0) > length(key) + 1 { count++ } END { exit count == 1 ? 0 : 1 }' \
         "$RUNTIME_ENV_FILE"; then
@@ -129,6 +133,15 @@ if ! grep -Fqx 'ASPNETCORE_FORWARDEDHEADERS_ENABLED=true' "$RUNTIME_ENV_FILE"; t
 fi
 if ! grep -Fqx 'touringen__StempelstellenUri=https://www.touringen.de/stempelstellen' "$RUNTIME_ENV_FILE"; then
     printf 'touringen__StempelstellenUri must use the supported Touringen source URL.\n' >&2
+    exit 1
+fi
+if ! grep -Fqx 'RegistrationNotifications__Enabled=true' "$RUNTIME_ENV_FILE"; then
+    printf 'RegistrationNotifications__Enabled must be true.\n' >&2
+    exit 1
+fi
+smtp_port="$(awk -F= '$1 == "RegistrationNotifications__SmtpPort" { print $2 }' "$RUNTIME_ENV_FILE")"
+if [[ ! "$smtp_port" =~ ^[0-9]+$ ]] || (( smtp_port < 1 || smtp_port > 65535 )); then
+    printf 'RegistrationNotifications__SmtpPort must be a valid port number between 1 and 65535.\n' >&2
     exit 1
 fi
 if [[ -e "$DATA_PROTECTION_KEYS_DIR" && ( ! -d "$DATA_PROTECTION_KEYS_DIR" || -L "$DATA_PROTECTION_KEYS_DIR" ) ]]; then

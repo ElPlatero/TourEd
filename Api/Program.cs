@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Api.Extensions;
 using Api.Managers;
+using Api.Options;
 using Api.Repositories;
 using Api.Services;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -37,6 +38,10 @@ builder.Services
     .AddRepositories()
     .AddManagers()
     .AddSingleton<TimeProvider>(TimeProvider.System)
+    .Configure<RegistrationNotificationOptions>(builder.Configuration.GetSection(RegistrationNotificationOptions.SectionName))
+    .AddTransient<IRegistrationNotificationSender, SmtpRegistrationNotificationSender>()
+    .AddSingleton<RegistrationRequestNotificationService>()
+    .AddHostedService(serviceProvider => serviceProvider.GetRequiredService<RegistrationRequestNotificationService>())
     .AddSingleton<DataRetentionCleanupService>()
     .AddHostedService(serviceProvider => serviceProvider.GetRequiredService<DataRetentionCleanupService>())
     .AddTransient<IUnitOfWork, UnitOfWork>()

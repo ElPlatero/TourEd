@@ -20,6 +20,7 @@ public class DataContext : DbContext
     public DbSet<UserVisit> UserVisits { get; set; } = null!;
     public DbSet<AdminAuditEntry> AdminAuditEntries { get; set; } = null!;
     public DbSet<RegistrationRequest> RegistrationRequests { get; set; } = null!;
+    public DbSet<RegistrationNotificationState> RegistrationNotificationStates { get; set; } = null!;
     
     
     protected override void OnConfiguring(DbContextOptionsBuilder options)
@@ -716,6 +717,14 @@ public class DataContext : DbContext
             dto.HasIndex(p => p.GoogleSubject).IsUnique();
             dto.HasIndex(p => p.CreatedAt);
             dto.HasIndex(p => p.Status);
+            dto.HasIndex(p => new { p.Status, p.AdminNotificationSentAt });
+        });
+
+        modelBuilder.Entity<RegistrationNotificationState>(dto =>
+        {
+            dto.HasKey(p => p.Id);
+            dto.Property(p => p.Id).ValueGeneratedNever();
+            dto.HasData(new RegistrationNotificationState());
         });
 
         modelBuilder.Entity<UserVisit>(dto =>

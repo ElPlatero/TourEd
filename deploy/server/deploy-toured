@@ -93,7 +93,11 @@ runtime_env_mode="$(stat --format '%a' "$RUNTIME_ENV_FILE")"
     fail "Runtime environment file must not be accessible by group or others"
 for environment_key in Authentication__Google__ClientId Authentication__Google__ClientSecret \
     Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath \
-    ASPNETCORE_FORWARDEDHEADERS_ENABLED touringen__StempelstellenUri; do
+    ASPNETCORE_FORWARDEDHEADERS_ENABLED touringen__StempelstellenUri \
+    RegistrationNotifications__Enabled RegistrationNotifications__SmtpHost \
+    RegistrationNotifications__SmtpPort RegistrationNotifications__SmtpUsername \
+    RegistrationNotifications__SmtpPassword RegistrationNotifications__SenderAddress \
+    RegistrationNotifications__RecipientAddress; do
     awk -F= -v key="$environment_key" \
         '$1 == key && length($0) > length(key) + 1 { count++ } END { exit count == 1 ? 0 : 1 }' \
         "$RUNTIME_ENV_FILE" || \
@@ -105,6 +109,11 @@ grep -Fqx 'ASPNETCORE_FORWARDEDHEADERS_ENABLED=true' "$RUNTIME_ENV_FILE" || \
     fail "ASPNETCORE_FORWARDEDHEADERS_ENABLED must be true"
 grep -Fqx 'touringen__StempelstellenUri=https://www.touringen.de/stempelstellen' "$RUNTIME_ENV_FILE" || \
     fail "touringen__StempelstellenUri must use the supported Touringen source URL"
+grep -Fqx 'RegistrationNotifications__Enabled=true' "$RUNTIME_ENV_FILE" || \
+    fail "RegistrationNotifications__Enabled must be true"
+smtp_port="$(awk -F= '$1 == "RegistrationNotifications__SmtpPort" { print $2 }' "$RUNTIME_ENV_FILE")"
+[[ "$smtp_port" =~ ^[0-9]+$ ]] && (( smtp_port >= 1 && smtp_port <= 65535 )) || \
+    fail "RegistrationNotifications__SmtpPort must be a valid port number between 1 and 65535"
 [[ -d "$DATA_PROTECTION_KEYS_DIR" && ! -L "$DATA_PROTECTION_KEYS_DIR" ]] || \
     fail "Data-Protection keys directory is missing or is a symlink: $DATA_PROTECTION_KEYS_DIR"
 [[ "$(stat --format '%u' "$DATA_PROTECTION_KEYS_DIR")" == "$(id -u "$RUNTIME_USER")" ]] || \

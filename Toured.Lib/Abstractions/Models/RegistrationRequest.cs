@@ -16,4 +16,5 @@ public sealed class RegistrationRequest
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public DateTime? DecidedAt { get; set; }
+    public DateTime? AdminNotificationSentAt { get; set; }
 }
