@@ -48,6 +48,7 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
         using var client = _factory.CreateClient();
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/admin/registrations")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/admin/audit")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/api/admin/registrations/1/approve", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/api/admin/registrations/1/reject", null)).StatusCode);
     }
@@ -137,6 +138,7 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
             Assert.NotNull(auditEntry);
             Assert.Equal(_adminUserId, auditEntry.ActorUserId);
             Assert.Null(auditEntry.ProviderSlug);
+            Assert.Equal(requestId, auditEntry.RegistrationRequestId);
         }
     }
 
@@ -178,8 +180,17 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
                 .SingleOrDefaultAsync(a => a.Action == "registration.rejected");
             Assert.NotNull(auditEntry);
             Assert.Equal(_adminUserId, auditEntry.ActorUserId);
-            Assert.Equal(0, auditEntry.TargetUserId);
+            Assert.Null(auditEntry.TargetUserId);
+            Assert.Equal(requestId, auditEntry.RegistrationRequestId);
         }
+
+        var auditResponse = await client.GetFromJsonAsync<List<AdminAuditEntryDto>>(
+            "/api/admin/audit?offset=0&limit=250");
+        Assert.NotNull(auditResponse);
+        var auditDto = Assert.Single(auditResponse, entry => entry.RegistrationRequestId == requestId);
+        Assert.Equal("registration.rejected", auditDto.Action);
+        Assert.Equal(_adminUserId, auditDto.ActorUserId);
+        Assert.Null(auditDto.TargetUserId);
     }
 
     [Fact]

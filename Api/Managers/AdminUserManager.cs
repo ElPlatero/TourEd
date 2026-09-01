@@ -18,6 +18,12 @@ public sealed class AdminUserManager
     public Task<List<AdminProviderDto>> GetProvidersAsync(CancellationToken cancellationToken)
         => _repository.GetAdminProvidersAsync(cancellationToken);
 
+    public Task<List<AdminAuditEntryDto>> GetAuditEntriesAsync(
+        int offset,
+        int limit,
+        CancellationToken cancellationToken)
+        => _repository.GetAdminAuditEntriesAsync(offset, limit, cancellationToken);
+
     public Task<AdminUserDto?> UpdateProvidersAsync(
         int userId,
         UpdateAdminUserProvidersRequestDto request,

@@ -118,7 +118,7 @@ The backend follows a simple layered structure:
 
 Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN, Malerweg (8 points), Schluchtensteig (6 points), Heidschnuckenweg (13 points), and Harzer Klosterwanderweg (16 points) each have one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. `UserStampingProvider` uses `(UserId, StampingProviderId)` as its unique key. Removing an entitlement hides its provider and visits without deleting visit rows; restoring it makes those visits visible again. Deleting a user cascades to entitlements.
 
-Administrative entitlement and registration decisions are recorded in `AdminAuditEntry` with timestamp, actor and target internal user ids, action (`registration.approved`, `registration.rejected`, etc.), and optional provider slug. Tokens, email addresses, and Google subjects are not copied into the audit table.
+Administrative entitlement and registration decisions are recorded in `AdminAuditEntry` with timestamp, actor user id, action (`registration.approved`, `registration.rejected`, etc.), optional target user id, optional registration-request id, and optional provider slug. Registration rejections identify the request without inventing a target user. Tokens, email addresses, and Google subjects are not copied into the audit table. The CLI-protected, bounded `GET /api/admin/audit` endpoint returns the newest entries for the separate admin client.
 
 `StampingProvider` also stores the public name, abbreviation, description, optional website, legacy anonymous-access/data-readiness flag, and optional imported-data provenance used by the provider catalog and GeoJSON export. Provenance includes source and licence links, attribution, source revision/timestamp, and import timestamp. Public provider DTOs expose only absolute HTTP(S) URLs; unsupported URI schemes are omitted. Browser catalogs, points, tours, visits, search data and GeoJSON exports are always restricted by user entitlements.
 
@@ -256,6 +256,8 @@ Other endpoints:
   - Requires the dedicated CLI bearer token.
 - `POST /api/admin/registrations/{id}/reject`
   - Rejects a registration request, updates status to `rejected`, and logs an audit entry.
+- `GET /api/admin/audit?offset=0&limit=100`
+  - Returns audit entries newest first; offset is non-negative and limit is clamped to 1 through 250.
   - Requires the dedicated CLI bearer token.
 
 ## Development Notes

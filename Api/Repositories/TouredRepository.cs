@@ -198,16 +198,38 @@ public class TouredRepository : IUserService
     private static AdminAuditEntry CreateAudit(
         int actorUserId,
         string action,
-        int targetUserId,
-        string? providerSlug)
+        int? targetUserId,
+        string? providerSlug,
+        int? registrationRequestId = null)
         => new()
         {
             CreatedAt = DateTime.UtcNow,
             ActorUserId = actorUserId,
             Action = action,
             TargetUserId = targetUserId,
+            RegistrationRequestId = registrationRequestId,
             ProviderSlug = providerSlug
         };
+
+    public Task<List<AdminAuditEntryDto>> GetAdminAuditEntriesAsync(
+        int offset,
+        int limit,
+        CancellationToken cancellationToken = default)
+        => _dbContext.AdminAuditEntries
+            .AsNoTracking()
+            .OrderByDescending(entry => entry.CreatedAt)
+            .ThenByDescending(entry => entry.Id)
+            .Skip(offset)
+            .Take(limit)
+            .Select(entry => new AdminAuditEntryDto(
+                entry.Id,
+                entry.CreatedAt,
+                entry.ActorUserId,
+                entry.Action,
+                entry.TargetUserId,
+                entry.RegistrationRequestId,
+                entry.ProviderSlug))
+            .ToListAsync(cancellationToken);
 
     public Task<List<StampingProvider>> GetStampingProvidersForUserAsync(
         int userId,
@@ -710,7 +732,8 @@ public class TouredRepository : IUserService
             actorUserId,
             "registration.approved",
             existingUser.Id,
-            null));
+            null,
+            request.Id));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -744,8 +767,9 @@ public class TouredRepository : IUserService
         _dbContext.AdminAuditEntries.Add(CreateAudit(
             actorUserId,
             "registration.rejected",
-            0,
-            null));
+            null,
+            null,
+            request.Id));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
