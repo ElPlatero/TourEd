@@ -555,7 +555,12 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var tours = await client.GetFromJsonAsync<GetHikingToursResponse>("/api/tours");
 
         Assert.NotNull(catalog);
-        Assert.DoesNotContain(catalog.StampingProviders, provider => provider.Slug == "other");
+        var otherCatalogProvider = Assert.Single(catalog.StampingProviders, provider => provider.Slug == "other");
+        Assert.False(otherCatalogProvider.IsEnabled);
+        Assert.True(otherCatalogProvider.IsDataReady);
+        Assert.Equal(1, otherCatalogProvider.TotalPoints);
+        Assert.Equal(1, otherCatalogProvider.VisitedPoints);
+        Assert.False(otherCatalogProvider.HasPublicDataDownload);
         Assert.NotNull(allPoints);
         Assert.DoesNotContain(allPoints.StampingPoints, point => point.Provider.Slug == "other");
         Assert.Equal(HttpStatusCode.Forbidden, directPoint.StatusCode);
@@ -1018,7 +1023,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("closeAccountMenu()", script, StringComparison.Ordinal);
         Assert.Contains("elements.providerInfoDialog.showModal()", script, StringComparison.Ordinal);
         Assert.Contains("providerInfoDialog.addEventListener(\"cancel\"", script, StringComparison.Ordinal);
-        Assert.Contains("elements.providerInfoTrigger?.focus", script, StringComparison.Ordinal);
+        Assert.Contains("trigger?.isConnected", script, StringComparison.Ordinal);
+        Assert.Contains("elements.progressButton.focus", script, StringComparison.Ordinal);
         Assert.Contains("url.protocol === \"http:\" || url.protocol === \"https:\"", script, StringComparison.Ordinal);
         Assert.Contains("provider.hasPublicDataDownload", script, StringComparison.Ordinal);
         Assert.Contains("points.geojson", script, StringComparison.Ordinal);
@@ -1313,7 +1319,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v7", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v8", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
@@ -1402,7 +1408,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("indexedDB.open(DB_NAME", script, StringComparison.Ordinal);
         Assert.Contains("\"snapshots\"", script, StringComparison.Ordinal);
         Assert.Contains("\"current\"", script, StringComparison.Ordinal);
-        Assert.Contains("SNAPSHOT_SCHEMA_VERSION = 2", script, StringComparison.Ordinal);
+        Assert.Contains("SNAPSHOT_SCHEMA_VERSION = 3", script, StringComparison.Ordinal);
         Assert.Contains("pendingActions", script, StringComparison.Ordinal);
         Assert.Contains("Synchronisierung ausstehend", await client.GetStringAsync("/"), StringComparison.Ordinal);
         Assert.Contains("BroadcastChannel", script, StringComparison.Ordinal);
