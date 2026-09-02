@@ -159,6 +159,32 @@ public class PointsController : ControllerBase
     }
 
     [Authorize]
+    [HttpPut("id/{stampingPointId:int:min(1)}/state")]
+    [ProducesResponseType(typeof(VisitDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(VisitDto), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SynchronizeVisitById(
+        int stampingPointId,
+        [FromBody] SynchronizeVisitRequest request,
+        [FromQuery] string? provider = null)
+    {
+        if (!User.TryGetUser(out var currentUser)) return Unauthorized();
+        try
+        {
+            var result = await _manager.SynchronizeVisitByIdAsync(
+                currentUser,
+                stampingPointId,
+                CreateState(request.Expected!),
+                CreateState(request.Desired!),
+                provider);
+            var dto = VisitDto.Create(result.Visit, StampingPointDto.Create(result.StampingPoint, result.Visit));
+            return result.IsConflict ? Conflict(dto) : Ok(dto);
+        }
+        catch (EntityNotFoundException) { return NotFound(); }
+        catch (NotSupportedException) { return BadRequest(); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
+    [Authorize]
     [HttpGet("id/{stampingPointId:int:min(1)}")]
     public async Task<IActionResult> GetVisitById(int stampingPointId, [FromQuery] string? provider = null)
     {
@@ -225,4 +251,11 @@ public class PointsController : ControllerBase
         if (data.Tours != null) result.Tours = data.Tours.Select(TourCompactDto.Create);
         return result;
     }
+
+    private static VisitStateValue CreateState(VisitStateRequest state) => state.IsVisited
+        ? new VisitStateValue(
+            true,
+            state.VisitedOn?.ToDateTime(state.VisitedAt ?? TimeOnly.MinValue),
+            state.VisitedAt.HasValue)
+        : VisitStateValue.Open;
 }

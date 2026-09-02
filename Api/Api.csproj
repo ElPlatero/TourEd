@@ -9,6 +9,7 @@
         <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
         <RepositoryUrl>https://github.com/ElPlatero/TourEd</RepositoryUrl>
+        <UserSecretsId>7043e135-c1ff-44d8-9968-4786f2be84fa</UserSecretsId>
     </PropertyGroup>
 
     <ItemGroup>
