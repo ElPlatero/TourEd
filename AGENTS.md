@@ -298,7 +298,7 @@ The configured database connection is:
 
 Current verification baseline:
 
-- `dotnet build TourEd.sln --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
+- `dotnet build TourEd.slnx --no-restore` succeeds after a fresh restore with the .NET 10 SDK.
 - `dotnet test --no-restore` runs provider-aware persistence/import, readiness, Google account-binding, browser-session/mobile-visit/frontend-contract, and CLI-authentication integration tests after a fresh restore with the .NET 10 SDK.
 
 ## Deployment
