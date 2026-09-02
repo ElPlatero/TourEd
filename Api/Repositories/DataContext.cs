@@ -79,7 +79,7 @@ public class DataContext : DbContext
                 Id = StampingProvider.SchluchtensteigId,
                 Slug = StampingProvider.SchluchtensteigSlug,
                 Name = "Schluchtensteig",
-                Abbreviation = "SS",
+                Abbreviation = "SST",
                 IsAnonymousAccessAllowed = true,
                 WebsiteUri = new Uri("https://www.schluchtensteig.de/"),
                 Description = "Der Schluchtensteig im Naturpark Südschwarzwald führt über 119 Kilometer in 6 Etappen von Stühlingen quer durch spektakuläre Schluchten bis nach Wehr. Entlang der Etappenorte laden Stempelstellen zum Eintragen in den Wanderpass ein."

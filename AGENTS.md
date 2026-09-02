@@ -4,7 +4,7 @@
 
 TourEd is a small .NET 10 application for stamping points and hiking tours from multiple providers.
 
-It stores Touringen, Harzer Wandernadel (HWN), Malerweg (MW), Schluchtensteig (SS), Heidschnuckenweg (HNW), and Harzer Klosterwanderweg (HKW) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
+It stores Touringen, Harzer Wandernadel (HWN), Malerweg (MW), Schluchtensteig (SST), Heidschnuckenweg (HNW), and Harzer Klosterwanderweg (HKW) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
 Stamping points are anchored by `StampingProvider` and belong to a provider-scoped `StampingSeries`. A series supplies the number namespace, so equally numbered points from different editions remain distinct. Per-user `UserStampingProvider` entitlements determine which providers an authenticated account may access. Existing users received every provider present when the entitlement migration ran; new users and providers receive no automatic grants. `User.DefaultStampingProviderId` is nullable and is used only when it references an entitled provider.
 

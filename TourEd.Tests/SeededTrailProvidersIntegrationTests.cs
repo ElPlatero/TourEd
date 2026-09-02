@@ -63,7 +63,7 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("schluchtensteig", "Schluchtensteig", "SS", 6)]
+    [InlineData("schluchtensteig", "Schluchtensteig", "SST", 6)]
     [InlineData("heidschnuckenweg", "Heidschnuckenweg", "HNW", 13)]
     [InlineData("harzer-klosterwanderweg", "Harzer Klosterwanderweg", "HKW", 16)]
     public async Task AuthenticatedUserCanQuerySeededTrailProviderPoints(string slug, string expectedName, string expectedAbbr, int expectedCount)
