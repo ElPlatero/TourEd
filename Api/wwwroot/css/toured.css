@@ -133,6 +133,37 @@ input:focus-visible,
     stroke-width: 2.2;
 }
 
+.pending-visit-indicator {
+    position: absolute;
+    top: 0.65rem;
+    left: 0.65rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid rgb(18 62 101 / 35%);
+    border-radius: 50%;
+    color: #123e65;
+    background: #ffffff;
+    box-shadow: 0 1px 5px rgb(0 0 0 / 18%);
+}
+
+.pending-visit-indicator svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+#infoCard.info-card--pending .info-card__header {
+    padding-left: 2.35rem;
+}
+
 #userSession {
     position: fixed;
     top: max(0.5rem, env(safe-area-inset-top));
@@ -960,6 +991,12 @@ input:focus-visible,
     }
 }
 
+@keyframes auth-barrier-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 @media (prefers-contrast: more) {
     .account-menu-button,
     .account-panel,
@@ -984,6 +1021,10 @@ input:focus-visible,
 
 @media (prefers-reduced-motion: reduce) {
     .account-panel {
+        animation: none;
+    }
+
+    .auth-barrier__spinner {
         animation: none;
     }
 }
@@ -1070,6 +1111,25 @@ input:focus-visible,
     font-weight: 600;
     text-decoration: none;
     border-radius: 0.5rem;
+}
+
+.auth-barrier__loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    min-height: 3rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.auth-barrier__spinner {
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 0.2rem solid rgb(39 156 223 / 30%);
+    border-top-color: #279cdf;
+    border-radius: 50%;
+    animation: auth-barrier-spin 800ms linear infinite;
 }
 
 .auth-barrier__footer {

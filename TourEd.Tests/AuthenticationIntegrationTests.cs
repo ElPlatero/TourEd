@@ -546,6 +546,11 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var directWrite = await client.PutAsJsonAsync(
             $"/api/points/{OtherProviderPointNumber}?provider=other",
             new SaveVisitRequest(null, null));
+        var directStateWrite = await client.PutAsJsonAsync(
+            $"/api/points/id/{otherPointId}/state?provider=other",
+            new SynchronizeVisitRequest(
+                new VisitStateRequest(true, null, null),
+                new VisitStateRequest(false, null, null)));
         var geoJson = await client.GetAsync("/api/providers/other/points.geojson");
         var tours = await client.GetFromJsonAsync<GetHikingToursResponse>("/api/tours");
 
@@ -555,6 +560,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.DoesNotContain(allPoints.StampingPoints, point => point.Provider.Slug == "other");
         Assert.Equal(HttpStatusCode.Forbidden, directPoint.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, directWrite.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, directStateWrite.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, geoJson.StatusCode);
         Assert.NotNull(tours);
         var entitlementTour = Assert.Single(tours.HikingTours, tour => tour.Id == 999);
@@ -688,6 +694,153 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Null(deletedVisit.VisitedOn);
         Assert.Null(deletedVisit.VisitedAt);
         Assert.Equal(HttpStatusCode.NotFound, repeatedDeleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task CookieSessionCanSynchronizeVisitStateAtomicallyAndIdempotently()
+    {
+        int pointId;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            pointId = await context.StampingPoints
+                .Where(point => point.Number == WritablePointNumber &&
+                                point.ProviderId == StampingProvider.TouringenId)
+                .Select(point => point.Id)
+                .SingleAsync();
+        }
+
+        var endpoint = $"/api/points/id/{pointId}/state?provider={StampingProvider.TouringenSlug}";
+        var open = new VisitStateRequest(false, null, null);
+        var dateOnly = new VisitStateRequest(true, new DateOnly(2026, 8, 28), null);
+        var dated = new VisitStateRequest(true, new DateOnly(2026, 8, 28), new TimeOnly(14, 30));
+
+        using var anonymousClient = CreateClient(_factory);
+        var anonymousResponse = await anonymousClient.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(open, dateOnly));
+
+        using var client = CreateClient(_factory);
+        await LoginAsync(client);
+        var createResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(open, dateOnly));
+        var created = await createResponse.Content.ReadFromJsonAsync<VisitDto>();
+
+        var repeatedResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(open, dateOnly));
+        var repeated = await repeatedResponse.Content.ReadFromJsonAsync<VisitDto>();
+
+        var conflictResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(open, dated));
+        var conflict = await conflictResponse.Content.ReadFromJsonAsync<VisitDto>();
+
+        var updateResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(dateOnly, dated));
+        var updated = await updateResponse.Content.ReadFromJsonAsync<VisitDto>();
+
+        var deleteResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(dated, open));
+        var deleted = await deleteResponse.Content.ReadFromJsonAsync<VisitDto>();
+
+        var repeatedDeleteResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(dated, open));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        Assert.True(created!.IsVisited);
+        Assert.Equal(dateOnly.VisitedOn, created.VisitedOn);
+        Assert.Null(created.VisitedAt);
+        Assert.Equal(HttpStatusCode.OK, repeatedResponse.StatusCode);
+        Assert.Equal(created with { StampingPoint = repeated!.StampingPoint }, repeated);
+        Assert.Equal(HttpStatusCode.Conflict, conflictResponse.StatusCode);
+        Assert.True(conflict!.IsVisited);
+        Assert.Equal(dateOnly.VisitedOn, conflict.VisitedOn);
+        Assert.Null(conflict.VisitedAt);
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        Assert.Equal(dated.VisitedOn, updated!.VisitedOn);
+        Assert.Equal(dated.VisitedAt, updated.VisitedAt);
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+        Assert.False(deleted!.IsVisited);
+        Assert.Null(deleted.VisitedOn);
+        Assert.Null(deleted.VisitedAt);
+        Assert.Equal(HttpStatusCode.OK, repeatedDeleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task VisitStateSynchronizationValidatesStateShapesAndFutureValues()
+    {
+        int pointId;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            pointId = await context.StampingPoints
+                .Where(point => point.Number == WritablePointNumber &&
+                                point.ProviderId == StampingProvider.TouringenId)
+                .Select(point => point.Id)
+                .SingleAsync();
+        }
+
+        using var client = CreateClient(_factory);
+        await LoginAsync(client);
+        var endpoint = $"/api/points/id/{pointId}/state?provider={StampingProvider.TouringenSlug}";
+        var open = new VisitStateRequest(false, null, null);
+
+        var openWithDateResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(open, new VisitStateRequest(false, new DateOnly(2026, 8, 28), null)));
+        var timeWithoutDateResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(open, new VisitStateRequest(true, null, new TimeOnly(10, 30))));
+        var futureResponse = await client.PutAsJsonAsync(
+            endpoint,
+            new SynchronizeVisitRequest(
+                open,
+                new VisitStateRequest(true, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)), null),
+                0));
+
+        Assert.Equal(HttpStatusCode.BadRequest, openWithDateResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, timeWithoutDateResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, futureResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ConcurrentVisitStateSynchronizationAllowsOnlyOneExpectedStateTransition()
+    {
+        int pointId;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            pointId = await context.StampingPoints
+                .Where(point => point.Number == WritablePointNumber &&
+                                point.ProviderId == StampingProvider.TouringenId)
+                .Select(point => point.Id)
+                .SingleAsync();
+        }
+
+        using var firstClient = CreateClient(_factory);
+        using var secondClient = CreateClient(_factory);
+        await LoginAsync(firstClient);
+        await LoginAsync(secondClient);
+        var endpoint = $"/api/points/id/{pointId}/state?provider={StampingProvider.TouringenSlug}";
+        var expected = new VisitStateRequest(false, null, null);
+        var firstDesired = new VisitStateRequest(true, new DateOnly(2026, 8, 27), null);
+        var secondDesired = new VisitStateRequest(true, new DateOnly(2026, 8, 28), null);
+
+        var responses = await Task.WhenAll(
+            firstClient.PutAsJsonAsync(endpoint, new SynchronizeVisitRequest(expected, firstDesired)),
+            secondClient.PutAsJsonAsync(endpoint, new SynchronizeVisitRequest(expected, secondDesired)));
+
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
+        var states = await Task.WhenAll(responses.Select(response => response.Content.ReadFromJsonAsync<VisitDto>()));
+        Assert.All(states, state => Assert.NotNull(state));
+        Assert.Equal(states[0]!.VisitedOn, states[1]!.VisitedOn);
     }
 
     [Fact]
@@ -974,13 +1127,19 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("Ohne Angaben wird nur der Eintrag gespeichert.", html, StringComparison.Ordinal);
         Assert.Contains("id=\"deleteVisitDialog\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Stempeleintrag endgültig entfernen", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"pendingVisitIndicator\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Synchronisierung ausstehend", html, StringComparison.Ordinal);
         Assert.Contains("role=\"status\" aria-live=\"polite\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".visit-controls", css, StringComparison.Ordinal);
+        Assert.Contains(".pending-visit-indicator", css, StringComparison.Ordinal);
+        Assert.Contains("top: 0.65rem", css, StringComparison.Ordinal);
+        Assert.Contains("left: 0.65rem", css, StringComparison.Ordinal);
         Assert.Contains("min-height: 2.75rem", css, StringComparison.Ordinal);
-        Assert.Contains("saveVisit(\"PUT\"", script, StringComparison.Ordinal);
-        Assert.Contains("api/points/id/${stampingPoint.id}?provider=${provider}", script, StringComparison.Ordinal);
-        Assert.Contains("? \"PATCH\" : \"PUT\"", script, StringComparison.Ordinal);
-        Assert.Contains("sendVisitRequest(\"DELETE\"", script, StringComparison.Ordinal);
+        Assert.Contains("queueVisitAction(feature", script, StringComparison.Ordinal);
+        Assert.Contains("api/points/id/${action.pointId}/state?provider=${provider}", script, StringComparison.Ordinal);
+        Assert.Contains("expected: action.expected", script, StringComparison.Ordinal);
+        Assert.Contains("desired: action.desired", script, StringComparison.Ordinal);
+        Assert.Contains("isVisited: false", script, StringComparison.Ordinal);
         Assert.Contains("elements.deleteVisitDialog.showModal()", script, StringComparison.Ordinal);
         Assert.Contains("wirklich entfernt werden", script, StringComparison.Ordinal);
         Assert.Contains("id=\"authBarrier\"", html, StringComparison.OrdinalIgnoreCase);
@@ -993,7 +1152,12 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.True(
             script.IndexOf("const registrationParam = urlParams.get(\"registration\")", StringComparison.Ordinal) <
             script.IndexOf("window.history.replaceState", StringComparison.Ordinal));
-        Assert.Contains("elements.authBarrierLoginButton.hidden = registrationDecisionVisible", script, StringComparison.Ordinal);
+        Assert.Contains("id=\"authBarrierLoading\" class=\"auth-barrier__loading\" role=\"status\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<span>Sitzung wird geprüft …</span>", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"authBarrierLoginButton\" class=\"action action--primary auth-barrier__login\" href=\"auth/login\" hidden", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("elements.authBarrierLoginButton.hidden = true", script, StringComparison.Ordinal);
+        Assert.Contains("elements.authBarrierLoginButton.hidden = false", script, StringComparison.Ordinal);
+        Assert.Contains("elements.authBarrierLoading.hidden = registrationDecisionVisible", script, StringComparison.Ordinal);
         Assert.Contains("elements.authBarrierDesc.hidden = registrationDecisionVisible", script, StringComparison.Ordinal);
         Assert.Contains("Solange diese Entscheidung gespeichert ist", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML", script, StringComparison.Ordinal);
@@ -1085,10 +1249,11 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("Mit der Kontolöschung werden die Anbieterfreigaben", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Lokale Speicherung, Offline-Nutzung und Service Worker", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("IndexedDB", privacyNotice, StringComparison.Ordinal);
-        Assert.Contains("schreibgeschützte Anzeige", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("noch nicht synchronisierte Stempelaktionen", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("automatisch mit dem angemeldeten Konto synchronisiert", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("nicht zusätzlich anwendungsseitig verschlüsselt", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("hängt vom Schutz des jeweiligen Endgeräts", privacyNotice, StringComparison.Ordinal);
-        Assert.Contains("bei einem Wechsel des Benutzerkontos sowie nach Ablauf der serverseitigen Sitzungsgültigkeit", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("bei einem Wechsel des Benutzerkontos, bei einer nicht mehr gültigen serverseitigen Sitzung", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("ausdrücklich keine OpenStreetMap-Kartenkacheln im Service-Worker-Cache", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Die anonyme Kartenansicht ist ohne Benutzerkonto möglich", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
@@ -1145,7 +1310,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v1", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v6", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
@@ -1234,7 +1399,16 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("indexedDB.open(DB_NAME", script, StringComparison.Ordinal);
         Assert.Contains("\"snapshots\"", script, StringComparison.Ordinal);
         Assert.Contains("\"current\"", script, StringComparison.Ordinal);
-        Assert.Contains("Offline nur ansehen", script, StringComparison.Ordinal);
+        Assert.Contains("SNAPSHOT_SCHEMA_VERSION = 2", script, StringComparison.Ordinal);
+        Assert.Contains("pendingActions", script, StringComparison.Ordinal);
+        Assert.Contains("Synchronisierung ausstehend", await client.GetStringAsync("/"), StringComparison.Ordinal);
+        Assert.Contains("BroadcastChannel", script, StringComparison.Ordinal);
+        Assert.Contains("acquireSyncLease", script, StringComparison.Ordinal);
+        Assert.Contains("synchronizePendingActions", script, StringComparison.Ordinal);
+        Assert.Contains("scheduleSynchronizationRetry", script, StringComparison.Ordinal);
+        Assert.Contains("window.confirm(\"Nicht synchronisierte Stempeländerungen", script, StringComparison.Ordinal);
+        Assert.Contains("window.addEventListener(\"focus\", () =>", script, StringComparison.Ordinal);
+        Assert.Contains("if (!elements.visitForm.hidden || elements.deleteVisitDialog.open) return;", script, StringComparison.Ordinal);
         Assert.Contains("queueSnapshotOperation", script, StringComparison.Ordinal);
         Assert.Contains("window.addEventListener(\"offline\"", script, StringComparison.Ordinal);
         Assert.Contains("scheduleSessionExpiry", script, StringComparison.Ordinal);

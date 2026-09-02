@@ -98,6 +98,23 @@ public class TourDataManager
         await _repository.DeleteUserVisitAsync(currentUser, stampingPoint.Id);
     }
 
+    public async Task<SynchronizeVisitResult> SynchronizeVisitByIdAsync(
+        User currentUser,
+        int stampingPointId,
+        VisitStateValue expected,
+        VisitStateValue desired,
+        string? providerSlug = null)
+    {
+        var providerFilter = await _repository.GetStampingProviderFilterAsync(providerSlug, currentUser.Id);
+        var stampingPoint = await _repository.GetStampingPointByIdAsync(stampingPointId, providerFilter);
+        var (visit, isConflict) = await _repository.SynchronizeUserVisitAsync(
+            currentUser,
+            stampingPoint.Id,
+            expected,
+            desired);
+        return new SynchronizeVisitResult(stampingPoint, visit, isConflict);
+    }
+
     public async Task<AdminSavePointsResponseDto> SaveAdminStampingPointsAsync(
         IReadOnlyList<AdminStampingPointRequestDto> requests,
         CancellationToken cancellationToken = default)

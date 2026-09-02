@@ -1,6 +1,7 @@
 using System.Drawing;
 using Api.Dto;
 using Api.Managers;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TourEd.Lib.Abstractions.Exceptions;
 using TourEd.Lib.Abstractions.Interfaces.Services;
@@ -997,5 +998,69 @@ public class TouredRepository : IUserService
             ?? throw EntityNotFoundException.Create<UserVisit>(stampingPointId);
         _dbContext.UserVisits.Remove(userVisit);
         await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task<(UserVisit? Visit, bool IsConflict)> SynchronizeUserVisitAsync(
+        User currentUser,
+        int stampingPointId,
+        VisitStateValue expected,
+        VisitStateValue desired)
+    {
+        var currentVisit = await _dbContext.UserVisits.AsNoTracking().SingleOrDefaultAsync(visit =>
+            visit.UserId == currentUser.Id && visit.StampingPointId == stampingPointId);
+        var current = VisitStateValue.FromVisit(currentVisit);
+
+        if (current == desired)
+        {
+            return (currentVisit, false);
+        }
+
+        if (current != expected)
+        {
+            return (currentVisit, true);
+        }
+
+        if (!expected.IsVisited)
+        {
+            _dbContext.UserVisits.Add(new UserVisit
+            {
+                UserId = currentUser.Id,
+                StampingPointId = stampingPointId,
+                Visited = desired.Visited,
+                HasVisitedTime = desired.HasVisitedTime
+            });
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+                return (await GetUserVisitOrDefaultAsync(currentUser, stampingPointId), false);
+            }
+            catch (DbUpdateException exception) when (
+                exception.InnerException is SqliteException { SqliteErrorCode: 19 })
+            {
+                _dbContext.ChangeTracker.Clear();
+                var concurrentVisit = await GetUserVisitOrDefaultAsync(currentUser, stampingPointId);
+                return (concurrentVisit, VisitStateValue.FromVisit(concurrentVisit) != desired);
+            }
+        }
+
+        var matchingVisits = _dbContext.UserVisits.Where(visit =>
+            visit.UserId == currentUser.Id &&
+            visit.StampingPointId == stampingPointId &&
+            visit.Visited == expected.Visited &&
+            visit.HasVisitedTime == expected.HasVisitedTime);
+
+        var affected = desired.IsVisited
+            ? await matchingVisits.ExecuteUpdateAsync(update => update
+                .SetProperty(visit => visit.Visited, desired.Visited)
+                .SetProperty(visit => visit.HasVisitedTime, desired.HasVisitedTime))
+            : await matchingVisits.ExecuteDeleteAsync();
+
+        var finalVisit = await GetUserVisitOrDefaultAsync(currentUser, stampingPointId);
+        if (affected == 1 || VisitStateValue.FromVisit(finalVisit) == desired)
+        {
+            return (finalVisit, false);
+        }
+
+        return (finalVisit, true);
     }
 }

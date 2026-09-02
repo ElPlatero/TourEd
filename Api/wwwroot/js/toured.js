@@ -7,6 +7,7 @@
         appShell: document.getElementById("appShell"),
         authBarrier: document.getElementById("authBarrier"),
         authBarrierDesc: document.getElementById("authBarrierDesc"),
+        authBarrierLoading: document.getElementById("authBarrierLoading"),
         authBarrierLoginButton: document.getElementById("authBarrierLoginButton"),
         authBarrierNotice: document.getElementById("authBarrierNotice"),
         cancelDeleteVisitButton: document.getElementById("cancelDeleteVisitButton"),
@@ -37,6 +38,7 @@
         pointStatus: document.getElementById("pointStatus"),
         pointTours: document.getElementById("pointTours"),
         pointVisited: document.getElementById("pointVisited"),
+        pendingVisitIndicator: document.getElementById("pendingVisitIndicator"),
         providerInfoDescription: document.getElementById("providerInfoDescription"),
         providerInfoDialog: document.getElementById("providerInfoDialog"),
         providerInfoDisclaimer: document.getElementById("providerInfoDisclaimer"),
@@ -83,6 +85,10 @@
     const DB_VERSION = 1;
     const STORE_NAME = "snapshots";
     const SNAPSHOT_KEY = "current";
+    const SNAPSHOT_SCHEMA_VERSION = 2;
+    const SYNC_LEASE_MILLISECONDS = 30000;
+    const RETRY_MAX_MILLISECONDS = 60000;
+    const TAB_ID = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     let snapshotOperations = Promise.resolve();
 
     const queueSnapshotOperation = operation => {
@@ -129,16 +135,42 @@
 
     const writeStoredSnapshot = async snapshot => {
         const db = await openDatabase();
-        if (!db) return;
+        if (!db) return false;
         return new Promise(resolve => {
             try {
                 const tx = db.transaction(STORE_NAME, "readwrite");
                 const store = tx.objectStore(STORE_NAME);
                 store.put({ ...snapshot, key: SNAPSHOT_KEY });
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => resolve();
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+                tx.onabort = () => resolve(false);
             } catch {
-                resolve();
+                resolve(false);
+            }
+        });
+    };
+
+    const mutateStoredSnapshot = async mutation => {
+        const db = await openDatabase();
+        if (!db) return { ok: false, snapshot: null };
+        return new Promise(resolve => {
+            try {
+                const tx = db.transaction(STORE_NAME, "readwrite");
+                const store = tx.objectStore(STORE_NAME);
+                const request = store.get(SNAPSHOT_KEY);
+                let nextSnapshot = null;
+                request.onsuccess = () => {
+                    nextSnapshot = mutation(request.result || null);
+                    if (nextSnapshot) {
+                        store.put({ ...nextSnapshot, key: SNAPSHOT_KEY });
+                    }
+                };
+                request.onerror = () => tx.abort();
+                tx.oncomplete = () => resolve({ ok: true, snapshot: nextSnapshot });
+                tx.onerror = () => resolve({ ok: false, snapshot: null });
+                tx.onabort = () => resolve({ ok: false, snapshot: null });
+            } catch {
+                resolve({ ok: false, snapshot: null });
             }
         });
     };
@@ -159,16 +191,56 @@
         });
     };
 
-    const getStoredSnapshot = () => queueSnapshotOperation(readStoredSnapshot);
+    const normalizeSnapshot = snapshot => {
+        if (!snapshot || typeof snapshot !== "object") return snapshot;
+        if (snapshot.schemaVersion === 1) {
+            return { ...snapshot, schemaVersion: SNAPSHOT_SCHEMA_VERSION, pendingActions: [] };
+        }
+        if (snapshot.schemaVersion === SNAPSHOT_SCHEMA_VERSION && !Array.isArray(snapshot.pendingActions)) {
+            return { ...snapshot, pendingActions: [] };
+        }
+        return snapshot;
+    };
 
-    const saveStoredSnapshot = snapshot => queueSnapshotOperation(
-        () => writeStoredSnapshot(snapshot));
+    const getStoredSnapshot = () => queueSnapshotOperation(async () => {
+        const stored = await readStoredSnapshot();
+        const normalized = normalizeSnapshot(stored);
+        if (stored?.schemaVersion === 1 && normalized) {
+            await writeStoredSnapshot(normalized);
+        }
+        return normalized;
+    });
+
+    const updateStoredSnapshot = mutation => queueSnapshotOperation(
+        () => mutateStoredSnapshot(snapshot => mutation(normalizeSnapshot(snapshot))));
 
     const clearStoredSnapshot = () => queueSnapshotOperation(deleteStoredSnapshot);
 
+    const isStoredVisitStateValid = state => {
+        if (!state || typeof state !== "object" || typeof state.isVisited !== "boolean") return false;
+        const visitedOnValid = state.visitedOn === null ||
+            (typeof state.visitedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(state.visitedOn));
+        const visitedAtValid = state.visitedAt === null ||
+            (typeof state.visitedAt === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(state.visitedAt));
+        if (!visitedOnValid || !visitedAtValid) return false;
+        if (!state.isVisited) return state.visitedOn === null && state.visitedAt === null;
+        return state.visitedAt === null || state.visitedOn !== null;
+    };
+
+    const isPendingActionValid = action => action &&
+        typeof action === "object" &&
+        Number.isInteger(action.pointId) && action.pointId > 0 &&
+        typeof action.providerSlug === "string" && action.providerSlug.length > 0 &&
+        isStoredVisitStateValid(action.expected) &&
+        isStoredVisitStateValid(action.desired) &&
+        (action.utcOffsetMinutes === null ||
+            (Number.isInteger(action.utcOffsetMinutes) &&
+                action.utcOffsetMinutes >= -840 && action.utcOffsetMinutes <= 840)) &&
+        typeof action.createdAt === "string" && Number.isFinite(Date.parse(action.createdAt));
+
     const isSnapshotValid = snapshot => {
         if (!snapshot || typeof snapshot !== "object") return false;
-        if (snapshot.schemaVersion !== 1) return false;
+        if (snapshot.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) return false;
         if (!snapshot.email || typeof snapshot.email !== "string") return false;
         if (!snapshot.expiresAt) return false;
         const expiresDate = new Date(snapshot.expiresAt);
@@ -176,6 +248,10 @@
         if (!snapshot.providers || !Array.isArray(snapshot.providers.stampingProviders)) return false;
         if (!snapshot.unvisitedPoints || !Array.isArray(snapshot.unvisitedPoints.stampingPoints)) return false;
         if (!snapshot.visitedPoints || !Array.isArray(snapshot.visitedPoints.stampingPoints)) return false;
+        if (!Array.isArray(snapshot.pendingActions) ||
+            !snapshot.pendingActions.every(isPendingActionValid)) return false;
+        if (new Set(snapshot.pendingActions.map(action => action.pointId)).size !==
+            snapshot.pendingActions.length) return false;
         return true;
     };
 
@@ -241,6 +317,9 @@
         visited: "visited"
     });
     const VisitFilterOrder = [VisitFilter.all, VisitFilter.open, VisitFilter.visited];
+    const syncChannel = "BroadcastChannel" in window
+        ? new BroadcastChannel("toured-offline-sync")
+        : null;
 
     const createMarkerStyle = iconSource => new ol.style.Style({
         image: new ol.style.Icon({
@@ -377,6 +456,7 @@
         infoLocked: false,
         infoPixel: null,
         loadGeneration: 0,
+        pendingActions: new Map(),
         providerInfoTrigger: null,
         markerLayer,
         markerSource,
@@ -388,8 +468,14 @@
         providers: [],
         selectedProviderSlugs: new Set(),
         userLocationLayer,
+        backOnlineNoticePending: false,
+        retryAttempt: 0,
+        retryTimer: null,
+        syncPromise: null,
         visitFilter: VisitFilter.all
     };
+
+    const broadcastSyncEvent = type => syncChannel?.postMessage({ type, sender: TAB_ID });
 
     const osmSource = new ol.source.OSM({
         url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -566,20 +652,21 @@
                 elements.tileErrorBanner.hidden = true;
             }
         }
-        if (app.activeFeature && !elements.infoCard.hidden) {
-            updateVisitControls(app.activeFeature, app.infoLocked);
+        if (elements.offlineNotice && app.activeFeature && !elements.infoCard.hidden) {
+            elements.offlineNotice.hidden = !app.infoLocked || !offline;
         }
     };
 
     const showOfflineUnavailable = async message => {
         ++app.loadGeneration;
-        await clearStoredSnapshot();
+        await clearPersonalData();
         hideInfo(true);
         resetPointCache();
         clearMarkers();
         setSession({ authenticated: false });
         setOfflineMode(true);
         elements.authBarrierLoginButton.hidden = true;
+        if (elements.authBarrierLoading) elements.authBarrierLoading.hidden = true;
         elements.authBarrierDesc.hidden = true;
         if (elements.authBarrierNotice) {
             elements.authBarrierNotice.className = "auth-barrier__notice";
@@ -1037,18 +1124,26 @@
         return await response.json();
     };
 
-    const sendVisitRequest = async (method, stampingPoint, body) => {
-        const provider = encodeURIComponent(stampingPoint.provider.slug);
-        const response = await fetch(`api/points/id/${stampingPoint.id}?provider=${provider}`, {
-            method,
-            headers: body === undefined
-                ? { "Accept": "application/json" }
-                : { "Accept": "application/json", "Content-Type": "application/json" },
-            body: body === undefined ? undefined : JSON.stringify(body)
+    const sendVisitStateRequest = async action => {
+        const provider = encodeURIComponent(action.providerSlug);
+        const response = await fetch(`api/points/id/${action.pointId}/state?provider=${provider}`, {
+            method: "PUT",
+            headers: { "Accept": "application/json", "Content-Type": "application/json" },
+            body: JSON.stringify({
+                expected: action.expected,
+                desired: action.desired,
+                utcOffsetMinutes: action.utcOffsetMinutes
+            })
         });
-        if (!response.ok) {
-            throw response;
+        let body = null;
+        if (response.headers.get("content-type")?.includes("json")) {
+            try {
+                body = await response.json();
+            } catch {
+                body = null;
+            }
         }
+        return { response, body };
     };
 
     const hideInfo = (force = false) => {
@@ -1089,22 +1184,95 @@
 
     const pointMatches = (left, right) => left.id === right.id;
 
-    const synchronizeStoredSnapshot = () => queueSnapshotOperation(async () => {
-        const snapshot = await readStoredSnapshot();
-        if (!snapshot ||
-            !app.authenticated ||
-            app.isOffline ||
-            snapshot.email !== app.sessionEmail) {
-            return;
-        }
-
-        await writeStoredSnapshot({
-            ...snapshot,
-            unvisitedPoints: { stampingPoints: app.pointCache[VisitState.open] },
-            visitedPoints: { stampingPoints: app.pointCache[VisitState.visited] },
-            savedAt: new Date().toISOString()
-        });
+    const visitStateFromPoint = point => ({
+        isVisited: point.isVisited === true,
+        visitedOn: point.isVisited === true ? point.visitedOn ?? null : null,
+        visitedAt: point.isVisited === true ? point.visitedAt ?? null : null
     });
+
+    const normalizedVisitState = state => ({
+        isVisited: state?.isVisited === true,
+        visitedOn: state?.isVisited === true ? state.visitedOn ?? null : null,
+        visitedAt: state?.isVisited === true ? state.visitedAt ?? null : null
+    });
+
+    const applyStateToPoint = (point, state) => {
+        const normalized = normalizedVisitState(state);
+        return {
+            ...point,
+            isVisited: normalized.isVisited,
+            visitedOn: normalized.visitedOn,
+            visitedAt: normalized.visitedAt
+        };
+    };
+
+    const replacePointInResponses = (snapshot, pointId, state, canonicalPoint = null) => {
+        const allPoints = [
+            ...(snapshot.unvisitedPoints?.stampingPoints ?? []),
+            ...(snapshot.visitedPoints?.stampingPoints ?? [])
+        ];
+        const existing = allPoints.find(point => point.id === pointId);
+        const point = canonicalPoint
+            ? {
+                ...(existing ?? {}),
+                ...canonicalPoint,
+                tours: existing?.tours ?? canonicalPoint.tours
+            }
+            : (existing ? applyStateToPoint(existing, state) : null);
+        const withoutPoint = allPoints.filter(candidate => candidate.id !== pointId);
+        if (point) withoutPoint.push(point);
+        return {
+            ...snapshot,
+            unvisitedPoints: {
+                ...(snapshot.unvisitedPoints ?? {}),
+                stampingPoints: withoutPoint.filter(candidate => !candidate.isVisited),
+                overallCount: withoutPoint.filter(candidate => !candidate.isVisited).length
+            },
+            visitedPoints: {
+                ...(snapshot.visitedPoints ?? {}),
+                stampingPoints: withoutPoint.filter(candidate => candidate.isVisited),
+                overallCount: withoutPoint.filter(candidate => candidate.isVisited).length
+            },
+            savedAt: new Date().toISOString()
+        };
+    };
+
+    const setPendingActions = actions => {
+        app.pendingActions = new Map((actions ?? []).map(action => [action.pointId, action]));
+    };
+
+    const overlayPendingActions = (unvisited, visited, actions) => {
+        let combined = {
+            unvisitedPoints: { ...unvisited, stampingPoints: [...unvisited.stampingPoints] },
+            visitedPoints: { ...visited, stampingPoints: [...visited.stampingPoints] }
+        };
+        for (const action of actions ?? []) {
+            combined = replacePointInResponses(combined, action.pointId, action.desired);
+        }
+        return {
+            unvisited: combined.unvisitedPoints,
+            visited: combined.visitedPoints
+        };
+    };
+
+    const hasPendingAction = pointId => app.pendingActions.has(pointId);
+
+    const loadSnapshotData = snapshot => {
+        setPendingActions(snapshot.pendingActions);
+        setProviderCatalog(snapshot.providers);
+        cachePoints(snapshot.unvisitedPoints, VisitState.open);
+        cachePoints(snapshot.visitedPoints, VisitState.visited);
+        const pointCount = renderSelectedPoints();
+        renderSearchResults();
+        return pointCount;
+    };
+
+    const restoreLockedInfo = (pointId, pixel, locked) => {
+        if (pointId === null || !locked) return;
+        const renderedFeature = app.markerSource.getFeatures().find(feature =>
+            feature.stampingPoint.id === pointId);
+        if (renderedFeature) showInfo(renderedFeature, pixel, true);
+    };
 
     const updatePointVisit = (feature, isVisited, visitedOn = null, visitedAt = null) => {
         const stampingPoint = feature.stampingPoint;
@@ -1130,7 +1298,296 @@
             announceFilteredPointCount(pointCount);
         }
 
-        return synchronizeStoredSnapshot();
+        return Promise.resolve();
+    };
+
+    const refreshFromStoredSnapshot = async () => {
+        const snapshot = await getStoredSnapshot();
+        if (!isSnapshotValid(snapshot) ||
+            !app.authenticated ||
+            snapshot.email.toLocaleLowerCase() !== app.sessionEmail?.toLocaleLowerCase()) {
+            return;
+        }
+        const activePointId = app.activeFeature?.stampingPoint.id ?? null;
+        const activePixel = app.infoPixel;
+        const activeLocked = app.infoLocked;
+        setPendingActions(snapshot.pendingActions);
+        if (app.providers.length === 0) setProviderCatalog(snapshot.providers);
+        cachePoints(snapshot.unvisitedPoints, VisitState.open);
+        cachePoints(snapshot.visitedPoints, VisitState.visited);
+        renderSelectedPoints();
+        renderSearchResults();
+        restoreLockedInfo(activePointId, activePixel, activeLocked);
+    };
+
+    const clearRetryTimer = () => {
+        if (app.retryTimer !== null) {
+            window.clearTimeout(app.retryTimer);
+            app.retryTimer = null;
+        }
+    };
+
+    const scheduleSynchronizationRetry = () => {
+        if (app.retryTimer !== null || app.pendingActions.size === 0) return;
+        const delay = Math.min(1000 * (2 ** app.retryAttempt), RETRY_MAX_MILLISECONDS);
+        app.retryAttempt += 1;
+        app.retryTimer = window.setTimeout(() => {
+            app.retryTimer = null;
+            synchronizePendingActions();
+        }, delay);
+    };
+
+    const clearPersonalData = async (broadcast = true) => {
+        clearRetryTimer();
+        app.backOnlineNoticePending = false;
+        setPendingActions([]);
+        await clearStoredSnapshot();
+        if (broadcast) broadcastSyncEvent("personal-data-cleared");
+    };
+
+    const acquireSyncLease = async () => {
+        let acquired = false;
+        const result = await updateStoredSnapshot(snapshot => {
+            if (!isSnapshotValid(snapshot)) return snapshot;
+            const lease = snapshot.syncLease;
+            if (lease && lease.owner !== TAB_ID && Date.parse(lease.expiresAt) > Date.now()) {
+                return snapshot;
+            }
+            acquired = true;
+            return {
+                ...snapshot,
+                syncLease: {
+                    owner: TAB_ID,
+                    expiresAt: new Date(Date.now() + SYNC_LEASE_MILLISECONDS).toISOString()
+                }
+            };
+        });
+        return result.ok && acquired;
+    };
+
+    const renewSyncLease = () => updateStoredSnapshot(snapshot => {
+        if (!snapshot || snapshot.syncLease?.owner !== TAB_ID) return snapshot;
+        return {
+            ...snapshot,
+            syncLease: {
+                owner: TAB_ID,
+                expiresAt: new Date(Date.now() + SYNC_LEASE_MILLISECONDS).toISOString()
+            }
+        };
+    });
+
+    const releaseSyncLease = () => updateStoredSnapshot(snapshot => {
+        if (!snapshot || snapshot.syncLease?.owner !== TAB_ID) return snapshot;
+        const { syncLease, ...withoutLease } = snapshot;
+        return withoutLease;
+    });
+
+    const finishPendingAction = async (action, state, canonicalPoint = null) => {
+        const result = await updateStoredSnapshot(snapshot => {
+            if (!isSnapshotValid(snapshot)) return snapshot;
+            const pendingActions = snapshot.pendingActions.filter(pending =>
+                pending.pointId !== action.pointId || pending.createdAt !== action.createdAt);
+            return {
+                ...replacePointInResponses(snapshot, action.pointId, state, canonicalPoint),
+                pendingActions
+            };
+        });
+        if (!result.ok || !result.snapshot) return false;
+        setPendingActions(result.snapshot.pendingActions);
+        await refreshFromStoredSnapshot();
+        broadcastSyncEvent("snapshot-updated");
+        return true;
+    };
+
+    const showBackOnlineNotice = () => {
+        const message = "TourEd ist wieder online.";
+        setMapStatus(message, "ready");
+        window.setTimeout(() => {
+            if (elements.mapStatus.textContent === message) setMapStatus("");
+        }, 3000);
+    };
+
+    const synchronizePendingActions = (knownSession = null) => {
+        clearRetryTimer();
+        if (app.syncPromise) return app.syncPromise;
+
+        app.syncPromise = (async () => {
+            let snapshot = await getStoredSnapshot();
+            if (!isSnapshotValid(snapshot)) {
+                await clearPersonalData();
+                return;
+            }
+            if (snapshot.pendingActions.length === 0) {
+                setPendingActions([]);
+                return;
+            }
+            setPendingActions(snapshot.pendingActions);
+
+            let session = knownSession;
+            if (!session) {
+                try {
+                    session = await getJson("auth/session");
+                } catch (error) {
+                    if (!(error instanceof Response)) setOfflineMode(true);
+                    scheduleSynchronizationRetry();
+                    return;
+                }
+            }
+
+            if (!session?.authenticated) {
+                await clearPersonalData();
+                setSession({ authenticated: false });
+                showAuthBarrier();
+                return;
+            }
+
+            if (snapshot.email.toLocaleLowerCase() !== session.email.toLocaleLowerCase()) {
+                await clearPersonalData();
+                window.queueMicrotask(() => initialize());
+                return;
+            }
+
+            setSession(session);
+            setOfflineMode(false);
+            await updateStoredSnapshot(current => current ? {
+                ...current,
+                expiresAt: session.expiresAt ?? current.expiresAt
+            } : current);
+
+            if (!await acquireSyncLease()) {
+                scheduleSynchronizationRetry();
+                return;
+            }
+
+            let shouldReload = false;
+            let synchronizedAny = false;
+            try {
+                while (true) {
+                    snapshot = await getStoredSnapshot();
+                    if (!isSnapshotValid(snapshot) || snapshot.pendingActions.length === 0) {
+                        app.retryAttempt = 0;
+                        if (synchronizedAny) app.backOnlineNoticePending = true;
+                        break;
+                    }
+                    const action = snapshot.pendingActions[0];
+                    await renewSyncLease();
+
+                    let result;
+                    try {
+                        result = await sendVisitStateRequest(action);
+                    } catch {
+                        setOfflineMode(true);
+                        scheduleSynchronizationRetry();
+                        break;
+                    }
+
+                    const { response, body } = result;
+                    if (response.ok || response.status === 409) {
+                        const canonicalPoint = body?.stampingPoint ?? null;
+                        const canonicalState = body
+                            ? normalizedVisitState(body)
+                            : (response.ok ? action.desired : action.expected);
+                        if (!await finishPendingAction(action, canonicalState, canonicalPoint)) {
+                            scheduleSynchronizationRetry();
+                            break;
+                        }
+                        synchronizedAny = true;
+                        app.retryAttempt = 0;
+                        continue;
+                    }
+
+                    if (response.status === 400) {
+                        await finishPendingAction(action, action.expected);
+                        setMapStatus("Eine vorgemerkte Stempeländerung war ungültig und wurde verworfen.", "error");
+                        continue;
+                    }
+
+                    if (response.status === 401) {
+                        await clearPersonalData();
+                        setSession({ authenticated: false });
+                        resetPointCache();
+                        clearMarkers();
+                        showAuthBarrier();
+                        break;
+                    }
+
+                    if (response.status === 403) {
+                        await finishPendingAction(action, action.expected);
+                        shouldReload = true;
+                        continue;
+                    }
+
+                    if (response.status === 404) {
+                        await finishPendingAction(action, action.expected, null);
+                        shouldReload = true;
+                        continue;
+                    }
+
+                    if (response.status >= 500) {
+                        scheduleSynchronizationRetry();
+                        break;
+                    }
+
+                    scheduleSynchronizationRetry();
+                    break;
+                }
+            } finally {
+                await releaseSyncLease();
+            }
+
+            if (shouldReload && app.authenticated && !app.isOffline) {
+                window.queueMicrotask(() => initialize());
+            }
+        })().finally(() => {
+            app.syncPromise = null;
+        });
+        return app.syncPromise;
+    };
+
+    const queueVisitAction = async (feature, desired, utcOffsetMinutes) => {
+        const point = feature?.stampingPoint;
+        if (!point || hasPendingAction(point.id)) return false;
+        const action = {
+            pointId: point.id,
+            providerSlug: point.provider.slug,
+            expected: visitStateFromPoint(point),
+            desired: normalizedVisitState(desired),
+            utcOffsetMinutes,
+            createdAt: new Date().toISOString()
+        };
+
+        const result = await updateStoredSnapshot(snapshot => {
+            if (!isSnapshotValid(snapshot) ||
+                snapshot.email.toLocaleLowerCase() !== app.sessionEmail?.toLocaleLowerCase() ||
+                snapshot.pendingActions.some(pending => pending.pointId === point.id)) {
+                return snapshot;
+            }
+            return {
+                ...replacePointInResponses(snapshot, point.id, action.desired),
+                pendingActions: [...snapshot.pendingActions, action]
+            };
+        });
+
+        if (!result.ok || !result.snapshot ||
+            !result.snapshot.pendingActions.some(pending => pending.createdAt === action.createdAt)) {
+            if (isSnapshotValid(result.snapshot)) {
+                setPendingActions(result.snapshot.pendingActions);
+                await refreshFromStoredSnapshot();
+            }
+            setVisitActionStatus("Die Änderung konnte nicht sicher auf diesem Gerät gespeichert werden.", "error");
+            return false;
+        }
+
+        setPendingActions(result.snapshot.pendingActions);
+        await updatePointVisit(
+            feature,
+            action.desired.isVisited,
+            action.desired.visitedOn,
+            action.desired.visitedAt);
+        setVisitActionStatus("Änderung wurde zur Synchronisierung vorgemerkt.", "ready");
+        broadcastSyncEvent("snapshot-updated");
+        if (!app.isOffline) synchronizePendingActions();
+        return true;
     };
 
     const setVisitActionStatus = (message, state) => {
@@ -1159,8 +1616,9 @@
     };
 
     const setVisitBusy = busy => {
-        setVisitControlsDisabled(busy || app.isOffline);
-        if (!busy && !app.isOffline) {
+        const pending = app.activeFeature && hasPendingAction(app.activeFeature.stampingPoint.id);
+        setVisitControlsDisabled(busy || pending);
+        if (!busy && !pending) {
             elements.visitedAtInput.disabled = !elements.visitedOnInput.value;
         }
     };
@@ -1187,11 +1645,8 @@
     };
 
     const openVisitForm = () => {
-        if (app.isOffline) {
-            return;
-        }
         const stampingPoint = app.activeFeature?.stampingPoint;
-        if (!stampingPoint) {
+        if (!stampingPoint || hasPendingAction(stampingPoint.id)) {
             return;
         }
         elements.visitedOnInput.max = toLocalDateInput(new Date());
@@ -1209,48 +1664,17 @@
         elements.visitedOnInput.focus({ preventScroll: true });
     };
 
-    const describeVisitError = response => {
-        if (response?.status === 401) {
-            return "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.";
-        }
-        if (response?.status === 404) {
-            return "Die Stempelstelle oder der Eintrag wurde nicht gefunden.";
-        }
-        if (response?.status === 409) {
-            return "Für diese Stempelstelle ist bereits ein Eintrag vorhanden.";
-        }
-        if (response?.status === 400) {
-            return "Datum oder Uhrzeit sind ungültig. Bitte prüfe deine Eingabe.";
-        }
-        return "Der Eintrag konnte nicht gespeichert werden. Bitte versuche es erneut.";
-    };
-
-    const saveVisit = async (method, visitedOn, visitedAt) => {
-        if (app.isOffline) {
-            setVisitActionStatus("Offline nur ansehen.", "error");
-            return;
-        }
+    const saveVisit = async (visitedOn, visitedAt, utcOffsetMinutes = -new Date().getTimezoneOffset()) => {
         const feature = app.activeFeature;
-        if (!feature) {
+        if (!feature || hasPendingAction(feature.stampingPoint.id)) {
             return;
         }
         setVisitBusy(true);
-        setVisitActionStatus("Eintrag wird gespeichert …");
+        setVisitActionStatus("Änderung wird auf diesem Gerät gespeichert …");
         try {
-            await sendVisitRequest(method, feature.stampingPoint, {
-                visitedOn,
-                visitedAt,
-                utcOffsetMinutes: -new Date().getTimezoneOffset()
-            });
-            await updatePointVisit(feature, true, visitedOn, visitedAt);
-            setVisitActionStatus("Eintrag wurde gespeichert.", "ready");
-        } catch (response) {
-            if (response?.status === 401) {
-                setMapStatus("Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.", "error");
-                await initialize();
-                return;
-            }
-            setVisitActionStatus(describeVisitError(response), "error");
+            await queueVisitAction(feature, { isVisited: true, visitedOn, visitedAt }, utcOffsetMinutes);
+        } catch {
+            setVisitActionStatus("Die Änderung konnte nicht sicher auf diesem Gerät gespeichert werden.", "error");
         } finally {
             setVisitBusy(false);
         }
@@ -1263,15 +1687,12 @@
         if (elements.offlineNotice) {
             elements.offlineNotice.hidden = !locked || !app.isOffline;
         }
-        setVisitControlsDisabled(app.isOffline);
-
-        if (app.isOffline) {
-            elements.newVisitActions.hidden = !locked || !app.authenticated || visited;
-            elements.existingVisitActions.hidden = !locked || !app.authenticated || !visited;
-            elements.visitForm.hidden = true;
-            setVisitActionStatus("");
-            return;
+        const pending = hasPendingAction(feature.stampingPoint.id);
+        if (elements.pendingVisitIndicator) {
+            elements.pendingVisitIndicator.hidden = !locked || !pending;
         }
+        elements.infoCard.classList.toggle("info-card--pending", locked && pending);
+        setVisitControlsDisabled(pending);
 
         elements.newVisitActions.hidden = !locked || !app.authenticated || visited;
         elements.existingVisitActions.hidden = !locked || !app.authenticated || !visited;
@@ -1415,9 +1836,11 @@
     });
 
     elements.visitNowButton.addEventListener("click", () => {
-        if (app.isOffline) return;
         const now = new Date();
-        saveVisit("PUT", toLocalDateInput(now), `${toLocalTimeInput(now)}:00`);
+        saveVisit(
+            toLocalDateInput(now),
+            `${toLocalTimeInput(now)}:00`,
+            -now.getTimezoneOffset());
     });
 
     elements.openVisitFormButton.addEventListener("click", openVisitForm);
@@ -1444,7 +1867,7 @@
             setVisitActionStatus("Ein Stempeldatum kann nicht in der Zukunft liegen.", "error");
             return;
         }
-        saveVisit(app.activeFeature?.visitState === VisitState.visited ? "PATCH" : "PUT", visitedOn, visitedAt);
+        saveVisit(visitedOn, visitedAt);
     });
 
     const closeDeleteVisitDialog = () => {
@@ -1454,9 +1877,8 @@
     };
 
     elements.deleteVisitButton.addEventListener("click", () => {
-        if (app.isOffline) return;
         const stampingPoint = app.activeFeature?.stampingPoint;
-        if (!stampingPoint) {
+        if (!stampingPoint || hasPendingAction(stampingPoint.id)) {
             return;
         }
         const label = getPointNumberLabel(stampingPoint);
@@ -1467,10 +1889,6 @@
     elements.closeDeleteVisitButton.addEventListener("click", closeDeleteVisitDialog);
     elements.cancelDeleteVisitButton.addEventListener("click", closeDeleteVisitDialog);
     elements.confirmDeleteVisitButton.addEventListener("click", async () => {
-        if (app.isOffline) {
-            closeDeleteVisitDialog();
-            return;
-        }
         const feature = app.activeFeature;
         if (!feature) {
             closeDeleteVisitDialog();
@@ -1478,18 +1896,14 @@
         }
         setVisitBusy(true);
         try {
-            await sendVisitRequest("DELETE", feature.stampingPoint);
-            await updatePointVisit(feature, false);
+            await queueVisitAction(
+                feature,
+                { isVisited: false, visitedOn: null, visitedAt: null },
+                -new Date().getTimezoneOffset());
             closeDeleteVisitDialog();
-            setVisitActionStatus("Stempeleintrag wurde entfernt.", "ready");
-        } catch (response) {
+        } catch {
             closeDeleteVisitDialog();
-            if (response?.status === 401) {
-                setMapStatus("Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.", "error");
-                await initialize();
-                return;
-            }
-            setVisitActionStatus(describeVisitError(response), "error");
+            setVisitActionStatus("Die Änderung konnte nicht sicher auf diesem Gerät gespeichert werden.", "error");
         } finally {
             setVisitBusy(false);
         }
@@ -1611,6 +2025,9 @@
 
     const initialize = async () => {
         const generation = ++app.loadGeneration;
+        const activePointId = app.activeFeature?.stampingPoint.id ?? null;
+        const activePixel = app.infoPixel;
+        const activeLocked = app.infoLocked;
         const urlParams = new URLSearchParams(window.location.search);
         const registrationParam = urlParams.get("registration");
         if (window.location.search) {
@@ -1626,7 +2043,8 @@
         renderSearchResults();
 
         const registrationDecisionVisible = registrationParam === "pending" || registrationParam === "rejected";
-        elements.authBarrierLoginButton.hidden = registrationDecisionVisible;
+        elements.authBarrierLoginButton.hidden = true;
+        if (elements.authBarrierLoading) elements.authBarrierLoading.hidden = registrationDecisionVisible;
         elements.authBarrierDesc.hidden = registrationDecisionVisible;
         if (registrationParam === "pending" && elements.authBarrierNotice) {
             elements.authBarrierNotice.className = "auth-barrier__notice";
@@ -1677,6 +2095,7 @@
             }
 
             if (isSnapshotValid(snapshot)) {
+                setPendingActions(snapshot.pendingActions);
                 setSession({
                     authenticated: true,
                     email: snapshot.email,
@@ -1687,11 +2106,8 @@
                     elements.authBarrierNotice.hidden = true;
                 }
                 hideAuthBarrier();
-                setProviderCatalog(snapshot.providers);
-                cachePoints(snapshot.unvisitedPoints, VisitState.open);
-                cachePoints(snapshot.visitedPoints, VisitState.visited);
-                const pointCount = renderSelectedPoints();
-                renderSearchResults();
+                const pointCount = loadSnapshotData(snapshot);
+                restoreLockedInfo(activePointId, activePixel, activeLocked);
                 setMapStatus(`${formatPointCount(pointCount)} offline geladen.`, "ready");
                 window.setTimeout(() => {
                     if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {
@@ -1707,6 +2123,7 @@
         }
 
         if (isHttpError) {
+            if (elements.authBarrierLoading) elements.authBarrierLoading.hidden = true;
             setSession({ authenticated: false });
             showAuthBarrier();
             setMapStatus("Sitzungsprüfung fehlgeschlagen. Bitte versuche es erneut.", "error");
@@ -1714,8 +2131,10 @@
         }
 
         if (!session || !session.authenticated) {
-            await clearStoredSnapshot();
+            await clearPersonalData();
             setSession({ authenticated: false });
+            elements.authBarrierLoginButton.hidden = false;
+            if (elements.authBarrierLoading) elements.authBarrierLoading.hidden = true;
             showAuthBarrier();
             setMapStatus("");
             return;
@@ -1727,7 +2146,25 @@
         if (existingSnapshot &&
             existingSnapshot.email &&
             existingSnapshot.email.toLocaleLowerCase() !== session.email.toLocaleLowerCase()) {
-            await clearStoredSnapshot();
+            await clearPersonalData();
+        } else if (isSnapshotValid(existingSnapshot)) {
+            setPendingActions(existingSnapshot.pendingActions);
+            if (existingSnapshot.pendingActions.length > 0) {
+                await synchronizePendingActions(session);
+            }
+        }
+
+        if (generation !== app.loadGeneration) return;
+
+        if (app.isOffline) {
+            const offlineSnapshot = await getStoredSnapshot();
+            if (isSnapshotValid(offlineSnapshot)) {
+                hideAuthBarrier();
+                const pointCount = loadSnapshotData(offlineSnapshot);
+                restoreLockedInfo(activePointId, activePixel, activeLocked);
+                setMapStatus(`${formatPointCount(pointCount)} offline geladen.`, "ready");
+                return;
+            }
         }
 
         if (elements.authBarrierNotice) {
@@ -1743,7 +2180,7 @@
             }
             setProviderCatalog(providers);
 
-            const [unvisited, visited] = await Promise.all([
+            const [serverUnvisited, serverVisited] = await Promise.all([
                 getJson("api/points?provider=all&vis=false"),
                 getJson("api/points?provider=all&vis=true")
             ]);
@@ -1751,38 +2188,68 @@
                 return;
             }
 
+            const currentSnapshot = await getStoredSnapshot();
+            const pendingActions = isSnapshotValid(currentSnapshot)
+                ? currentSnapshot.pendingActions
+                : [];
+            setPendingActions(pendingActions);
+            const { unvisited, visited } = overlayPendingActions(
+                serverUnvisited,
+                serverVisited,
+                pendingActions);
             cachePoints(unvisited, VisitState.open);
             cachePoints(visited, VisitState.visited);
             const pointCount = renderSelectedPoints();
             renderSearchResults();
+            restoreLockedInfo(activePointId, activePixel, activeLocked);
 
             if (session.expiresAt) {
-                await saveStoredSnapshot({
-                    schemaVersion: 1,
+                const stored = await updateStoredSnapshot(snapshot => ({
+                    ...(snapshot ?? {}),
+                    schemaVersion: SNAPSHOT_SCHEMA_VERSION,
                     email: session.email,
                     expiresAt: session.expiresAt,
                     providers,
                     unvisitedPoints: unvisited,
                     visitedPoints: visited,
+                    pendingActions,
                     savedAt: new Date().toISOString()
-                });
+                }));
+                if (!stored.ok) {
+                    setMapStatus("Der Offline-Datenstand konnte nicht sicher gespeichert werden.", "error");
+                }
             }
 
-            setMapStatus(`${formatPointCount(pointCount)} geladen.`, "ready");
-            window.setTimeout(() => {
-                if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {
-                    setMapStatus("");
-                }
-            }, 1800);
+            if (app.backOnlineNoticePending) {
+                app.backOnlineNoticePending = false;
+                showBackOnlineNotice();
+            } else {
+                setMapStatus(`${formatPointCount(pointCount)} geladen.`, "ready");
+                window.setTimeout(() => {
+                    if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {
+                        setMapStatus("");
+                    }
+                }, 1800);
+            }
         } catch (error) {
             if (generation === app.loadGeneration) {
                 if (error?.status === 401) {
-                    await clearStoredSnapshot();
+                    await clearPersonalData();
                     setSession({ authenticated: false });
                     resetPointCache();
                     clearMarkers();
                     showAuthBarrier();
                     setMapStatus("");
+                } else if (!(error instanceof Response)) {
+                    const fallbackSnapshot = await getStoredSnapshot();
+                    if (isSnapshotValid(fallbackSnapshot)) {
+                        setOfflineMode(true);
+                        const pointCount = loadSnapshotData(fallbackSnapshot);
+                        restoreLockedInfo(activePointId, activePixel, activeLocked);
+                        setMapStatus(`${formatPointCount(pointCount)} offline geladen.`, "ready");
+                    } else {
+                        setMapStatus("Anbieter und Stempelstellen konnten nicht geladen werden.", "error");
+                    }
                 } else {
                     setMapStatus("Anbieter und Stempelstellen konnten nicht geladen werden.", "error");
                 }
@@ -1791,8 +2258,12 @@
     };
 
     elements.logoutButton.addEventListener("click", async () => {
+        if (app.pendingActions.size > 0 &&
+            !window.confirm("Nicht synchronisierte Stempeländerungen gehen beim Abmelden verloren. Trotzdem abmelden?")) {
+            return;
+        }
         elements.logoutButton.disabled = true;
-        await clearStoredSnapshot();
+        await clearPersonalData();
         ++app.loadGeneration;
         hideInfo(true);
         resetPointCache();
@@ -1831,8 +2302,40 @@
     });
 
     window.addEventListener("online", () => {
+        clearRetryTimer();
         initialize();
     });
+
+    syncChannel?.addEventListener("message", async event => {
+        if (!event.data || event.data.sender === TAB_ID) return;
+        if (event.data.type === "personal-data-cleared") {
+            ++app.loadGeneration;
+            clearRetryTimer();
+            setPendingActions([]);
+            hideInfo(true);
+            resetPointCache();
+            clearMarkers();
+            setSession({ authenticated: false });
+            showAuthBarrier();
+            return;
+        }
+        if (event.data.type === "snapshot-updated") {
+            if (!elements.visitForm.hidden || elements.deleteVisitDialog.open) return;
+            await refreshFromStoredSnapshot();
+        }
+    });
+
+    window.addEventListener("focus", () => {
+        if (!elements.visitForm.hidden || elements.deleteVisitDialog.open) return;
+        refreshFromStoredSnapshot();
+    });
+    if (!syncChannel) {
+        window.setInterval(() => {
+            if (app.authenticated && elements.visitForm.hidden && !elements.deleteVisitDialog.open) {
+                refreshFromStoredSnapshot();
+            }
+        }, 2000);
+    }
 
     initialize();
 })();
