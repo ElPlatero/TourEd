@@ -688,6 +688,13 @@ input:focus-visible,
     flex-shrink: 0;
 }
 
+.action--tile .stamp-logo-icon {
+    width: 2rem;
+    height: 2rem;
+    fill: currentColor;
+    stroke: none;
+}
+
 .action--tile span {
     font-size: 0.85rem;
     font-weight: 650;

@@ -1116,6 +1116,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         Assert.Contains("id=\"visitNowButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Jetzt stempeln", html, StringComparison.Ordinal);
+        Assert.Contains("class=\"stamp-logo-icon\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(".action--tile .stamp-logo-icon", css, StringComparison.Ordinal);
+        Assert.Contains("fill: currentColor", css, StringComparison.Ordinal);
         Assert.Contains("id=\"openVisitFormButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Nachtragen", html, StringComparison.Ordinal);
         Assert.Contains("id=\"editVisitButton\"", html, StringComparison.OrdinalIgnoreCase);
@@ -1310,7 +1313,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v6", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v7", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
