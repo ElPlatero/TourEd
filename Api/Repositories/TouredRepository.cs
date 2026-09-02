@@ -271,6 +271,61 @@ public class TouredRepository : IUserService
             .ThenBy(provider => provider.Slug)
             .ToListAsync(cancellationToken);
 
+    public async Task<StampingProviderCatalogResult> GetStampingProvidersCatalogAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        var providers = await _dbContext.StampingProviders.AsNoTracking()
+            .OrderBy(provider => provider.Name)
+            .ThenBy(provider => provider.Slug)
+            .ToListAsync(cancellationToken);
+
+        var enabledProviderIds = await _dbContext.UserStampingProviders.AsNoTracking()
+            .Where(access => access.UserId == userId)
+            .Select(access => access.StampingProviderId)
+            .ToHashSetAsync(cancellationToken);
+
+        var totalPointsByProvider = await _dbContext.StampingPoints.AsNoTracking()
+            .Where(point => point.ValidFrom == null && point.ValidUntil == null)
+            .GroupBy(point => point.ProviderId)
+            .Select(group => new { ProviderId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(group => group.ProviderId, group => group.Count, cancellationToken);
+
+        var visitedPointsByProvider = await _dbContext.UserVisits.AsNoTracking()
+            .Where(visit => visit.UserId == userId)
+            .Join(
+                _dbContext.StampingPoints.AsNoTracking().Where(point => point.ValidFrom == null && point.ValidUntil == null),
+                visit => visit.StampingPointId,
+                point => point.Id,
+                (visit, point) => point.ProviderId)
+            .GroupBy(providerId => providerId)
+            .Select(group => new { ProviderId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(group => group.ProviderId, group => group.Count, cancellationToken);
+
+        var providerDtos = providers.Select(provider =>
+        {
+            var isEnabled = enabledProviderIds.Contains(provider.Id);
+            var isDataReady = provider.IsAnonymousAccessAllowed;
+            var totalPoints = isDataReady ? totalPointsByProvider.GetValueOrDefault(provider.Id, 0) : (int?)null;
+            var visitedPoints = isDataReady ? visitedPointsByProvider.GetValueOrDefault(provider.Id, 0) : (int?)null;
+            return StampingProviderDetailsDto.Create(provider, isEnabled, isDataReady, totalPoints, visitedPoints);
+        }).ToList();
+
+        var overallTotal = providerDtos
+            .Where(dto => dto.IsEnabled && dto.IsDataReady)
+            .Sum(dto => dto.TotalPoints ?? 0);
+
+        var overallVisited = providerDtos
+            .Where(dto => dto.IsEnabled && dto.IsDataReady)
+            .Sum(dto => dto.VisitedPoints ?? 0);
+
+        return new StampingProviderCatalogResult(
+            providerDtos.Count,
+            overallTotal,
+            overallVisited,
+            providerDtos);
+    }
+
     public Task<bool> HasStampingProviderAccessAsync(
         int userId,
         int providerId,

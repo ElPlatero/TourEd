@@ -140,6 +140,34 @@
         </div>
     </header>
 
+    <div id="progressOverview" class="progress-overview">
+        <button
+            id="progressButton"
+            class="progress-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="progressPanel"
+            aria-label="Gesamtfortschritt anzeigen">
+            <div class="progress-button__content">
+                <span class="progress-button__title">Gesamtfortschritt</span>
+                <span id="progressButtonCount" class="progress-button__count">0 / 0</span>
+            </div>
+            <div class="progress-bar progress-bar--summary" aria-hidden="true">
+                <div id="progressButtonFill" class="progress-bar__fill" style="width: 0%;"></div>
+            </div>
+            <span id="progressButtonSrPercent" class="visually-hidden">0 %</span>
+        </button>
+        <div id="progressPanel" class="account-panel progress-panel" hidden>
+            <div class="progress-panel__header">
+                <h2>Fortschritt nach Anbieter</h2>
+                <button id="closeProgressPanelButton" class="icon-button" type="button" aria-label="Fortschrittsübersicht schließen">×</button>
+            </div>
+            <div id="progressList" class="progress-list" role="list" aria-label="Stempelanbieter und persönlicher Fortschritt">
+                <p class="provider-options-status">Fortschritt wird geladen …</p>
+            </div>
+        </div>
+    </div>
+
     <p id="mapStatus" class="map-status" role="status" aria-live="polite">Karte wird geladen …</p>
     <div id="tileErrorBanner" class="tile-error-banner" hidden role="status" aria-live="polite">
         <p>Einige Kartenkacheln sind offline nicht verfügbar und werden bei Verbindung nachgeladen.</p>

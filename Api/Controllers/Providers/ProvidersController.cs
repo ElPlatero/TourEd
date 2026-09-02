@@ -18,17 +18,19 @@ public sealed class ProvidersController : ControllerBase
 
     [ProducesResponseType(typeof(GetStampingProvidersResponse), StatusCodes.Status200OK)]
     [HttpGet]
-    public async Task<ActionResult<GetStampingProvidersResponse>> GetStampingProviders()
+    public async Task<ActionResult<GetStampingProvidersResponse>> GetStampingProviders(CancellationToken cancellationToken)
     {
         if (!User.TryGetUser(out var currentUser))
         {
             return Unauthorized();
         }
 
-        var providers = await _manager.GetStampingProvidersAsync(currentUser.Id);
+        var result = await _manager.GetStampingProvidersCatalogAsync(currentUser.Id, cancellationToken);
         return Ok(new GetStampingProvidersResponse(
-            providers.Count,
-            providers.Select(StampingProviderDetailsDto.Create)));
+            result.OverallCount,
+            result.TotalPoints,
+            result.VisitedPoints,
+            result.Providers));
     }
 
     [Produces("application/geo+json")]

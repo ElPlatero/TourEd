@@ -11,7 +11,8 @@ public record StampingPointDto(
     DateOnly? VisitedOn,
     TimeOnly? VisitedAt,
     StampingProviderDto Provider,
-    StampingSeriesDto Series)
+    StampingSeriesDto Series,
+    bool CountsTowardProgress)
 {
     public IEnumerable<TourCompactDto>? Tours { get; set; }
     public static StampingPointDto Create(StampingPoint point, UserVisit? visit = null) => new(
@@ -25,5 +26,6 @@ public record StampingPointDto(
             ? TimeOnly.FromDateTime(visitedWithTime)
             : null,
         StampingProviderDto.Create(point.Provider),
-        StampingSeriesDto.Create(point.Series));
+        StampingSeriesDto.Create(point.Series),
+        point.ValidFrom is null && point.ValidUntil is null);
 }

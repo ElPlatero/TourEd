@@ -6,7 +6,11 @@ public sealed record StampingProviderDetailsDto(
     string Slug,
     string Name,
     string? Abbreviation,
+    bool IsEnabled,
+    bool IsDataReady,
     bool IsAnonymousAccessAllowed,
+    int? TotalPoints,
+    int? VisitedPoints,
     string? Description,
     string? WebsiteUrl,
     string? DataSourceAttribution,
@@ -15,19 +19,31 @@ public sealed record StampingProviderDetailsDto(
     string? DataLicenseUrl,
     bool HasPublicDataDownload)
 {
-    public static StampingProviderDetailsDto Create(StampingProvider provider)
+    public static StampingProviderDetailsDto Create(
+        StampingProvider provider,
+        bool isEnabled,
+        bool isDataReady,
+        int? totalPoints,
+        int? visitedPoints)
         => new(
             provider.Slug,
             provider.Name,
             provider.Abbreviation,
-            provider.IsAnonymousAccessAllowed,
+            isEnabled,
+            isDataReady,
+            isDataReady,
+            isDataReady ? totalPoints : null,
+            isDataReady ? visitedPoints : null,
             provider.Description,
             GetPublicHttpUrl(provider.WebsiteUri),
             provider.DataSourceAttribution,
             GetPublicHttpUrl(provider.DataSourceUri),
             provider.DataLicenseName,
             GetPublicHttpUrl(provider.DataLicenseUri),
-            provider.IsAnonymousAccessAllowed && provider.DataImportedAt is not null);
+            isEnabled && isDataReady && provider.DataImportedAt is not null);
+
+    public static StampingProviderDetailsDto Create(StampingProvider provider)
+        => Create(provider, true, provider.IsAnonymousAccessAllowed, null, null);
 
     private static string? GetPublicHttpUrl(Uri? websiteUri)
     {
