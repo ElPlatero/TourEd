@@ -57,7 +57,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal("MW", providers[2].Abbreviation);
         Assert.True(providers[2].IsAnonymousAccessAllowed);
         Assert.Equal(StampingProvider.SchluchtensteigSlug, providers[3].Slug);
-        Assert.Equal("SS", providers[3].Abbreviation);
+        Assert.Equal("SST", providers[3].Abbreviation);
         Assert.True(providers[3].IsAnonymousAccessAllowed);
         Assert.Equal(StampingProvider.HeidschnuckenwegSlug, providers[4].Slug);
         Assert.Equal("HNW", providers[4].Abbreviation);
