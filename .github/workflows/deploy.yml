@@ -54,13 +54,13 @@ jobs:
 
       - name: Restore dependencies and tools
         run: |
-          dotnet restore TourEd.sln
+          dotnet restore TourEd.slnx
           dotnet tool restore
 
       - name: Build and test
         run: |
-          dotnet build TourEd.sln --configuration Release --no-restore
-          dotnet test TourEd.sln --configuration Release --no-build --no-restore --verbosity normal
+          dotnet build TourEd.slnx --configuration Release --no-restore
+          dotnet test TourEd.slnx --configuration Release --no-build --no-restore --verbosity normal
 
       - name: Publish application
         run: |

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Api/Api.csproj" />
+  <Project Path="Toured.Lib/TourEd.Lib.csproj" />
+  <Project Path="TourEd.Tests/TourEd.Tests.csproj" />
+</Solution>

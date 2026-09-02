@@ -4,6 +4,8 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 .idea/
+**/Properties/launchSettings.json
+*.DotSettings.user
 **/*.db*
 **/wwwroot/
 !Api/wwwroot/
