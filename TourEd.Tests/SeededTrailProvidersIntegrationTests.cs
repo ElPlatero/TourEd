@@ -47,6 +47,7 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
     [InlineData("heidschnuckenweg")]
     [InlineData("harzer-klosterwanderweg")]
     [InlineData("bliessteig")]
+    [InlineData("kellerwaldsteig")]
     public async Task AnonymousPointsAndCatalogRequestsAreRejectedWithUnauthorized(string slug)
     {
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -184,6 +185,62 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AuthenticatedUserCanQueryAndVisitUnnumberedKellerwaldsteigPoints()
+    {
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            if (!await context.Users.AnyAsync(u => u.Email == FakeGoogleHandler.Email))
+            {
+                await AddUserWithAccessAsync(context);
+            }
+        }
+
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true,
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var challenge = await client.GetAsync("/auth/login");
+        var callback = await client.GetAsync(challenge.Headers.Location);
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
+
+        var response = await client.GetAsync("/api/points?provider=kellerwaldsteig");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = await response.Content.ReadFromJsonAsync<GetStampingPointsResponse>();
+        Assert.NotNull(data);
+        Assert.Equal(10, data.OverallCount);
+        Assert.All(data.StampingPoints, point =>
+        {
+            Assert.Null(point.Number);
+            Assert.Equal("kellerwaldsteig", point.Provider.Slug);
+            Assert.Equal("Kellerwaldsteig", point.Provider.Name);
+            Assert.Equal("KWS", point.Provider.Abbreviation);
+            Assert.Equal("standard", point.Series.Slug);
+        });
+
+        var open = new VisitStateRequest(false, null, null);
+        var desired = new VisitStateRequest(true, new DateOnly(2026, 9, 3), null);
+        var visitResponse = await client.PutAsJsonAsync(
+            "/api/points/id/5501/state?provider=kellerwaldsteig",
+            new SynchronizeVisitRequest(open, desired));
+        Assert.Equal(HttpStatusCode.OK, visitResponse.StatusCode);
+        var visit = await visitResponse.Content.ReadFromJsonAsync<VisitDto>();
+        Assert.NotNull(visit);
+        Assert.True(visit.IsVisited);
+        Assert.Equal(new DateOnly(2026, 9, 3), visit.VisitedOn);
+        Assert.Null(visit.StampingPoint.Number);
+
+        var deleteResponse = await client.DeleteAsync("/api/points/id/5501?provider=kellerwaldsteig");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        var geoJsonResponse = await client.GetAsync("/api/providers/kellerwaldsteig/points.geojson");
+        Assert.Equal(HttpStatusCode.NotFound, geoJsonResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task BliessteigSeedUsesOfficialStageEndpointsAndCcByProvenance()
     {
         await using var scope = _factory.Services.CreateAsyncScope();
@@ -224,6 +281,65 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
         Assert.Equal(49.346269m, points[^1].Latitude);
     }
 
+    [Fact]
+    public async Task KellerwaldsteigSeedUsesOfficialUnnumberedStationsAndCcBySaProvenance()
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+
+        var provider = await context.StampingProviders.SingleAsync(
+            item => item.Id == StampingProvider.KellerwaldsteigId);
+        Assert.Equal("kellerwaldsteig", provider.Slug);
+        Assert.Equal(
+            "Edersee Marketing GmbH; von TourEd als Punktliste aus den offiziellen Stationsdatensätzen übernommen",
+            provider.DataSourceAttribution);
+        Assert.Equal(
+            "Creative Commons Namensnennung - Weitergabe unter gleichen Bedingungen 4.0 International (CC BY-SA 4.0)",
+            provider.DataLicenseName);
+        Assert.Equal("https://creativecommons.org/licenses/by-sa/4.0/", provider.DataLicenseUri?.AbsoluteUri);
+        Assert.Equal("destination.one:2025-10-13T11:40:00+02:00", provider.DataSourceRevision);
+        Assert.Null(provider.DataImportedAt);
+
+        var points = await context.StampingPoints
+            .Where(point => point.ProviderId == StampingProvider.KellerwaldsteigId)
+            .OrderBy(point => point.Code)
+            .ToArrayAsync();
+
+        Assert.Equal(
+            [
+                "Asel",
+                "Reckenberg",
+                "Keseburg",
+                "Löhlbach",
+                "Jeust",
+                "Waldeck",
+                "Kesselbach",
+                "Armsfeld",
+                "Bad Zwesten",
+                "Wüstegarten"
+            ],
+            points.Select(point => point.Name));
+        Assert.Equal(
+            [
+                "p_100217885",
+                "p_100217884",
+                "p_100217882",
+                "p_100217881",
+                "p_100217879",
+                "p_100217860",
+                "p_100217873",
+                "p_100217876",
+                "p_100217877",
+                "p_100217878"
+            ],
+            points.Select(point => point.ExternalId));
+        Assert.All(points, point => Assert.Null(point.Number));
+        Assert.Equal(8.9601660m, points[0].Longitude);
+        Assert.Equal(51.2018317m, points[0].Latitude);
+        Assert.Equal(9.0840197m, points[^1].Longitude);
+        Assert.Equal(51.0156851m, points[^1].Latitude);
+    }
+
     private static async Task AddUserWithAccessAsync(DataContext context)
     {
         var user = new User { Email = FakeGoogleHandler.Email };
@@ -234,7 +350,8 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
             StampingProvider.SchluchtensteigId,
             StampingProvider.HeidschnuckenwegId,
             StampingProvider.HarzerKlosterwanderwegId,
-            StampingProvider.BliessteigId
+            StampingProvider.BliessteigId,
+            StampingProvider.KellerwaldsteigId
         }.Select(providerId => new UserStampingProvider
         {
             UserId = user.Id,

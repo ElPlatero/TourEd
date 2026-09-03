@@ -46,8 +46,9 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("20260831172419_AddUserStampingProviderEntitlements", migrations);
         Assert.Contains("20260831181353_AddAdminAuditEntries", migrations);
         Assert.Contains("20260903180824_AddBliessteigProvider", migrations);
+        Assert.Contains("20260903193034_AddKellerwaldsteigProvider", migrations);
         var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
-        Assert.Equal(7, providers.Length);
+        Assert.Equal(8, providers.Length);
         Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);
         Assert.True(providers[0].IsAnonymousAccessAllowed);
         Assert.Contains("430 offizielle Stempelstellen", providers[0].Description, StringComparison.Ordinal);
@@ -70,8 +71,12 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal("BS", providers[6].Abbreviation);
         Assert.True(providers[6].IsAnonymousAccessAllowed);
         Assert.Equal("Creative Commons Namensnennung 4.0 International (CC BY 4.0)", providers[6].DataLicenseName);
+        Assert.Equal(StampingProvider.KellerwaldsteigSlug, providers[7].Slug);
+        Assert.Equal("KWS", providers[7].Abbreviation);
+        Assert.True(providers[7].IsAnonymousAccessAllowed);
+        Assert.Contains("CC BY-SA 4.0", providers[7].DataLicenseName, StringComparison.Ordinal);
         var series = await context.StampingSeries.OrderBy(item => item.Id).ToArrayAsync();
-        Assert.Equal(10, series.Length);
+        Assert.Equal(11, series.Length);
         Assert.Equal(430, series.Single(item => item.Id == StampingSeries.TouringenStandardId).ExpectedPointCount);
         Assert.True(series.Single(item => item.Id == StampingSeries.TouringenSpecialStampsId).IsTemporary);
         Assert.Equal(8, series.Single(item => item.Id == StampingSeries.MalerwegStandardId).ExpectedPointCount);
@@ -79,6 +84,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(13, series.Single(item => item.Id == StampingSeries.HeidschnuckenwegStandardId).ExpectedPointCount);
         Assert.Equal(16, series.Single(item => item.Id == StampingSeries.HarzerKlosterwanderwegStandardId).ExpectedPointCount);
         Assert.Equal(10, series.Single(item => item.Id == StampingSeries.BliessteigStandardId).ExpectedPointCount);
+        Assert.Equal(10, series.Single(item => item.Id == StampingSeries.KellerwaldsteigStandardId).ExpectedPointCount);
     }
 
     [Fact]

@@ -16,6 +16,8 @@ public class StampingProvider
     public const string HarzerKlosterwanderwegSlug = "harzer-klosterwanderweg";
     public const int BliessteigId = 7;
     public const string BliessteigSlug = "bliessteig";
+    public const int KellerwaldsteigId = 8;
+    public const string KellerwaldsteigSlug = "kellerwaldsteig";
 
     public int Id { get; set; }
     public string Slug { get; set; } = null!;
