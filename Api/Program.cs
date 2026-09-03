@@ -24,14 +24,14 @@ builder.Services
     .AddHttpClient<IHtmlParsingService, HtmlParsingService>().Services
     .AddHttpClient<ITouringenStampingPointImportService, TouringenStampingPointImportService>(client =>
     {
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; TourEd/1.0; +https://baelgun.de/toured/)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; TourEd/1.0; +https://toured-app.de/)");
         client.Timeout = TimeSpan.FromSeconds(30);
     }).Services
     .AddSingleton(serviceProvider => serviceProvider
         .GetRequiredService<Microsoft.Extensions.Options.IOptions<TouringenWebsiteConfiguration>>().Value)
     .AddHttpClient<IHarzerWandernadelImportService, HarzerWandernadelImportService>(client =>
     {
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; TourEd/1.0; +https://baelgun.de/toured/)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; TourEd/1.0; +https://toured-app.de/)");
         client.Timeout = TimeSpan.FromSeconds(30);
     }).Services
     .AddImportServices()

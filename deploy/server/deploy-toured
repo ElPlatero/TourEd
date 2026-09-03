@@ -92,7 +92,7 @@ runtime_env_mode="$(stat --format '%a' "$RUNTIME_ENV_FILE")"
 (( (8#$runtime_env_mode & 0077) == 0 )) || \
     fail "Runtime environment file must not be accessible by group or others"
 for environment_key in Authentication__Google__ClientId Authentication__Google__ClientSecret \
-    Authentication__Cli__UserEmail Authentication__Cli__Token PathBase DataProtection__KeysPath \
+    Authentication__Cli__UserEmail Authentication__Cli__Token DataProtection__KeysPath \
     ASPNETCORE_FORWARDEDHEADERS_ENABLED touringen__StempelstellenUri \
     RegistrationNotifications__Enabled RegistrationNotifications__SmtpHost \
     RegistrationNotifications__SmtpPort RegistrationNotifications__SmtpUsername \
@@ -103,6 +103,17 @@ for environment_key in Authentication__Google__ClientId Authentication__Google__
         "$RUNTIME_ENV_FILE" || \
         fail "Runtime environment file must contain exactly one non-empty $environment_key value"
 done
+awk -F= '
+    $1 == "PathBase" {
+        count++
+        value = substr($0, length($1) + 2)
+    }
+    END {
+        if (count != 1) exit 1
+        if (value == "") exit 0
+        if (value !~ /^\// || value == "/" || value ~ /\/$/ || value ~ /[[:space:]]/) exit 1
+    }' "$RUNTIME_ENV_FILE" || \
+    fail "Runtime environment file must contain exactly one valid PathBase value (empty for the domain root or an absolute path without a trailing slash)"
 grep -Fqx "DataProtection__KeysPath=$DATA_PROTECTION_KEYS_DIR" "$RUNTIME_ENV_FILE" || \
     fail "DataProtection__KeysPath must equal configured DATA_PROTECTION_KEYS_DIR"
 grep -Fqx 'ASPNETCORE_FORWARDEDHEADERS_ENABLED=true' "$RUNTIME_ENV_FILE" || \
