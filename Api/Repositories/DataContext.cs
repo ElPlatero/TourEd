@@ -103,6 +103,23 @@ public class DataContext : DbContext
                 IsAnonymousAccessAllowed = true,
                 WebsiteUri = new Uri("https://www.harzinfo.de/erlebnisse/harzer-kloester/harzer-klosterwanderweg"),
                 Description = "Der Harzer Klosterwanderweg führt über rund 117 Kilometer entlang geschichtsträchtiger Klöster und Kirchen am Nordrand des Harzes von Goslar bis Halberstadt. 16 markante rote Stempelkästen der Harzer Wandernadel laden zum Sammeln im Begleitheft ein."
+            },
+            new StampingProvider
+            {
+                Id = StampingProvider.BliessteigId,
+                Slug = StampingProvider.BliessteigSlug,
+                Name = "Bliessteig",
+                Abbreviation = "BS",
+                IsAnonymousAccessAllowed = true,
+                WebsiteUri = new Uri("https://www.saarpfalz-touristik.de/erlebnisse/wandern/wanderservice/stempelstationen"),
+                Description = "Der rund 106 Kilometer lange Bliessteig führt in neun Etappen von Sarreguemines durch den Bliesgau bis nach Bexbach. An den Etappenorten stehen 10 feste Stempelstationen.",
+                DataSourceUri = new Uri("https://www.saarpfalz-touristik.de/touren/bliessteig-c62caf7374"),
+                DataSourceAttribution = "Saarpfalz-Touristik, Julia Serov",
+                DataLicenseName = "Creative Commons Namensnennung 4.0 International (CC BY 4.0)",
+                DataLicenseUri = new Uri("https://creativecommons.org/licenses/by/4.0/"),
+                DataSourceRevision = "f6ccf2af-e2e7-4bd1-becc-4590f8e3456a:2026-09-03T02:08:17",
+                DataSourceUpdatedAt = new DateTime(2026, 9, 3, 2, 8, 17, DateTimeKind.Utc),
+                DataImportedAt = new DateTime(2026, 9, 3, 18, 6, 12, DateTimeKind.Utc)
             });
         });
 
@@ -635,6 +652,126 @@ public class DataContext : DbContext
                     ProviderId = StampingProvider.HarzerKlosterwanderwegId,
                     SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerKlosterwanderwegStandardId,
                     ExternalId = "standard-16"
+                },
+                new
+                {
+                    Id = 5401,
+                    Name = "Sarreguemines Bahnhof",
+                    Longitude = 7.072924m,
+                    Latitude = 49.110405m,
+                    Number = (int?)1,
+                    Code = 1,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-1"
+                },
+                new
+                {
+                    Id = 5402,
+                    Name = "Gräfinthal",
+                    Longitude = 7.119782m,
+                    Latitude = 49.160345m,
+                    Number = (int?)2,
+                    Code = 2,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-2"
+                },
+                new
+                {
+                    Id = 5403,
+                    Name = "Bebelsheim",
+                    Longitude = 7.170777m,
+                    Latitude = 49.170907m,
+                    Number = (int?)3,
+                    Code = 3,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-3"
+                },
+                new
+                {
+                    Id = 5404,
+                    Name = "Blieskastel",
+                    Longitude = 7.259220m,
+                    Latitude = 49.237008m,
+                    Number = (int?)4,
+                    Code = 4,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-4"
+                },
+                new
+                {
+                    Id = 5405,
+                    Name = "Kirkel",
+                    Longitude = 7.240993m,
+                    Latitude = 49.285312m,
+                    Number = (int?)5,
+                    Code = 5,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-5"
+                },
+                new
+                {
+                    Id = 5406,
+                    Name = "Schwarzenacker",
+                    Longitude = 7.315955m,
+                    Latitude = 49.283315m,
+                    Number = (int?)6,
+                    Code = 6,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-6"
+                },
+                new
+                {
+                    Id = 5407,
+                    Name = "Homburg",
+                    Longitude = 7.344550m,
+                    Latitude = 49.321074m,
+                    Number = (int?)7,
+                    Code = 7,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-7"
+                },
+                new
+                {
+                    Id = 5408,
+                    Name = "Jägersburg",
+                    Longitude = 7.312004m,
+                    Latitude = 49.362197m,
+                    Number = (int?)8,
+                    Code = 8,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-8"
+                },
+                new
+                {
+                    Id = 5409,
+                    Name = "Höchen",
+                    Longitude = 7.266016m,
+                    Latitude = 49.397474m,
+                    Number = (int?)9,
+                    Code = 9,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-9"
+                },
+                new
+                {
+                    Id = 5410,
+                    Name = "Kulturbahnhof Bexbach",
+                    Longitude = 7.254470m,
+                    Latitude = 49.346269m,
+                    Number = (int?)10,
+                    Code = 10,
+                    ProviderId = StampingProvider.BliessteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
+                    ExternalId = "standard-10"
                 });
         });
 
@@ -656,7 +793,8 @@ public class DataContext : DbContext
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardId, ProviderId = StampingProvider.MalerwegId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.MalerwegStandardSlug, Name = "Standard", ExpectedPointCount = 8 },
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.SchluchtensteigStandardId, ProviderId = StampingProvider.SchluchtensteigId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.SchluchtensteigStandardSlug, Name = "Standard", ExpectedPointCount = 6 },
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.HeidschnuckenwegStandardId, ProviderId = StampingProvider.HeidschnuckenwegId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.HeidschnuckenwegStandardSlug, Name = "Standard", ExpectedPointCount = 13 },
-                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerKlosterwanderwegStandardId, ProviderId = StampingProvider.HarzerKlosterwanderwegId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerKlosterwanderwegStandardSlug, Name = "Standard", ExpectedPointCount = 16 });
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerKlosterwanderwegStandardId, ProviderId = StampingProvider.HarzerKlosterwanderwegId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerKlosterwanderwegStandardSlug, Name = "Standard", ExpectedPointCount = 16 },
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId, ProviderId = StampingProvider.BliessteigId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardSlug, Name = "Standard", ExpectedPointCount = 10 });
         });
 
         modelBuilder.Entity<SortedStampingPoint>(dto =>

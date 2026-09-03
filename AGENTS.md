@@ -4,7 +4,7 @@
 
 TourEd is a small .NET 10 application for stamping points and hiking tours from multiple providers.
 
-It stores Touringen, Harzer Wandernadel (HWN), Malerweg (MW), Schluchtensteig (SST), Heidschnuckenweg (HNW), and Harzer Klosterwanderweg (HKW) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
+It stores Touringen, Harzer Wandernadel (HWN), Malerweg (MW), Schluchtensteig (SST), Heidschnuckenweg (HNW), Harzer Klosterwanderweg (HKW), and Bliessteig (BS) stamping points, hiking tours, tour-to-point relationships, users, and user visits in a SQLite database. The main user-facing feature is showing stamping points on a map and distinguishing visited from unvisited points for a known user.
 
 Stamping points are anchored by `StampingProvider` and belong to a provider-scoped `StampingSeries`. A series supplies the number namespace, so equally numbered points from different editions remain distinct. Per-user `UserStampingProvider` entitlements determine which providers an authenticated account may access. Existing users received every provider present when the entitlement migration ran; new users and providers receive no automatic grants. `User.DefaultStampingProviderId` is nullable and is used only when it references an entitled provider.
 
@@ -131,7 +131,7 @@ The backend follows a simple layered structure:
 - `DataContext` defines SQLite-backed EF Core mappings.
 - `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
 
-Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN, Malerweg (8 points), Schluchtensteig (6 points), Heidschnuckenweg (13 points), and Harzer Klosterwanderweg (16 points) each have one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. `UserStampingProvider` uses `(UserId, StampingProviderId)` as its unique key. Removing an entitlement hides its provider and visits without deleting visit rows; restoring it makes those visits visible again. Deleting a user cascades to entitlements.
+Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN, Malerweg (8 points), Schluchtensteig (6 points), Heidschnuckenweg (13 points), Harzer Klosterwanderweg (16 points), and Bliessteig (10 points) each have one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. `UserStampingProvider` uses `(UserId, StampingProviderId)` as its unique key. Removing an entitlement hides its provider and visits without deleting visit rows; restoring it makes those visits visible again. Deleting a user cascades to entitlements.
 
 Administrative entitlement and registration decisions are recorded in `AdminAuditEntry` with timestamp, actor user id, action (`registration.approved`, `registration.rejected`, etc.), optional target user id, optional registration-request id, and optional provider slug. Registration rejections identify the request without inventing a target user. Tokens, email addresses, and Google subjects are not copied into the audit table. The CLI-protected, bounded `GET /api/admin/audit` endpoint returns the newest entries for the separate admin client. Audit entries are retained for 90 days from creation and automatically deleted by the hosted retention cleanup.
 
@@ -184,11 +184,11 @@ Harzer Wandernadel data import:
 - Atomically records OSM provenance/licence metadata, records the import, and marks HWN data ready for entitled catalog/GeoJSON access only after the complete validated point update succeeds.
 - Is started manually through the CLI-protected admin endpoint; no schedule or workflow triggers it automatically.
 
-Seeded trail providers (Malerweg, Schluchtensteig, Heidschnuckenweg, Harzer Klosterwanderweg):
+Seeded trail providers (Malerweg, Schluchtensteig, Heidschnuckenweg, Harzer Klosterwanderweg, Bliessteig):
 
-- Fixed stamping points across established trails (Malerweg: 8, Schluchtensteig: 6, Heidschnuckenweg: 13, Harzer Klosterwanderweg: 16), seeded directly via EF Core migrations.
+- Fixed stamping points across established trails (Malerweg: 8, Schluchtensteig: 6, Heidschnuckenweg: 13, Harzer Klosterwanderweg: 16, Bliessteig: 10), seeded directly via EF Core migrations. The Bliessteig seed records its official CC BY 4.0 route-data provenance and supports the entitled GeoJSON export.
 - Available without a background network import, but visible only to authenticated users with a matching entitlement.
-- Provenance/import metadata fields remain null, hiding external source/licence links and public GeoJSON export in the provider information modal.
+- Provenance/import metadata fields remain null for Malerweg, Schluchtensteig, Heidschnuckenweg, and Harzer Klosterwanderweg, hiding external source/licence links and public GeoJSON export for those providers. Bliessteig records its official CC BY 4.0 route-data provenance and exposes the entitled GeoJSON export.
 
 User data import:
 
