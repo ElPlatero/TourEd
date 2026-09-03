@@ -1319,7 +1319,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v9", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v10", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
@@ -1335,8 +1335,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css", swScript, StringComparison.Ordinal);
         Assert.Contains("https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js", swScript, StringComparison.Ordinal);
 
-        // Security boundaries: never cache auth, api, health, or non-GET
+        // Security boundaries: never handle auth (including the OAuth callback), api, health, or non-GET
         Assert.Contains("/auth/", swScript, StringComparison.Ordinal);
+        Assert.Contains("/signin-google", swScript, StringComparison.Ordinal);
         Assert.Contains("/api/", swScript, StringComparison.Ordinal);
         Assert.Contains("/health", swScript, StringComparison.Ordinal);
         Assert.Contains("event.request.method !== \"GET\"", swScript, StringComparison.Ordinal);

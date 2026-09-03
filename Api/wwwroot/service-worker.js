@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const CACHE_NAME = "toured-shell-v9";
+    const CACHE_NAME = "toured-shell-v10";
 
     const CORE_ASSETS = [
         "./",
@@ -79,8 +79,9 @@
 
         const url = new URL(event.request.url);
 
-        // Security boundary: Never cache auth, api, or health endpoints
+        // Security boundary: Never handle auth (including the OAuth callback), api, or health endpoints
         if (url.pathname.includes("/auth/") ||
+            url.pathname.endsWith("/signin-google") ||
             url.pathname.includes("/api/") ||
             url.pathname.endsWith("/health") ||
             url.pathname.includes("/health/")) {
