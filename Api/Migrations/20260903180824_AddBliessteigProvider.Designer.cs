@@ -1009,10 +1009,9 @@ namespace Api.Migrations
                         {
                             Id = 7,
                             Abbreviation = "BS",
-                            DataImportedAt = new DateTime(2026, 9, 3, 18, 6, 12, 0, DateTimeKind.Utc),
                             DataLicenseName = "Creative Commons Namensnennung 4.0 International (CC BY 4.0)",
                             DataLicenseUri = "https://creativecommons.org/licenses/by/4.0/",
-                            DataSourceAttribution = "Saarpfalz-Touristik, Julia Serov",
+                            DataSourceAttribution = "Saarpfalz-Touristik, Julia Serov; von TourEd aus den Etappenendpunkten abgeleitet",
                             DataSourceRevision = "f6ccf2af-e2e7-4bd1-becc-4590f8e3456a:2026-09-03T02:08:17",
                             DataSourceUpdatedAt = new DateTime(2026, 9, 3, 2, 8, 17, 0, DateTimeKind.Utc),
                             DataSourceUri = "https://www.saarpfalz-touristik.de/touren/bliessteig-c62caf7374",
