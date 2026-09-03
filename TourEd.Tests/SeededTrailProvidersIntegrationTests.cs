@@ -67,7 +67,7 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
     [InlineData("schluchtensteig", "Schluchtensteig", "SST", 6, false)]
     [InlineData("heidschnuckenweg", "Heidschnuckenweg", "HNW", 13, false)]
     [InlineData("harzer-klosterwanderweg", "Harzer Klosterwanderweg", "HKW", 16, false)]
-    [InlineData("bliessteig", "Bliessteig", "BS", 10, true)]
+    [InlineData("bliessteig", "Bliessteig", "BS", 10, false)]
     public async Task AuthenticatedUserCanQuerySeededTrailProviderPoints(
         string slug,
         string expectedName,
@@ -192,10 +192,12 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
         var provider = await context.StampingProviders.SingleAsync(
             item => item.Id == StampingProvider.BliessteigId);
         Assert.Equal("bliessteig", provider.Slug);
-        Assert.Equal("Saarpfalz-Touristik, Julia Serov", provider.DataSourceAttribution);
+        Assert.Equal(
+            "Saarpfalz-Touristik, Julia Serov; von TourEd aus den Etappenendpunkten abgeleitet",
+            provider.DataSourceAttribution);
         Assert.Equal("Creative Commons Namensnennung 4.0 International (CC BY 4.0)", provider.DataLicenseName);
         Assert.Equal("https://creativecommons.org/licenses/by/4.0/", provider.DataLicenseUri?.AbsoluteUri);
-        Assert.NotNull(provider.DataImportedAt);
+        Assert.Null(provider.DataImportedAt);
 
         var points = await context.StampingPoints
             .Where(point => point.ProviderId == StampingProvider.BliessteigId)

@@ -114,12 +114,11 @@ public class DataContext : DbContext
                 WebsiteUri = new Uri("https://www.saarpfalz-touristik.de/erlebnisse/wandern/wanderservice/stempelstationen"),
                 Description = "Der rund 106 Kilometer lange Bliessteig führt in neun Etappen von Sarreguemines durch den Bliesgau bis nach Bexbach. An den Etappenorten stehen 10 feste Stempelstationen.",
                 DataSourceUri = new Uri("https://www.saarpfalz-touristik.de/touren/bliessteig-c62caf7374"),
-                DataSourceAttribution = "Saarpfalz-Touristik, Julia Serov",
+                DataSourceAttribution = "Saarpfalz-Touristik, Julia Serov; von TourEd aus den Etappenendpunkten abgeleitet",
                 DataLicenseName = "Creative Commons Namensnennung 4.0 International (CC BY 4.0)",
                 DataLicenseUri = new Uri("https://creativecommons.org/licenses/by/4.0/"),
                 DataSourceRevision = "f6ccf2af-e2e7-4bd1-becc-4590f8e3456a:2026-09-03T02:08:17",
-                DataSourceUpdatedAt = new DateTime(2026, 9, 3, 2, 8, 17, DateTimeKind.Utc),
-                DataImportedAt = new DateTime(2026, 9, 3, 18, 6, 12, DateTimeKind.Utc)
+                DataSourceUpdatedAt = new DateTime(2026, 9, 3, 2, 8, 17, DateTimeKind.Utc)
             });
         });
 

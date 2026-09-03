@@ -186,9 +186,9 @@ Harzer Wandernadel data import:
 
 Seeded trail providers (Malerweg, Schluchtensteig, Heidschnuckenweg, Harzer Klosterwanderweg, Bliessteig):
 
-- Fixed stamping points across established trails (Malerweg: 8, Schluchtensteig: 6, Heidschnuckenweg: 13, Harzer Klosterwanderweg: 16, Bliessteig: 10), seeded directly via EF Core migrations. The Bliessteig seed records its official CC BY 4.0 route-data provenance and supports the entitled GeoJSON export.
+- Fixed stamping points across established trails (Malerweg: 8, Schluchtensteig: 6, Heidschnuckenweg: 13, Harzer Klosterwanderweg: 16, Bliessteig: 10), seeded directly via EF Core migrations. The Bliessteig seed records and displays its official CC BY 4.0 route-data provenance but does not offer a GeoJSON export.
 - Available without a background network import, but visible only to authenticated users with a matching entitlement.
-- Provenance/import metadata fields remain null for Malerweg, Schluchtensteig, Heidschnuckenweg, and Harzer Klosterwanderweg, hiding external source/licence links and public GeoJSON export for those providers. Bliessteig records its official CC BY 4.0 route-data provenance and exposes the entitled GeoJSON export.
+- Provenance/import metadata fields remain null for Malerweg, Schluchtensteig, Heidschnuckenweg, and Harzer Klosterwanderweg, hiding external source/licence links and public GeoJSON export for those providers. Bliessteig displays its official CC BY 4.0 source and licence, but intentionally leaves `DataImportedAt` unset so TourEd does not offer the optional GeoJSON export.
 
 User data import:
 

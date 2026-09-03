@@ -507,7 +507,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var bliessteig = providers.Single(p => p.Slug == StampingProvider.BliessteigSlug);
         Assert.Equal("BS", bliessteig.Abbreviation);
         Assert.Equal("Creative Commons Namensnennung 4.0 International (CC BY 4.0)", bliessteig.DataLicenseName);
-        Assert.True(bliessteig.HasPublicDataDownload);
+        Assert.False(bliessteig.HasPublicDataDownload);
         var unsupported = providers.Single(p => p.Slug == "unsupported-link");
         Assert.Null(unsupported.WebsiteUrl);
 
