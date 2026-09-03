@@ -54,7 +54,7 @@ The setup installs this file as root-owned mode `0600` at `/etc/toured-deploy.co
 Create an OAuth 2.0 client of type **Web application** in Google Cloud. Configure the exact public callback URI, including the deployed path base:
 
 ```text
-https://server.example/toured/signin-google
+https://toured-app.de/signin-google
 ```
 
 For local development, add only the exact HTTPS callback URI and port actually used, for example `https://localhost:7082/signin-google`. Google redirects to the backend callback; no JavaScript origin is needed by TourEd. While the consent screen remains in testing mode, add every permitted Google account as a test user.
@@ -82,7 +82,7 @@ printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecre
     "$TOURED_GOOGLE_CLIENT_SECRET" \
     "$TOURED_CLI_USER_EMAIL" \
     "$TOURED_CLI_TOKEN" \
-    '/toured' \
+    '' \
     '/srv/toured/data-protection-keys' \
     'true' \
     'https://www.touringen.de/stempelstellen' \
@@ -100,12 +100,12 @@ unset TOURED_GOOGLE_CLIENT_SECRET
 unset TOURED_SMTP_PASSWORD
 ```
 
-Replace `YOUR-ADMIN-FORWARDING-ADDRESS@baelgun.de` with the actual administrative recipient before writing the environment file. `DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` has no trailing slash. The checked-in `touringen` settings supply the official Touringen page and GPX archive URLs used by the terminal-driven import; deployments normally override only `touringen__StempelstellenUri` if necessary. No separate test email is sent; the background notification service evaluates pending requests immediately after application startup and then every five minutes.
+Replace `YOUR-ADMIN-FORWARDING-ADDRESS@baelgun.de` with the actual administrative recipient before writing the environment file. `DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` is empty when TourEd is hosted at the domain root; a non-empty path base starts with `/` and has no trailing slash. The checked-in `touringen` settings supply the official Touringen page and GPX archive URLs used by the terminal-driven import; deployments normally override only `touringen__StempelstellenUri` if necessary. No separate test email is sent; the background notification service evaluates pending requests immediately after application startup and then every five minutes.
 
-The reverse proxy must preserve the `/toured` prefix and send the original host and HTTPS protocol through forwarded headers. For nginx, a location with a path base uses `proxy_pass` without a trailing slash:
+The reverse proxy sends the original host and HTTPS protocol through forwarded headers. For the current domain-root deployment:
 
 ```nginx
-location /toured/ {
+location / {
     proxy_pass http://private-backend:5000;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -126,13 +126,13 @@ The separately maintained local `TourEd.Admin` terminal client reads this token 
 ```bash
 curl --fail-with-body \
     --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
-    https://server.example/toured/api/admin/users
+    https://toured-app.de/api/admin/users
 
 curl --fail-with-body --request PUT \
     --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
     --header "Content-Type: application/json" \
     --data '{"providers":["touringen","harzer-wandernadel"],"defaultProvider":"touringen"}' \
-    https://server.example/toured/api/admin/users/42/providers
+    https://toured-app.de/api/admin/users/42/providers
 ```
 
 The update replaces the complete entitlement set atomically. Its default provider must be included in that set. Grants, revocations, and default-provider changes are written to the database audit log using internal actor/target ids, action, timestamp, and optional provider slug; tokens and email addresses are not duplicated there. Audit entries are retained for 90 days and cleaned up automatically upon application startup and every 24 hours thereafter, requiring no manual administrative operations. Database backups retain audit entries according to the configured backup rotation; restoring a backup causes the startup cleanup to delete already expired audit entries immediately.
@@ -142,7 +142,7 @@ Use the token without writing its literal value into shell history. For the Tour
 ```bash
 curl --fail-with-body --request POST \
     --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
-    https://server.example/toured/api/admin/imports/touringen
+    https://toured-app.de/api/admin/imports/touringen
 ```
 
 The Touringen import reads the 430 standard stamping points directly from OSM relation 14773147, the 8 Naturschätze and 13 Rhön points from the official GPX archives, and hiking tours from the Touringen website. It updates points in place while retaining internal IDs and user visits, records OSM provenance under ODbL 1.0, and makes the public GeoJSON export `GET /api/providers/touringen/points.geojson` available.
@@ -152,7 +152,7 @@ For the Harzer Wandernadel import:
 ```bash
 curl --fail-with-body --request POST \
     --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
-    https://server.example/toured/api/admin/imports/harzer-wandernadel
+    https://toured-app.de/api/admin/imports/harzer-wandernadel
 ```
 
 The HWN import reads OSM relation 148007 and requires exactly one usable summer location for every regular number from 1 through 222. The winter alternative for HWN 69 is intentionally excluded. A complete import updates existing points without changing their internal ids or visits, records the OSM relation revision and licence metadata, and enables anonymous HWN access atomically. Until the first successful OSM import, HWN remains restricted and the public GeoJSON endpoint is unavailable. The non-secret relation id, OSM API/public URLs, and download-size limit are configured in the deployed appsettings under `harzerWandernadel`.
@@ -165,7 +165,7 @@ For a user visit import:
 curl --fail-with-body --request POST \
     --header "Authorization: Bearer ${TOURED_CLI_TOKEN}" \
     --form 'csvImport=@/path/to/visits.csv' \
-    https://server.example/toured/api/admin/imports
+    https://toured-app.de/api/admin/imports
 ```
 
 For inserting or updating stamping points (e.g. temporary Sonderstempel):
@@ -186,7 +186,7 @@ curl --fail-with-body --request POST \
         "validUntil": "2026-10-11"
       }
     ]' \
-    https://server.example/toured/api/admin/points
+    https://toured-app.de/api/admin/points
 ```
 
 Existing points matched by `(series, number)` or `(provider, externalId)` are updated in place while preserving internal database IDs and all recorded user visits; new points are created.
@@ -277,6 +277,6 @@ The server then:
 6. starts the service and waits for the configured `/health` readiness check;
 7. checks `/auth/session` and `index.html` once as API and frontend smoke tests.
 
-The API and frontend smoke-test URLs are derived from `HEALTH_URL`, so a value such as `https://server.example/toured/health` checks `https://server.example/toured/auth/session` and `https://server.example/toured/index.html`. During rollback, the script waits for `/health`.
+The API and frontend smoke-test URLs are derived from `HEALTH_URL`, so the current value `https://toured-app.de/health` checks `https://toured-app.de/auth/session` and `https://toured-app.de/index.html`. During rollback, the script waits for `/health`.
 
 If migration, startup, readiness, or smoke checking fails, the previous application and database are restored and the old service is restarted. Successful deployments retain the configured number of backups under `BACKUP_ROOT`.
