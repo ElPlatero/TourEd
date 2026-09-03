@@ -1359,7 +1359,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v11", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v12", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
@@ -1375,9 +1375,12 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css", swScript, StringComparison.Ordinal);
         Assert.Contains("https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js", swScript, StringComparison.Ordinal);
 
-        // Security boundaries: never handle auth (including the OAuth callback), api, health, or non-GET
+        // Security boundaries: valid OAuth callbacks and all other auth/api/health requests bypass the cache.
+        // A stale callback navigation without OAuth state is redirected to the app root.
         Assert.Contains("/auth/", swScript, StringComparison.Ordinal);
         Assert.Contains("/signin-google", swScript, StringComparison.Ordinal);
+        Assert.Contains("event.request.mode === \"navigate\" && !url.searchParams.has(\"state\")", swScript, StringComparison.Ordinal);
+        Assert.Contains("Response.redirect(new URL(\"./\", url).href, 302)", swScript, StringComparison.Ordinal);
         Assert.Contains("/api/", swScript, StringComparison.Ordinal);
         Assert.Contains("/health", swScript, StringComparison.Ordinal);
         Assert.Contains("event.request.method !== \"GET\"", swScript, StringComparison.Ordinal);
@@ -1464,6 +1467,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("scheduleSessionExpiry", script, StringComparison.Ordinal);
         Assert.Contains("showOfflineUnavailable", script, StringComparison.Ordinal);
         Assert.Contains("updateReloadRequested", script, StringComparison.Ordinal);
+        Assert.Contains("isGoogleCallbackPath(window.location.pathname)", script, StringComparison.Ordinal);
+        Assert.Contains("window.location.replace(getAppRootUrl().href)", script, StringComparison.Ordinal);
         Assert.DoesNotContain("getStoredSnapshot().then", script, StringComparison.Ordinal);
     }
 

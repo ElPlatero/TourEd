@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const CACHE_NAME = "toured-shell-v11";
+    const CACHE_NAME = "toured-shell-v12";
 
     const CORE_ASSETS = [
         "./",
@@ -79,9 +79,17 @@
 
         const url = new URL(event.request.url);
 
-        // Security boundary: Never handle auth (including the OAuth callback), api, or health endpoints
+        // Older app versions could leave a standalone window on the callback path.
+        // Redirect only a callback without OAuth state; valid callbacks still reach the backend.
+        if (url.pathname.endsWith("/signin-google")) {
+            if (event.request.mode === "navigate" && !url.searchParams.has("state")) {
+                event.respondWith(Response.redirect(new URL("./", url).href, 302));
+            }
+            return;
+        }
+
+        // Security boundary: Never handle auth, api, or health endpoints
         if (url.pathname.includes("/auth/") ||
-            url.pathname.endsWith("/signin-google") ||
             url.pathname.includes("/api/") ||
             url.pathname.endsWith("/health") ||
             url.pathname.includes("/health/")) {

@@ -102,6 +102,9 @@
     const TAB_ID = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     let snapshotOperations = Promise.resolve();
 
+    const isGoogleCallbackPath = pathname => pathname.endsWith("/signin-google");
+    const getAppRootUrl = () => new URL("./", document.baseURI || window.location.href);
+
     const readInitialNavigation = () => {
         const params = new URLSearchParams(window.location.search);
         const registration = params.get("registration");
@@ -119,7 +122,10 @@
             canonicalParams.set("point", String(pointLink.pointId));
         }
         const canonicalSearch = canonicalParams.toString();
-        const canonicalUrl = `${window.location.pathname}${canonicalSearch ? `?${canonicalSearch}` : ""}${window.location.hash}`;
+        const canonicalPath = isGoogleCallbackPath(window.location.pathname)
+            ? getAppRootUrl().pathname
+            : window.location.pathname;
+        const canonicalUrl = `${canonicalPath}${canonicalSearch ? `?${canonicalSearch}` : ""}${window.location.hash}`;
         if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== canonicalUrl) {
             window.history.replaceState(null, "", canonicalUrl);
         }
@@ -326,7 +332,11 @@
         navigator.serviceWorker.addEventListener("controllerchange", () => {
             if (updateReloadRequested && !refreshing) {
                 refreshing = true;
-                window.location.reload();
+                if (isGoogleCallbackPath(window.location.pathname)) {
+                    window.location.replace(getAppRootUrl().href);
+                } else {
+                    window.location.reload();
+                }
             }
         });
 
