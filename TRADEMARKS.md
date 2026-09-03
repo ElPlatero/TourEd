@@ -6,4 +6,4 @@ The GNU Affero General Public License grants copyright permissions for the cover
 
 Truthful, nominative references to TourEd are permitted where allowed by applicable law. Modified versions and independently operated services must be clearly distinguished from the official TourEd service and must not misrepresent their origin or affiliation.
 
-Requests for additional trademark permission may be sent to [dsgvo@baelgun.de](mailto:dsgvo@baelgun.de). Any permission identifies the relevant rights holder in the individually executed agreement.
+Requests for additional trademark permission may be sent to [info@toured-app.de](mailto:info@toured-app.de). Any permission identifies the relevant rights holder in the individually executed agreement.

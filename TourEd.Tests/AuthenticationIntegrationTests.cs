@@ -1268,7 +1268,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.DoesNotContain("TourEd 2023", frontendScript, StringComparison.Ordinal);
         Assert.Contains("rel=\"noopener noreferrer\"", frontendScript, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("dsgvo@baelgun.de", privacyNotice, StringComparison.Ordinal);
+        Assert.Contains("info@toured-app.de", privacyNotice, StringComparison.Ordinal);
+        Assert.DoesNotContain("dsgvo@baelgun.de", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("@schuettpelz.org", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Die Funktion „Abmelden“ beendet nur die aktuelle Sitzung", privacyNotice, StringComparison.Ordinal);
         Assert.Contains("Eine Verbindung zu dieser Website wird erst hergestellt, wenn der Link bewusst geöffnet wird", privacyNotice, StringComparison.Ordinal);
@@ -1359,7 +1360,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v12", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v13", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);

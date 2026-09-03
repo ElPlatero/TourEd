@@ -67,7 +67,7 @@ The root-owned runtime environment file contains the Google credentials, CLI ide
 
 Before deploying this version for the first time, the new notification environment entries must be added to `/etc/toured-api.env` so that deployment validation succeeds.
 
-Generate a 256-bit CLI token on the server and enter the Google client secret and SMTP password interactively without placing literals in shell history or shell arguments (alternatively edit `/etc/toured-api.env` using `sudoedit` and verify `root:root` with mode `0600` afterwards). The CLI email must already exist in the TourEd database. For IONOS SMTP (`smtp.ionos.de:587` with mandatory STARTTLS), the authenticated mailbox account (e.g. `mail.admin@baelgun.de`) must belong to the sender domain (e.g. `toured@baelgun.de`):
+Generate a 256-bit CLI token on the server and enter the Google client secret and SMTP password interactively without placing literals in shell history or shell arguments (alternatively edit `/etc/toured-api.env` using `sudoedit` and verify `root:root` with mode `0600` afterwards). The CLI email must already exist in the TourEd database. For IONOS SMTP (`smtp.ionos.de:587` with mandatory STARTTLS), the authenticated mailbox account must be permitted to use the configured sender address:
 
 ```bash
 TOURED_GOOGLE_CLIENT_ID='client-id.apps.googleusercontent.com'
@@ -89,10 +89,10 @@ printf 'Authentication__Google__ClientId=%s\nAuthentication__Google__ClientSecre
     'true' \
     'smtp.ionos.de' \
     '587' \
-    'mail.admin@baelgun.de' \
+    'smtp-user@example.com' \
     "$TOURED_SMTP_PASSWORD" \
-    'toured@baelgun.de' \
-    'YOUR-ADMIN-FORWARDING-ADDRESS@baelgun.de' \
+    'sender@example.com' \
+    'admin-recipient@example.com' \
     | sudo tee /etc/toured-api.env >/dev/null
 sudo chown root:root /etc/toured-api.env
 sudo chmod 0600 /etc/toured-api.env
@@ -100,7 +100,7 @@ unset TOURED_GOOGLE_CLIENT_SECRET
 unset TOURED_SMTP_PASSWORD
 ```
 
-Replace `YOUR-ADMIN-FORWARDING-ADDRESS@baelgun.de` with the actual administrative recipient before writing the environment file. `DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` is empty when TourEd is hosted at the domain root; a non-empty path base starts with `/` and has no trailing slash. The checked-in `touringen` settings supply the official Touringen page and GPX archive URLs used by the terminal-driven import; deployments normally override only `touringen__StempelstellenUri` if necessary. No separate test email is sent; the background notification service evaluates pending requests immediately after application startup and then every five minutes.
+Replace all `example.com` addresses with the actual accounts before writing the environment file. `DataProtection__KeysPath` must exactly match `DATA_PROTECTION_KEYS_DIR` in `toured-deploy.conf`. `PathBase` is empty when TourEd is hosted at the domain root; a non-empty path base starts with `/` and has no trailing slash. The checked-in `touringen` settings supply the official Touringen page and GPX archive URLs used by the terminal-driven import; deployments normally override only `touringen__StempelstellenUri` if necessary. No separate test email is sent; the background notification service evaluates pending requests immediately after application startup and then every five minutes.
 
 The reverse proxy sends the original host and HTTPS protocol through forwarded headers. For the current domain-root deployment:
 

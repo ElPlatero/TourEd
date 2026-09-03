@@ -4,6 +4,6 @@ TourEd is publicly available under the GNU Affero General Public License version
 
 Commercial terms are granted only by an individually executed agreement. This document is informational and does not itself grant any rights beyond those provided by the AGPL.
 
-Licensing enquiries may be sent to [dsgvo@baelgun.de](mailto:dsgvo@baelgun.de). The identity of the licensor and the applicable terms are specified in the individually executed agreement.
+Licensing enquiries may be sent to [info@toured-app.de](mailto:info@toured-app.de). The identity of the licensor and the applicable terms are specified in the individually executed agreement.
 
 Third-party software and data are not relicensed by a TourEd commercial license and remain subject to their respective terms.
