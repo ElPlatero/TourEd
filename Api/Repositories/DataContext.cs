@@ -119,6 +119,22 @@ public class DataContext : DbContext
                 DataLicenseUri = new Uri("https://creativecommons.org/licenses/by/4.0/"),
                 DataSourceRevision = "f6ccf2af-e2e7-4bd1-becc-4590f8e3456a:2026-09-03T02:08:17",
                 DataSourceUpdatedAt = new DateTime(2026, 9, 3, 2, 8, 17, DateTimeKind.Utc)
+            },
+            new StampingProvider
+            {
+                Id = StampingProvider.KellerwaldsteigId,
+                Slug = StampingProvider.KellerwaldsteigSlug,
+                Name = "Kellerwaldsteig",
+                Abbreviation = "KWS",
+                IsAnonymousAccessAllowed = true,
+                WebsiteUri = new Uri("https://www.naturpark-kellerwald-edersee.de/wandern/wanderpass-kellerwaldsteig"),
+                Description = "Der 164 Kilometer lange Kellerwaldsteig führt durch den Naturpark Kellerwald-Edersee, am Edersee und am Nationalpark entlang. Zehn feste Wanderpass-Stationen verbinden Stanzmotive mit Geocaches; ein vollständiger Pass kann gegen eine Wandermünze eingetauscht werden.",
+                DataSourceUri = new Uri("https://www.naturpark-kellerwald-edersee.de/wandern/wanderpass-kellerwaldsteig"),
+                DataSourceAttribution = "Edersee Marketing GmbH; von TourEd als Punktliste aus den offiziellen Stationsdatensätzen übernommen",
+                DataLicenseName = "Creative Commons Namensnennung - Weitergabe unter gleichen Bedingungen 4.0 International (CC BY-SA 4.0)",
+                DataLicenseUri = new Uri("https://creativecommons.org/licenses/by-sa/4.0/"),
+                DataSourceRevision = "destination.one:2025-10-13T11:40:00+02:00",
+                DataSourceUpdatedAt = new DateTime(2025, 10, 13, 9, 40, 0, DateTimeKind.Utc)
             });
         });
 
@@ -771,6 +787,126 @@ public class DataContext : DbContext
                     ProviderId = StampingProvider.BliessteigId,
                     SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId,
                     ExternalId = "standard-10"
+                },
+                new
+                {
+                    Id = 5501,
+                    Name = "Asel",
+                    Longitude = 8.9601660m,
+                    Latitude = 51.2018317m,
+                    Number = (int?)null,
+                    Code = 1,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217885"
+                },
+                new
+                {
+                    Id = 5502,
+                    Name = "Reckenberg",
+                    Longitude = 8.8274825m,
+                    Latitude = 51.1553140m,
+                    Number = (int?)null,
+                    Code = 2,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217884"
+                },
+                new
+                {
+                    Id = 5503,
+                    Name = "Keseburg",
+                    Longitude = 8.8836265m,
+                    Latitude = 51.1287343m,
+                    Number = (int?)null,
+                    Code = 3,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217882"
+                },
+                new
+                {
+                    Id = 5504,
+                    Name = "Löhlbach",
+                    Longitude = 8.9657450m,
+                    Latitude = 51.0548499m,
+                    Number = (int?)null,
+                    Code = 4,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217881"
+                },
+                new
+                {
+                    Id = 5505,
+                    Name = "Jeust",
+                    Longitude = 9.0304170m,
+                    Latitude = 50.9908330m,
+                    Number = (int?)null,
+                    Code = 5,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217879"
+                },
+                new
+                {
+                    Id = 5506,
+                    Name = "Waldeck",
+                    Longitude = 9.0621328m,
+                    Latitude = 51.2061205m,
+                    Number = (int?)null,
+                    Code = 6,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217860"
+                },
+                new
+                {
+                    Id = 5507,
+                    Name = "Kesselbach",
+                    Longitude = 9.0554330m,
+                    Latitude = 51.1247179m,
+                    Number = (int?)null,
+                    Code = 7,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217873"
+                },
+                new
+                {
+                    Id = 5508,
+                    Name = "Armsfeld",
+                    Longitude = 9.0656304m,
+                    Latitude = 51.0703515m,
+                    Number = (int?)null,
+                    Code = 8,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217876"
+                },
+                new
+                {
+                    Id = 5509,
+                    Name = "Bad Zwesten",
+                    Longitude = 9.1547066m,
+                    Latitude = 51.0658917m,
+                    Number = (int?)null,
+                    Code = 9,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217877"
+                },
+                new
+                {
+                    Id = 5510,
+                    Name = "Wüstegarten",
+                    Longitude = 9.0840197m,
+                    Latitude = 51.0156851m,
+                    Number = (int?)null,
+                    Code = 10,
+                    ProviderId = StampingProvider.KellerwaldsteigId,
+                    SeriesId = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId,
+                    ExternalId = "p_100217878"
                 });
         });
 
@@ -793,7 +929,8 @@ public class DataContext : DbContext
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.SchluchtensteigStandardId, ProviderId = StampingProvider.SchluchtensteigId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.SchluchtensteigStandardSlug, Name = "Standard", ExpectedPointCount = 6 },
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.HeidschnuckenwegStandardId, ProviderId = StampingProvider.HeidschnuckenwegId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.HeidschnuckenwegStandardSlug, Name = "Standard", ExpectedPointCount = 13 },
                 new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerKlosterwanderwegStandardId, ProviderId = StampingProvider.HarzerKlosterwanderwegId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.HarzerKlosterwanderwegStandardSlug, Name = "Standard", ExpectedPointCount = 16 },
-                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId, ProviderId = StampingProvider.BliessteigId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardSlug, Name = "Standard", ExpectedPointCount = 10 });
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardId, ProviderId = StampingProvider.BliessteigId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.BliessteigStandardSlug, Name = "Standard", ExpectedPointCount = 10 },
+                new StampingSeries { Id = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardId, ProviderId = StampingProvider.KellerwaldsteigId, Slug = global::TourEd.Lib.Abstractions.Models.StampingSeries.KellerwaldsteigStandardSlug, Name = "Standard", ExpectedPointCount = 10 });
         });
 
         modelBuilder.Entity<SortedStampingPoint>(dto =>

@@ -483,13 +483,14 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var authenticatedResponse = await client.GetFromJsonAsync<GetStampingProvidersResponse>("/api/providers");
 
         Assert.NotNull(authenticatedResponse);
-        Assert.Equal(9, authenticatedResponse.OverallCount);
+        Assert.Equal(10, authenticatedResponse.OverallCount);
         var providers = authenticatedResponse.StampingProviders.ToArray();
         Assert.Equal([
             "Bliessteig",
             "Harzer Klosterwanderweg",
             "Harzer Wandernadel",
             "Heidschnuckenweg",
+            "Kellerwaldsteig",
             "Malerweg",
             "Other provider",
             "Schluchtensteig",
@@ -508,6 +509,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Equal("BS", bliessteig.Abbreviation);
         Assert.Equal("Creative Commons Namensnennung 4.0 International (CC BY 4.0)", bliessteig.DataLicenseName);
         Assert.False(bliessteig.HasPublicDataDownload);
+        var kellerwaldsteig = providers.Single(p => p.Slug == StampingProvider.KellerwaldsteigSlug);
+        Assert.Equal("KWS", kellerwaldsteig.Abbreviation);
+        Assert.Contains("CC BY-SA 4.0", kellerwaldsteig.DataLicenseName, StringComparison.Ordinal);
+        Assert.False(kellerwaldsteig.HasPublicDataDownload);
         var unsupported = providers.Single(p => p.Slug == "unsupported-link");
         Assert.Null(unsupported.WebsiteUrl);
 
