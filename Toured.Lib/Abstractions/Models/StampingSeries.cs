@@ -11,6 +11,7 @@ public class StampingSeries
     public const int SchluchtensteigStandardId = 7;
     public const int HeidschnuckenwegStandardId = 8;
     public const int HarzerKlosterwanderwegStandardId = 9;
+    public const int BliessteigStandardId = 10;
 
     public const string TouringenStandardSlug = "standard";
     public const string TouringenNaturalTreasuresSlug = "naturschaetze";
@@ -21,6 +22,7 @@ public class StampingSeries
     public const string SchluchtensteigStandardSlug = "standard";
     public const string HeidschnuckenwegStandardSlug = "standard";
     public const string HarzerKlosterwanderwegStandardSlug = "standard";
+    public const string BliessteigStandardSlug = "standard";
 
     public int Id { get; set; }
     public int ProviderId { get; set; }

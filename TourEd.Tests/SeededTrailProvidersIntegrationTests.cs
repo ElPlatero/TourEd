@@ -46,6 +46,7 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
     [InlineData("schluchtensteig")]
     [InlineData("heidschnuckenweg")]
     [InlineData("harzer-klosterwanderweg")]
+    [InlineData("bliessteig")]
     public async Task AnonymousPointsAndCatalogRequestsAreRejectedWithUnauthorized(string slug)
     {
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -63,10 +64,16 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("schluchtensteig", "Schluchtensteig", "SST", 6)]
-    [InlineData("heidschnuckenweg", "Heidschnuckenweg", "HNW", 13)]
-    [InlineData("harzer-klosterwanderweg", "Harzer Klosterwanderweg", "HKW", 16)]
-    public async Task AuthenticatedUserCanQuerySeededTrailProviderPoints(string slug, string expectedName, string expectedAbbr, int expectedCount)
+    [InlineData("schluchtensteig", "Schluchtensteig", "SST", 6, false)]
+    [InlineData("heidschnuckenweg", "Heidschnuckenweg", "HNW", 13, false)]
+    [InlineData("harzer-klosterwanderweg", "Harzer Klosterwanderweg", "HKW", 16, false)]
+    [InlineData("bliessteig", "Bliessteig", "BS", 10, true)]
+    public async Task AuthenticatedUserCanQuerySeededTrailProviderPoints(
+        string slug,
+        string expectedName,
+        string expectedAbbr,
+        int expectedCount,
+        bool hasPublicDataDownload)
     {
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
@@ -109,13 +116,14 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
         Assert.Equal("standard", firstPoint.Series.Slug);
 
         var geoJsonResponse = await client.GetAsync($"/api/providers/{slug}/points.geojson");
-        Assert.Equal(HttpStatusCode.NotFound, geoJsonResponse.StatusCode);
+        Assert.Equal(hasPublicDataDownload ? HttpStatusCode.OK : HttpStatusCode.NotFound, geoJsonResponse.StatusCode);
     }
 
     [Theory]
     [InlineData("schluchtensteig", 6)]
     [InlineData("heidschnuckenweg", 13)]
     [InlineData("harzer-klosterwanderweg", 16)]
+    [InlineData("bliessteig", 10)]
     public async Task AuthenticatedUserCanVisitAndManageSeededPoints(string slug, int totalPoints)
     {
         await using (var scope = _factory.Services.CreateAsyncScope())
@@ -175,6 +183,45 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
         Assert.Empty(visitedAfterDeleteData.StampingPoints);
     }
 
+    [Fact]
+    public async Task BliessteigSeedUsesOfficialStageEndpointsAndCcByProvenance()
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+
+        var provider = await context.StampingProviders.SingleAsync(
+            item => item.Id == StampingProvider.BliessteigId);
+        Assert.Equal("bliessteig", provider.Slug);
+        Assert.Equal("Saarpfalz-Touristik, Julia Serov", provider.DataSourceAttribution);
+        Assert.Equal("Creative Commons Namensnennung 4.0 International (CC BY 4.0)", provider.DataLicenseName);
+        Assert.Equal("https://creativecommons.org/licenses/by/4.0/", provider.DataLicenseUri?.AbsoluteUri);
+        Assert.NotNull(provider.DataImportedAt);
+
+        var points = await context.StampingPoints
+            .Where(point => point.ProviderId == StampingProvider.BliessteigId)
+            .OrderBy(point => point.Number)
+            .ToArrayAsync();
+
+        Assert.Equal(
+            [
+                "Sarreguemines Bahnhof",
+                "Gräfinthal",
+                "Bebelsheim",
+                "Blieskastel",
+                "Kirkel",
+                "Schwarzenacker",
+                "Homburg",
+                "Jägersburg",
+                "Höchen",
+                "Kulturbahnhof Bexbach"
+            ],
+            points.Select(point => point.Name));
+        Assert.Equal(7.072924m, points[0].Longitude);
+        Assert.Equal(49.110405m, points[0].Latitude);
+        Assert.Equal(7.254470m, points[^1].Longitude);
+        Assert.Equal(49.346269m, points[^1].Latitude);
+    }
+
     private static async Task AddUserWithAccessAsync(DataContext context)
     {
         var user = new User { Email = FakeGoogleHandler.Email };
@@ -184,7 +231,8 @@ public sealed class SeededTrailProvidersIntegrationTests : IAsyncLifetime
         {
             StampingProvider.SchluchtensteigId,
             StampingProvider.HeidschnuckenwegId,
-            StampingProvider.HarzerKlosterwanderwegId
+            StampingProvider.HarzerKlosterwanderwegId,
+            StampingProvider.BliessteigId
         }.Select(providerId => new UserStampingProvider
         {
             UserId = user.Id,
