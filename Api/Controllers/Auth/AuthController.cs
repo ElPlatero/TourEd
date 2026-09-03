@@ -10,9 +10,14 @@ namespace Api.Controllers.Auth;
 public sealed class AuthController : ControllerBase
 {
     [HttpGet("login")]
-    public IActionResult Login()
+    public IActionResult Login([FromQuery] string? returnUrl = null)
         => Challenge(
-            new AuthenticationProperties { RedirectUri = Url.Content("~/") },
+            new AuthenticationProperties
+            {
+                RedirectUri = !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
+                    ? returnUrl
+                    : Url.Content("~/")
+            },
             TouredAuthenticationSchemes.GoogleChallenge);
 
     [HttpGet("session")]

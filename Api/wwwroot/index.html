@@ -213,6 +213,15 @@
         <p id="pointStatus" class="point-status"></p>
         <div id="pointTours"></div>
         <time id="pointVisited" class="point-visited" hidden></time>
+        <div id="pointShareControls" class="point-share-controls" hidden>
+            <button id="copyPointLinkButton" class="action point-share-button" type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1" />
+                </svg>
+                <span>Link kopieren</span>
+            </button>
+            <p id="pointShareStatus" class="point-share-status" role="status" aria-live="polite"></p>
+        </div>
         <div id="visitControls" class="visit-controls" hidden>
             <p id="offlineNotice" class="offline-notice" hidden>TourEd ist offline.</p>
             <a id="visitLoginLink" class="action" href="auth/login" hidden>Anmelden, um zu stempeln</a>

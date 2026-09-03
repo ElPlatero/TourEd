@@ -138,6 +138,23 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.DoesNotContain("subject", sessionJson, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("/?provider=touringen&point=123", "/?provider=touringen&point=123")]
+    [InlineData("https://attacker.example/", "/")]
+    [InlineData("//attacker.example/", "/")]
+    public async Task GoogleLoginPreservesOnlyLocalReturnUrls(string returnUrl, string expectedRedirect)
+    {
+        using var client = CreateClient(_factory);
+        var loginUrl = QueryHelpers.AddQueryString("/auth/login", "returnUrl", returnUrl);
+
+        var challengeResponse = await client.GetAsync(loginUrl);
+        Assert.Equal(HttpStatusCode.Redirect, challengeResponse.StatusCode);
+
+        var callbackResponse = await client.GetAsync(challengeResponse.Headers.Location);
+        Assert.Equal(HttpStatusCode.Redirect, callbackResponse.StatusCode);
+        Assert.Equal(expectedRedirect, callbackResponse.Headers.Location?.OriginalString);
+    }
+
     [Fact]
     public async Task UnknownGoogleUserCreatesRegistrationRequestAndRedirectsToPendingRegistration()
     {
@@ -1091,6 +1108,29 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BundledFrontendOffersStableShareablePointLinks()
+    {
+        using var client = CreateClient(_factory);
+
+        var html = await client.GetStringAsync("/");
+        var css = await client.GetStringAsync("/css/toured.css");
+        var script = await client.GetStringAsync("/js/toured.js");
+
+        Assert.Contains("id=\"copyPointLinkButton\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"pointShareStatus\"", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Link kopieren", html, StringComparison.Ordinal);
+        Assert.Contains(".point-share-controls", css, StringComparison.Ordinal);
+        Assert.Contains("params.get(\"provider\")", script, StringComparison.Ordinal);
+        Assert.Contains("params.get(\"point\")", script, StringComparison.Ordinal);
+        Assert.Contains("Number.isSafeInteger(pointId)", script, StringComparison.Ordinal);
+        Assert.Contains("candidate.id === pointLink.pointId", script, StringComparison.Ordinal);
+        Assert.Contains("candidate.provider?.slug === pointLink.providerSlug", script, StringComparison.Ordinal);
+        Assert.Contains("navigator.clipboard?.writeText", script, StringComparison.Ordinal);
+        Assert.Contains("auth/login?returnUrl=", script, StringComparison.Ordinal);
+        Assert.Contains("openPendingPointLink()", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task BundledFrontendClustersVisiblePointsClientSide()
     {
         using var client = CreateClient(_factory);
@@ -1319,7 +1359,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v10", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v11", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
