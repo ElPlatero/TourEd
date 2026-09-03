@@ -837,6 +837,39 @@ input:focus-visible,
     margin: 0;
 }
 
+.point-share-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.point-share-button {
+    gap: 0.45rem;
+}
+
+.point-share-button svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.point-share-status {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.825rem;
+}
+
+.point-share-status[data-state="error"] {
+    color: #8a171a;
+    font-weight: 650;
+}
+
 .visit-controls {
     display: grid;
     gap: 0.65rem;

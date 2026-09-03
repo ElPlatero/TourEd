@@ -17,6 +17,7 @@
         closeProgressPanelButton: document.getElementById("closeProgressPanelButton"),
         closeProviderInfoButton: document.getElementById("closeProviderInfoButton"),
         confirmDeleteVisitButton: document.getElementById("confirmDeleteVisitButton"),
+        copyPointLinkButton: document.getElementById("copyPointLinkButton"),
         deleteVisitButton: document.getElementById("deleteVisitButton"),
         deleteVisitDialog: document.getElementById("deleteVisitDialog"),
         deleteVisitMessage: document.getElementById("deleteVisitMessage"),
@@ -36,6 +37,8 @@
         pointName: document.getElementById("pointName"),
         pointNumber: document.getElementById("pointNumber"),
         pointProvider: document.getElementById("pointProvider"),
+        pointShareControls: document.getElementById("pointShareControls"),
+        pointShareStatus: document.getElementById("pointShareStatus"),
         pointStatus: document.getElementById("pointStatus"),
         pointTours: document.getElementById("pointTours"),
         pointVisited: document.getElementById("pointVisited"),
@@ -98,6 +101,33 @@
     const RETRY_MAX_MILLISECONDS = 60000;
     const TAB_ID = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     let snapshotOperations = Promise.resolve();
+
+    const readInitialNavigation = () => {
+        const params = new URLSearchParams(window.location.search);
+        const registration = params.get("registration");
+        const providerSlug = params.get("provider")?.trim().toLocaleLowerCase("de-DE") ?? "";
+        const pointId = Number(params.get("point"));
+        const pointLink = /^[a-z0-9-]+$/.test(providerSlug)
+            && Number.isSafeInteger(pointId)
+            && pointId > 0
+            ? { providerSlug, pointId }
+            : null;
+
+        const canonicalParams = new URLSearchParams();
+        if (pointLink) {
+            canonicalParams.set("provider", pointLink.providerSlug);
+            canonicalParams.set("point", String(pointLink.pointId));
+        }
+        const canonicalSearch = canonicalParams.toString();
+        const canonicalUrl = `${window.location.pathname}${canonicalSearch ? `?${canonicalSearch}` : ""}${window.location.hash}`;
+        if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== canonicalUrl) {
+            window.history.replaceState(null, "", canonicalUrl);
+        }
+
+        return { registration, pointLink };
+    };
+
+    const initialNavigation = readInitialNavigation();
 
     const queueSnapshotOperation = operation => {
         const result = snapshotOperations.then(operation, operation);
@@ -473,6 +503,8 @@
         infoPixel: null,
         loadGeneration: 0,
         pendingActions: new Map(),
+        pendingPointLink: initialNavigation.pointLink,
+        pendingRegistration: initialNavigation.registration,
         providerInfoTrigger: null,
         hasCompleteProviderCatalog: false,
         markerLayer,
@@ -491,6 +523,14 @@
         syncPromise: null,
         visitFilter: VisitFilter.all
     };
+
+    if (initialNavigation.pointLink) {
+        const returnUrl = `${window.location.pathname}${window.location.search}`;
+        const loginHref = `auth/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+        elements.loginLink.href = loginHref;
+        elements.visitLoginLink.href = loginHref;
+        elements.authBarrierLoginButton.href = loginHref;
+    }
 
     const broadcastSyncEvent = type => syncChannel?.postMessage({ type, sender: TAB_ID });
 
@@ -1265,17 +1305,10 @@
         .getFeatures()
         .find(feature => pointMatches(feature.stampingPoint, result.point));
 
-    const openSearchResult = result => {
-        const feature = findRenderedFeature(result);
-        if (!feature) {
-            elements.searchResultsStatus.textContent = "Der Treffer ist momentan nicht auf der Karte verfügbar.";
-            return;
-        }
-
+    const focusPointFeature = feature => {
         const coordinate = feature.getGeometry().getCoordinates();
         const view = app.map.getView();
         const zoom = Math.max(view.getZoom() ?? 0, 15);
-        closeSearchMenu();
         const showSelectedPoint = () => {
             const pixel = app.map.getPixelFromCoordinate(coordinate);
             showInfo(feature, pixel, true);
@@ -1291,6 +1324,57 @@
                 }
             });
         }
+    };
+
+    const openSearchResult = result => {
+        const feature = findRenderedFeature(result);
+        if (!feature) {
+            elements.searchResultsStatus.textContent = "Der Treffer ist momentan nicht auf der Karte verfügbar.";
+            return;
+        }
+
+        closeSearchMenu();
+        focusPointFeature(feature);
+    };
+
+    const openPendingPointLink = () => {
+        const pointLink = app.pendingPointLink;
+        if (!pointLink || !app.authenticated) {
+            return false;
+        }
+        app.pendingPointLink = null;
+
+        let result = null;
+        for (const visitState of Object.values(VisitState)) {
+            const point = app.pointCache[visitState].find(candidate =>
+                candidate.id === pointLink.pointId
+                && candidate.provider?.slug === pointLink.providerSlug);
+            if (point) {
+                result = { point, visitState };
+                break;
+            }
+        }
+
+        if (!result) {
+            setMapStatus("Die verlinkte Stempelstelle ist nicht verfügbar oder nicht freigeschaltet.", "error");
+            return true;
+        }
+
+        if (!app.selectedProviderSlugs.has(pointLink.providerSlug)) {
+            app.selectedProviderSlugs.add(pointLink.providerSlug);
+            renderProviderOptions();
+            renderSelectedPoints();
+            renderSearchResults();
+        }
+
+        const feature = findRenderedFeature(result);
+        if (!feature) {
+            setMapStatus("Die verlinkte Stempelstelle ist mit dem aktuellen Filter nicht sichtbar.", "error");
+            return true;
+        }
+
+        focusPointFeature(feature);
+        return true;
     };
 
     const renderSearchResults = () => {
@@ -1465,6 +1549,9 @@
             return;
         }
         elements.infoCard.hidden = true;
+        elements.pointShareControls.hidden = true;
+        elements.pointShareStatus.textContent = "";
+        delete elements.pointShareStatus.dataset.state;
         elements.visitForm.hidden = true;
         elements.visitActionStatus.textContent = "";
         app.activeFeature = null;
@@ -1497,6 +1584,55 @@
     };
 
     const pointMatches = (left, right) => left.id === right.id;
+
+    const createPointLink = stampingPoint => {
+        const providerSlug = stampingPoint.provider?.slug;
+        if (!providerSlug || !Number.isSafeInteger(stampingPoint.id) || stampingPoint.id <= 0) {
+            return null;
+        }
+        const url = new URL("./", document.baseURI);
+        url.searchParams.set("provider", providerSlug);
+        url.searchParams.set("point", String(stampingPoint.id));
+        return url.href;
+    };
+
+    const copyText = async text => {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+
+        const field = document.createElement("textarea");
+        field.value = text;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        const copied = document.execCommand("copy");
+        field.remove();
+        if (!copied) {
+            throw new Error("Copy command failed");
+        }
+    };
+
+    const copyActivePointLink = async () => {
+        const link = app.activeFeature && createPointLink(app.activeFeature.stampingPoint);
+        if (!link) {
+            return;
+        }
+        elements.copyPointLinkButton.disabled = true;
+        try {
+            await copyText(link);
+            elements.pointShareStatus.textContent = "Link kopiert.";
+            elements.pointShareStatus.dataset.state = "ready";
+        } catch {
+            elements.pointShareStatus.textContent = "Der Link konnte nicht kopiert werden.";
+            elements.pointShareStatus.dataset.state = "error";
+        } finally {
+            elements.copyPointLinkButton.disabled = false;
+        }
+    };
 
     const visitStateFromPoint = point => ({
         isVisited: point.isVisited === true,
@@ -2117,6 +2253,10 @@
         elements.pointVisited.hidden = !formattedVisit;
         elements.pointVisited.textContent = formattedVisit?.text ?? "";
         elements.pointVisited.dateTime = formattedVisit?.dateTime ?? "";
+        elements.pointShareControls.hidden = !locked;
+        elements.pointShareStatus.textContent = "";
+        delete elements.pointShareStatus.dataset.state;
+        elements.copyPointLinkButton.disabled = !createPointLink(stampingPoint);
 
         elements.infoCard.hidden = false;
         app.activeFeature = feature;
@@ -2200,6 +2340,7 @@
         hideInfo(true);
         elements.map.focus({ preventScroll: true });
     });
+    elements.copyPointLinkButton.addEventListener("click", copyActivePointLink);
 
     elements.visitNowButton.addEventListener("click", () => {
         const now = new Date();
@@ -2406,11 +2547,8 @@
         const activePointId = app.activeFeature?.stampingPoint.id ?? null;
         const activePixel = app.infoPixel;
         const activeLocked = app.infoLocked;
-        const urlParams = new URLSearchParams(window.location.search);
-        const registrationParam = urlParams.get("registration");
-        if (window.location.search) {
-            window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
-        }
+        const registrationParam = app.pendingRegistration;
+        app.pendingRegistration = null;
 
         hideInfo(true);
         clearMarkers();
@@ -2485,13 +2623,15 @@
                 }
                 hideAuthBarrier();
                 const pointCount = loadSnapshotData(snapshot);
-                restoreLockedInfo(activePointId, activePixel, activeLocked);
                 setMapStatus(`${formatPointCount(pointCount)} offline geladen.`, "ready");
                 window.setTimeout(() => {
                     if (generation === app.loadGeneration && elements.mapStatus.dataset.state === "ready") {
                         setMapStatus("");
                     }
                 }, 1800);
+                if (!openPendingPointLink()) {
+                    restoreLockedInfo(activePointId, activePixel, activeLocked);
+                }
                 return;
             }
 
@@ -2539,8 +2679,10 @@
             if (isSnapshotValid(offlineSnapshot)) {
                 hideAuthBarrier();
                 const pointCount = loadSnapshotData(offlineSnapshot);
-                restoreLockedInfo(activePointId, activePixel, activeLocked);
                 setMapStatus(`${formatPointCount(pointCount)} offline geladen.`, "ready");
+                if (!openPendingPointLink()) {
+                    restoreLockedInfo(activePointId, activePixel, activeLocked);
+                }
                 return;
             }
         }
@@ -2579,7 +2721,6 @@
             cachePoints(visited, VisitState.visited);
             const pointCount = renderSelectedPoints();
             renderSearchResults();
-            restoreLockedInfo(activePointId, activePixel, activeLocked);
 
             if (session.expiresAt) {
                 const stored = await updateStoredSnapshot(snapshot => ({
@@ -2608,6 +2749,9 @@
                         setMapStatus("");
                     }
                 }, 1800);
+            }
+            if (!openPendingPointLink()) {
+                restoreLockedInfo(activePointId, activePixel, activeLocked);
             }
         } catch (error) {
             if (generation === app.loadGeneration) {
