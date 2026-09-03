@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const CACHE_NAME = "toured-shell-v12";
+    const CACHE_NAME = "toured-shell-v13";
 
     const CORE_ASSETS = [
         "./",
