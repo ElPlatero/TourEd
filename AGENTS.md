@@ -145,6 +145,8 @@ Users can optionally store a unique Google subject identifier. `GoogleLoginServi
 
 The main runtime composition happens in `Api/Program.cs`.
 
+EF Core uses its default parameter redaction; sensitive data logging must remain disabled so personal values are not copied into database command logs, including failed commands.
+
 `Api/Program.cs` enables default and static files, so `Api/wwwroot/index.html` and its assets are served by the same application as the API.
 
 Authentication is scheme-separated:
