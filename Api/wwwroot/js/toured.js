@@ -100,7 +100,8 @@
     const SNAPSHOT_SCHEMA_VERSION = 3;
     const SYNC_LEASE_MILLISECONDS = 30000;
     const RETRY_MAX_MILLISECONDS = 60000;
-    const TAB_ID = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+    const createOperationId = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+    const TAB_ID = createOperationId();
     let snapshotOperations = Promise.resolve();
 
     const isGoogleCallbackPath = pathname => pathname.endsWith("/signin-google");
@@ -268,6 +269,7 @@
 
     const isPendingActionValid = action => action &&
         typeof action === "object" &&
+        (action.actionId === undefined || (typeof action.actionId === "string" && action.actionId.length > 0)) &&
         Number.isInteger(action.pointId) && action.pointId > 0 &&
         typeof action.providerSlug === "string" && action.providerSlug.length > 0 &&
         (action.countsTowardProgress === undefined || typeof action.countsTowardProgress === "boolean") &&
@@ -1797,10 +1799,20 @@
         if (broadcast) broadcastSyncEvent("personal-data-cleared");
     };
 
-    const acquireSyncLease = async () => {
+    const isSyncSessionCurrent = sync => app.authenticated &&
+        app.loadGeneration === sync.generation &&
+        app.sessionEmail?.toLocaleLowerCase() === sync.email;
+
+    const hasSyncLease = (snapshot, sync) => isSyncSessionCurrent(sync) &&
+        isSnapshotValid(snapshot) && snapshot.email.toLocaleLowerCase() === sync.email &&
+        snapshot.syncLease?.owner === TAB_ID && snapshot.syncLease.token === sync.token &&
+        Date.parse(snapshot.syncLease.expiresAt) > Date.now();
+
+    const acquireSyncLease = async sync => {
         let acquired = false;
         const result = await updateStoredSnapshot(snapshot => {
-            if (!isSnapshotValid(snapshot)) return snapshot;
+            if (!isSyncSessionCurrent(sync) || !isSnapshotValid(snapshot) ||
+                snapshot.email.toLocaleLowerCase() !== sync.email) return snapshot;
             const lease = snapshot.syncLease;
             if (lease && lease.owner !== TAB_ID && Date.parse(lease.expiresAt) > Date.now()) {
                 return snapshot;
@@ -1808,8 +1820,13 @@
             acquired = true;
             return {
                 ...snapshot,
+                // Older schema-2/3 queues lack action IDs. Assign them once, atomically,
+                // before any sender reads the queue; timestamps are not identities.
+                pendingActions: snapshot.pendingActions.map(action => action.actionId
+                    ? action : { ...action, actionId: createOperationId() }),
                 syncLease: {
                     owner: TAB_ID,
+                    token: sync.token,
                     expiresAt: new Date(Date.now() + SYNC_LEASE_MILLISECONDS).toISOString()
                 }
             };
@@ -1817,19 +1834,25 @@
         return result.ok && acquired;
     };
 
-    const renewSyncLease = () => updateStoredSnapshot(snapshot => {
-        if (!snapshot || snapshot.syncLease?.owner !== TAB_ID) return snapshot;
-        return {
-            ...snapshot,
-            syncLease: {
-                owner: TAB_ID,
-                expiresAt: new Date(Date.now() + SYNC_LEASE_MILLISECONDS).toISOString()
-            }
-        };
-    });
+    const renewSyncLease = async sync => {
+        let renewed = false;
+        const result = await updateStoredSnapshot(snapshot => {
+            if (!hasSyncLease(snapshot, sync)) return snapshot;
+            renewed = true;
+            return {
+                ...snapshot,
+                syncLease: {
+                    ...snapshot.syncLease,
+                    expiresAt: new Date(Date.now() + SYNC_LEASE_MILLISECONDS).toISOString()
+                }
+            };
+        });
+        return result.ok && renewed;
+    };
 
-    const releaseSyncLease = () => updateStoredSnapshot(snapshot => {
-        if (!snapshot || snapshot.syncLease?.owner !== TAB_ID) return snapshot;
+    const releaseSyncLease = sync => updateStoredSnapshot(snapshot => {
+        if (!snapshot || snapshot.email?.toLocaleLowerCase() !== sync.email ||
+            snapshot.syncLease?.owner !== TAB_ID || snapshot.syncLease.token !== sync.token) return snapshot;
         const { syncLease, ...withoutLease } = snapshot;
         return withoutLease;
     });
@@ -1874,14 +1897,19 @@
         };
     };
 
-    const finishPendingAction = async (action, state, canonicalPoint = null) => {
+    const finishPendingAction = async (sync, action, state, canonicalPoint = null) => {
+        let finished = false;
         const result = await updateStoredSnapshot(snapshot => {
-            if (!isSnapshotValid(snapshot)) return snapshot;
-            const pendingActions = snapshot.pendingActions.filter(pending =>
-                pending.pointId !== action.pointId || pending.createdAt !== action.createdAt);
+            if (!hasSyncLease(snapshot, sync) || !action.actionId) return snapshot;
+            const pendingAction = snapshot.pendingActions.find(pending =>
+                pending.actionId === action.actionId && pending.pointId === action.pointId &&
+                pending.providerSlug === action.providerSlug);
+            if (!pendingAction) return snapshot;
+            finished = true;
+            const pendingActions = snapshot.pendingActions.filter(pending => pending !== pendingAction);
             const updatedSnapshot = updateProviderProgressInSnapshot(
                 snapshot,
-                action,
+                pendingAction,
                 state,
                 canonicalPoint);
             return {
@@ -1889,7 +1917,7 @@
                 pendingActions
             };
         });
-        if (!result.ok || !result.snapshot) return false;
+        if (!result.ok || !finished || !isSyncSessionCurrent(sync)) return false;
         setPendingActions(result.snapshot.pendingActions);
         await refreshFromStoredSnapshot();
         renderProgressOverview();
@@ -1909,8 +1937,10 @@
         clearRetryTimer();
         if (app.syncPromise) return app.syncPromise;
 
+        const generation = app.loadGeneration;
         app.syncPromise = (async () => {
             let snapshot = await getStoredSnapshot();
+            if (generation !== app.loadGeneration) return;
             if (!isSnapshotValid(snapshot)) {
                 await clearPersonalData();
                 return;
@@ -1932,6 +1962,7 @@
                 }
             }
 
+            if (generation !== app.loadGeneration) return;
             if (!session?.authenticated) {
                 await clearPersonalData();
                 setSession({ authenticated: false });
@@ -1947,12 +1978,14 @@
 
             setSession(session);
             setOfflineMode(false);
-            await updateStoredSnapshot(current => current ? {
-                ...current,
-                expiresAt: session.expiresAt ?? current.expiresAt
-            } : current);
+            const sync = { token: createOperationId(), email: session.email.toLocaleLowerCase(), generation };
+            await updateStoredSnapshot(current => isSyncSessionCurrent(sync) &&
+                current?.email?.toLocaleLowerCase() === sync.email ? {
+                    ...current,
+                    expiresAt: session.expiresAt ?? current.expiresAt
+                } : current);
 
-            if (!await acquireSyncLease()) {
+            if (!await acquireSyncLease(sync)) {
                 scheduleSynchronizationRetry();
                 return;
             }
@@ -1962,30 +1995,40 @@
             try {
                 while (true) {
                     snapshot = await getStoredSnapshot();
+                    if (!isSyncSessionCurrent(sync)) break;
                     if (!isSnapshotValid(snapshot) || snapshot.pendingActions.length === 0) {
                         app.retryAttempt = 0;
                         if (synchronizedAny) app.backOnlineNoticePending = true;
                         break;
                     }
                     const action = snapshot.pendingActions[0];
-                    await renewSyncLease();
+                    if (!await renewSyncLease(sync)) {
+                        scheduleSynchronizationRetry();
+                        break;
+                    }
 
                     let result;
                     try {
                         result = await sendVisitStateRequest(action);
                     } catch {
-                        setOfflineMode(true);
+                        if (await renewSyncLease(sync)) setOfflineMode(true);
                         scheduleSynchronizationRetry();
                         break;
                     }
 
+                    // A slow response may outlive this lease or initialization. Never
+                    // let it apply a result (including an error) to a newer owner/account.
+                    if (!await renewSyncLease(sync)) {
+                        scheduleSynchronizationRetry();
+                        break;
+                    }
                     const { response, body } = result;
                     if (response.ok || response.status === 409) {
                         const canonicalPoint = body?.stampingPoint ?? null;
                         const canonicalState = body
                             ? normalizedVisitState(body)
                             : (response.ok ? action.desired : action.expected);
-                        if (!await finishPendingAction(action, canonicalState, canonicalPoint)) {
+                        if (!await finishPendingAction(sync, action, canonicalState, canonicalPoint)) {
                             scheduleSynchronizationRetry();
                             break;
                         }
@@ -1995,7 +2038,10 @@
                     }
 
                     if (response.status === 400) {
-                        await finishPendingAction(action, action.expected);
+                        if (!await finishPendingAction(sync, action, action.expected)) {
+                            scheduleSynchronizationRetry();
+                            break;
+                        }
                         setMapStatus("Eine vorgemerkte Stempeländerung war ungültig und wurde verworfen.", "error");
                         continue;
                     }
@@ -2010,13 +2056,19 @@
                     }
 
                     if (response.status === 403) {
-                        await finishPendingAction(action, action.expected);
+                        if (!await finishPendingAction(sync, action, action.expected)) {
+                            scheduleSynchronizationRetry();
+                            break;
+                        }
                         shouldReload = true;
                         continue;
                     }
 
                     if (response.status === 404) {
-                        await finishPendingAction(action, action.expected, null);
+                        if (!await finishPendingAction(sync, action, action.expected, null)) {
+                            scheduleSynchronizationRetry();
+                            break;
+                        }
                         shouldReload = true;
                         continue;
                     }
@@ -2030,7 +2082,7 @@
                     break;
                 }
             } finally {
-                await releaseSyncLease();
+                await releaseSyncLease(sync);
             }
 
             if (shouldReload && app.authenticated && !app.isOffline) {
@@ -2046,6 +2098,7 @@
         const point = feature?.stampingPoint;
         if (!point || hasPendingAction(point.id)) return false;
         const action = {
+            actionId: createOperationId(),
             pointId: point.id,
             providerSlug: point.provider.slug,
             countsTowardProgress: point.countsTowardProgress === true,
@@ -2068,7 +2121,7 @@
         });
 
         if (!result.ok || !result.snapshot ||
-            !result.snapshot.pendingActions.some(pending => pending.createdAt === action.createdAt)) {
+            !result.snapshot.pendingActions.some(pending => pending.actionId === action.actionId)) {
             if (isSnapshotValid(result.snapshot)) {
                 setPendingActions(result.snapshot.pendingActions);
                 await refreshFromStoredSnapshot();
