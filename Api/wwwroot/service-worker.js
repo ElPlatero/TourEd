@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const CACHE_NAME = "toured-shell-v15";
+    const CACHE_NAME = "toured-shell-v16";
 
     const CORE_ASSETS = [
         "./",
@@ -35,7 +35,8 @@
                     await Promise.all(
                         [...CACHEABLE_URLS].map(async url => {
                             const request = new Request(url, {
-                                mode: url.startsWith(self.location.origin) ? "same-origin" : "cors"
+                                mode: url.startsWith(self.location.origin) ? "same-origin" : "cors",
+                                cache: "reload"
                             });
                             const response = await fetch(request);
                             if (!response.ok && response.type !== "opaque") {
@@ -132,42 +133,23 @@
             return;
         }
 
-        // Navigation requests: Network first, fallback to cached App Shell
+        // The active worker owns the complete release. Query parameters select
+        // application state, never a different HTML version. Unknown routes still
+        // reach the server instead of being replaced by the application shell.
         if (event.request.mode === "navigate") {
-            event.respondWith(
-                (async () => {
-                    const cache = await caches.open(CACHE_NAME);
-                    try {
-                        const networkResponse = await fetch(event.request);
-                        if (networkResponse.ok) {
-                            return networkResponse;
-                        }
-                    } catch {
-                        // Network error: use offline fallback
-                    }
-
-                    const cachedNav = await cache.match(event.request);
-                    if (cachedNav) {
-                        return cachedNav;
-                    }
-
-                    if (url.pathname.includes("/datenschutz")) {
-                        const privacyFallback = await cache.match(new URL("datenschutz/index.html", self.location).href)
-                            || await cache.match(new URL("datenschutz/", self.location).href);
-                        if (privacyFallback) {
-                            return privacyFallback;
-                        }
-                    }
-
-                    const shellFallback = await cache.match(new URL("./", self.location).href)
-                        || await cache.match(new URL("index.html", self.location).href);
-                    if (shellFallback) {
-                        return shellFallback;
-                    }
-
-                    return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
-                })()
-            );
+            const shellUrl = new URL("./", self.location);
+            const indexUrl = new URL("index.html", self.location);
+            const privacyUrl = new URL("datenschutz/", self.location);
+            const privacyIndexUrl = new URL("datenschutz/index.html", self.location);
+            let cachedUrl;
+            if (url.pathname === shellUrl.pathname || url.pathname === indexUrl.pathname) {
+                cachedUrl = shellUrl.href;
+            } else if (url.pathname === privacyUrl.pathname || url.pathname === privacyIndexUrl.pathname) {
+                cachedUrl = privacyUrl.href;
+            } else {
+                return;
+            }
+            event.respondWith(readReleaseAsset(cachedUrl));
             return;
         }
 
@@ -175,20 +157,17 @@
             return;
         }
 
-        // Known static App Shell assets: Cache first, fallback to network
-        event.respondWith(
-            (async () => {
-                const cache = await caches.open(CACHE_NAME);
-                const cached = await cache.match(event.request);
-                if (cached) {
-                    return cached;
-                }
-                const response = await fetch(event.request);
-                if (response.ok) {
-                    await cache.put(event.request, response.clone());
-                }
-                return response;
-            })()
-        );
+        // Never fetch an unversioned local asset into an already installed release.
+        event.respondWith(readReleaseAsset(event.request));
     });
+
+    async function readReleaseAsset(request) {
+        const cache = await caches.open(CACHE_NAME);
+        return await cache.match(request)
+            || new Response("App-Version nicht vollständig verfügbar. Bitte lade die App neu.", {
+                status: 503,
+                statusText: "Service Unavailable",
+                headers: { "Content-Type": "text/plain; charset=utf-8" }
+            });
+    }
 })();
