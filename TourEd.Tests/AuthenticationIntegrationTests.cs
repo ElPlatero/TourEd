@@ -1432,6 +1432,18 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             icon.GetProperty("purpose").GetString() == "maskable");
     }
 
+    [Theory]
+    [InlineData("ol.js", "function")]
+    [InlineData("ol.css", ".ol-")]
+    [InlineData("LICENSE.md", "OpenLayers Contributors")]
+    public async Task BundledOpenLayersAssetsAreServedAnonymously(string file, string expectedContent)
+    {
+        using var client = CreateClient(_factory);
+        var response = await client.GetAsync("/vendor/openlayers/5.3.0/" + file);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(expectedContent, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ServiceWorkerIsServedAndImplementsSecurityAndCachingRules()
     {
@@ -1443,7 +1455,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v16", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v17", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
@@ -1455,9 +1467,9 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("img/icon-maskable-512.png", swScript, StringComparison.Ordinal);
         Assert.Contains("datenschutz/", swScript, StringComparison.Ordinal);
 
-        // Exact OpenLayers assets
-        Assert.Contains("https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css", swScript, StringComparison.Ordinal);
-        Assert.Contains("https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js", swScript, StringComparison.Ordinal);
+        // Locally bundled OpenLayers assets
+        Assert.Contains("vendor/openlayers/5.3.0/ol.css", swScript, StringComparison.Ordinal);
+        Assert.Contains("vendor/openlayers/5.3.0/ol.js", swScript, StringComparison.Ordinal);
 
         // Security boundaries: valid OAuth callbacks and all other auth/api/health requests bypass the cache.
         // A stale callback navigation without OAuth state is redirected to the app root.
@@ -1473,8 +1485,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("tile.openstreetmap.org", swScript, StringComparison.Ordinal);
         Assert.Contains("if (!CACHEABLE_URLS.has(event.request.url))", swScript, StringComparison.Ordinal);
         Assert.DoesNotContain("caches.match(", swScript, StringComparison.Ordinal);
-        Assert.Contains("const cached = await cache.match(event.request)", swScript, StringComparison.Ordinal);
-        Assert.Contains("await cache.put(event.request, response.clone())", swScript, StringComparison.Ordinal);
+        Assert.Contains("return await cache.match(request)", swScript, StringComparison.Ordinal);
+        Assert.Contains("await cache.put(request, response)", swScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("fetch(event.request)", swScript, StringComparison.Ordinal);
+        Assert.Contains("cache: \"reload\"", swScript, StringComparison.Ordinal);
         Assert.Contains("await caches.delete(CACHE_NAME)", swScript, StringComparison.Ordinal);
 
         // Update handling with SKIP_WAITING
