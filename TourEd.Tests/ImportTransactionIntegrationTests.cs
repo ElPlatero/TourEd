@@ -184,9 +184,86 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
         };
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2;31.02.2026;12:30"));
         var manager = scope.ServiceProvider.GetRequiredService<IImportManager>();
-        await Assert.ThrowsAsync<FormatException>(() => manager.ImportUserDataAsync(stream));
+        var result = await manager.ImportUserDataAsync(stream);
+        Assert.Equal(1, Assert.Single(result.Errors).Line);
         Assert.Equal(0, _factory.TransactionsStarted);
         Assert.Empty(await scope.ServiceProvider.GetRequiredService<DataContext>().UserVisits.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CsvPreservesOptionalDatesAndReportsExistingWithoutOverwriting()
+    {
+        using var response = await UploadCsv("1;;\n2;04.09.2026;\n3;04.09.2026;00:00\n4;04.09.2026;12:34\n");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = JsonSerializer.Deserialize<UserDataImportResult>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal(new[] { 4, 0, 0 }, new[] { result.Imported, result.Existing, result.Rejected });
+        using var repeat = await UploadCsv("1;01.01.2020;01:23\n2;;\n3;;\n4;;\n5;;");
+        Assert.Equal(HttpStatusCode.OK, repeat.StatusCode);
+        var repeated = JsonSerializer.Deserialize<UserDataImportResult>(await repeat.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal(new[] { 1, 4, 0 }, new[] { repeated.Imported, repeated.Existing, repeated.Rejected });
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DataContext>();
+        var visits = await db.UserVisits.Join(db.StampingPoints, v => v.StampingPointId, p => p.Id,
+            (v, p) => new { p.Number, v.Visited, v.HasVisitedTime, v.UserId, p.ProviderId }).OrderBy(v => v.Number).ToListAsync();
+        Assert.Equal(5, visits.Count);
+        Assert.All(visits, v => { Assert.Equal(_userId, v.UserId); Assert.Equal(StampingProvider.MalerwegId, v.ProviderId); });
+        Assert.Null(visits[0].Visited);
+        Assert.False(visits[0].HasVisitedTime);
+        Assert.Equal(new DateTime(2026, 9, 4), visits[1].Visited);
+        Assert.False(visits[1].HasVisitedTime);
+        Assert.Equal(new DateTime(2026, 9, 4), visits[2].Visited);
+        Assert.True(visits[2].HasVisitedTime);
+        Assert.Equal(new DateTime(2026, 9, 4, 12, 34, 0), visits[3].Visited);
+        Assert.True(visits[3].HasVisitedTime);
+    }
+
+    [Theory]
+    [InlineData("2;;12:30")]
+    [InlineData("2;31.02.2026;")]
+    [InlineData("2;04.09.2026;24:00")]
+    [InlineData("2;04.09.2026;12:60")]
+    [InlineData("1001;;")]
+    [InlineData("prefix2;;")]
+    [InlineData("2;;suffix")]
+    [InlineData("2;04.09.2026;12:30junk")]
+    [InlineData("2;;;")]
+    [InlineData("2;")]
+    [InlineData("0;;")]
+    [InlineData("1;;")]
+    [InlineData("001;;")]
+    [InlineData("999;;")]
+    [InlineData("")]
+    public async Task CsvRejectsWholeFileWithLineNumber(string invalidLine)
+    {
+        using var response = await UploadCsv("1;;\n" + invalidLine + "\n3;;");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var result = JsonSerializer.Deserialize<UserDataImportResult>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal(2, Assert.Single(result.Errors).Line);
+        Assert.Equal(1, result.Rejected);
+        Assert.Equal(0, result.Imported);
+        await using var scope = _factory.Services.CreateAsyncScope();
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<DataContext>().UserVisits.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(1, "")]
+    [InlineData(2, "1;;")]
+    public async Task CsvRequiresExactlyOneNonEmptyFile(int fileCount, string csv)
+    {
+        using var response = await UploadCsv(csv, fileCount);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, _factory.TransactionsStarted);
+    }
+
+    private async Task<HttpResponseMessage> UploadCsv(string csv, int fileCount = 1)
+    {
+        using var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        using var form = new MultipartFormDataContent();
+        for (var i = 0; i < fileCount; i++)
+            form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(csv)), "csvImport", $"visits{i}.csv");
+        return await client.PostAsync("/api/admin/imports", form);
     }
 
     private async Task WriteIndependentVisitAsync()

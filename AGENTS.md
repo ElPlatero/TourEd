@@ -198,7 +198,9 @@ User data import:
 
 - Requires `Authorization: Bearer <token>` using the dedicated CLI configuration and runs as its configured existing TourEd user.
 - Accepts uploaded CSV-like data.
-- Parses stamping point numbers and optional visit timestamps.
+- Requires exactly one non-empty CSV file with headerless `number;dd.MM.yyyy;HH:mm` rows; date and time may be empty, but a time requires a date. Numbers contain 1–3 ASCII digits and must be positive. Date-only visits retain their date without implying a time.
+- Validates complete rows, duplicate numbers (including equivalent leading-zero forms), and unknown numbers in the entitled default provider’s standard series. Any error rejects the whole file with HTTP 400 and structured `errors` containing 1-based `line` numbers (null for file-level errors). No partial writes occur.
+- Successful imports return `imported`, `existing`, `rejected` (zero), and `errors` (empty). Existing visits are counted and never overwritten. Failed validation reports offending rows in `rejected`; other rows remain unprocessed and `imported`/`existing` are zero.
 - Maps numbers only to stored stamping points from the authenticated user's default provider when that provider is enabled for the user; it never falls back to another provider.
 - Creates user visit records for the authenticated user.
 

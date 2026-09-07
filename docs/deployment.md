@@ -280,3 +280,17 @@ The server then:
 The API and frontend smoke-test URLs are derived from `HEALTH_URL`, so the current value `https://toured-app.de/health` checks `https://toured-app.de/auth/session` and `https://toured-app.de/index.html`. During rollback, the script waits for `/health`.
 
 If migration, startup, readiness, or smoke checking fails, the previous application and database are restored and the old service is restarted. Successful deployments retain the configured number of backups under `BACKUP_ROOT`.
+
+### CSV visit format
+
+Upload exactly one non-empty UTF-8 file without a header. Each line contains exactly three semicolon-separated fields:
+
+```text
+1;;
+2;04.09.2026;
+3;04.09.2026;12:30
+```
+
+These record a visit without a date, with a date only, and with a date plus time. Numbers must contain 1–3 ASCII digits and be positive; times use 00:00–23:59 and require a date. Numbers refer to the entitled default provider's standard series. Blank rows, malformed fields, duplicate numbers and unknown points reject the entire file with HTTP 400; `errors` identifies each detected error by its 1-based `line` (null for file-level errors). Fix the reported errors before retrying. No visits are written on validation failure.
+
+HTTP 200 returns counts in `imported`, `existing`, and `rejected` (zero), with an empty `errors` array. Existing visits remain unchanged, including their optional timestamps. On validation failure, `rejected` counts offending rows; other rows are unprocessed and `imported` and `existing` are zero.

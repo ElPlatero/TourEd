@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Runtime.Serialization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Api.Repositories;
 using Microsoft.Extensions.Options;
 using TourEd.Lib.Abstractions;
@@ -13,7 +12,7 @@ using TourEd.Lib.Extensions;
 
 namespace Api.Managers;
 
-public partial class ImportManager : IImportManager
+public class ImportManager : IImportManager
 {
     private static readonly HashSet<int> TouringenNaturalTreasureAreaIds = [102, 103, 104, 105, 106, 107, 108, 109];
     private readonly Func<User?> _getCurrentUser;
@@ -117,58 +116,84 @@ public partial class ImportManager : IImportManager
         await unitOfWork.CommitAsync();
     }
 
-    public async Task ImportUserDataAsync(Stream stream)
+    public async Task<UserDataImportResult> ImportUserDataAsync(Stream stream)
     {
         var user = _getCurrentUser() ?? throw new NotSupportedException("This operation needs authorization.");
         using var reader = new StreamReader(stream);
-        List<(int StampingPointNumber, DateTime? Visited)> visits = new();
+        List<(int Line, int Number, DateTime? Visited, bool HasTime)> visits = [];
+        List<UserDataImportError> errors = [];
+        HashSet<int> numbers = [];
+        var lineNumber = 0;
         while (await reader.ReadLineAsync() is { } line)
         {
-            var match = ParseUserDataImportRegex().Match(line);
-            if (!match.Success) continue;
-            
-            visits.Add((Convert.ToInt32(match.Groups[1].Value), GetDateTime(match)));
+            lineNumber++;
+            var fields = line.Split(';');
+            if (fields.Length != 3 || fields[0].Length is < 1 or > 3 ||
+                fields[0].Any(c => c is < '0' or > '9') ||
+                !int.TryParse(fields[0], NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number == 0)
+            {
+                errors.Add(new(lineNumber, "Expected number (1–999);date (dd.MM.yyyy or empty);time (HH:mm or empty)."));
+                continue;
+            }
+            if (!numbers.Add(number))
+            {
+                errors.Add(new(lineNumber, "Duplicate stamping point number."));
+                continue;
+            }
+            DateTime? visited = null;
+            if (fields[1].Length > 0)
+            {
+                if (!DateTime.TryParseExact(fields[1], "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+                {
+                    errors.Add(new(lineNumber, "Invalid date; expected dd.MM.yyyy."));
+                    continue;
+                }
+                visited = date;
+            }
+            var hasTime = fields[2].Length > 0;
+            if (hasTime)
+            {
+                if (!visited.HasValue || !TimeOnly.TryParseExact(fields[2], "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
+                {
+                    errors.Add(new(lineNumber, "Time requires a valid date and HH:mm (00:00–23:59)."));
+                    continue;
+                }
+                visited = visited.Value.Add(time.ToTimeSpan());
+            }
+            visits.Add((lineNumber, number, visited, hasTime));
         }
+        if (lineNumber == 0) errors.Add(new(null, "The file must contain at least one visit."));
+        if (errors.Count > 0) return new(0, 0, errors.Count, errors);
 
-        // Keep entitlement checks with the writes, but never hold the transaction
-        // while reading or parsing the uploaded file.
+        // Parsing finishes before opening the transaction; entitlement checks and all writes stay together.
         using var unitOfWork = _createUnitOfWork();
         var providerFilter = await _repository.GetStampingProviderFilterAsync(userId: user.Id);
         var stampingPointsMap = (await _repository.GetStampingPointsAsync(
                 providerFilter: providerFilter,
                 seriesSlug: StampingSeries.TouringenStandardSlug,
-                stampingPointsNr: visits.Select(p => p.StampingPointNumber).ToArray()))
+                stampingPointsNr: visits.Select(p => p.Number).ToArray()))
             .Select(p => p.Point)
             .Where(point => point.Number.HasValue)
             .ToDictionary(point => point.Number!.Value);
-        List<UserVisit> importedVisits = new();
+        List<UserVisit> importedVisits = [];
         foreach (var visit in visits)
         {
-            if (!stampingPointsMap.TryGetValue(visit.StampingPointNumber, out var stampingPoint)) continue;
+            if (!stampingPointsMap.TryGetValue(visit.Number, out var stampingPoint))
+            {
+                errors.Add(new(visit.Line, "Unknown stamping point number in the entitled default provider's standard series."));
+                continue;
+            }
             importedVisits.Add(new UserVisit
             {
                 StampingPointId = stampingPoint.Id,
                 UserId = user.Id,
                 Visited = visit.Visited,
-                HasVisitedTime = visit.Visited.HasValue
+                HasVisitedTime = visit.HasTime
             });
         }
-
-        await _repository.SaveUserDataAsync(importedVisits.ToArray());
+        if (errors.Count > 0) return new(0, 0, errors.Count, errors);
+        var imported = await _repository.SaveUserDataAsync(importedVisits.ToArray());
         await unitOfWork.CommitAsync();
-        return;
-
-        static DateTime? GetDateTime(Match m)
-        {
-            if (m.Groups is [_, _, { Value: { Length: > 0 } }, { Value: { Length: > 0} }])
-            {
-                return DateTime.ParseExact(m.Groups[2].Value, "dd.MM.yyyy", CultureInfo.InvariantCulture).Add(TimeSpan.Parse(m.Groups[3].Value));
-            }
-
-            return null;
-        }
+        return new(imported, visits.Count - imported, 0, []);
     }
-
-    [GeneratedRegex("(\\d{1,3});(\\d{2}\\.\\d{2}\\.\\d{4})?;(\\d{2}:\\d{2})?")]
-    private static partial Regex ParseUserDataImportRegex();
 }
