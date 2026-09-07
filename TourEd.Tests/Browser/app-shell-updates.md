@@ -1,11 +1,10 @@
 # PWA release-coherence regressions (Issue #81)
 
-This standalone test uses Node.js, Playwright, Chromium and the exact OpenLayers script referenced by the app. It adds no frontend build or production dependency:
+This standalone test uses Node.js, Playwright, Chromium and the bundled OpenLayers files. It adds no frontend build or production dependency:
 
 ```bash
 npm install --prefix /tmp/toured-browser-tests playwright
-curl -fsSL https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js -o /tmp/toured-browser-tests/ol.js
-PLAYWRIGHT_MODULE=/tmp/toured-browser-tests/node_modules/playwright OPENLAYERS_JS=/tmp/toured-browser-tests/ol.js node TourEd.Tests/Browser/app-shell-updates.cjs
+PLAYWRIGHT_MODULE=/tmp/toured-browser-tests/node_modules/playwright node TourEd.Tests/Browser/app-shell-updates.cjs
 ```
 
 `CHROMIUM_PATH` defaults to `/usr/bin/chromium`. The test starts a temporary HTTP server and real Chromium with real service-worker registration, Cache Storage, HTTP caching and network-offline behavior. It closes both when finished. Tiles are blocked through Chromium's hostname resolver; there is no Playwright request routing that would disable the browser HTTP cache.
@@ -14,7 +13,7 @@ The server simulates releases A, B and a failing C. It serves the production HTM
 
 - HTML contains a release-specific element; JavaScript accesses that exact element and records its release. Mixing releases throws immediately. CSS supplies an independently checked release marker.
 - The worker cache name varies by release.
-- The two exact OpenLayers URLs are redirected in the served HTML and worker source to local fixture endpoints. No external account or service is used.
+- OpenLayers is served directly from the bundled local assets. No external account or library host is used.
 - Unversioned local CSS and JavaScript have deliberately long HTTP-cache lifetimes, testing that worker installation fetches fresh assets.
 
 Each sequence runs at `/` and `/toured/` and covers:

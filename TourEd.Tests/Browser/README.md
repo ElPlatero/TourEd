@@ -1,11 +1,10 @@
 # Snapshot initialization regressions (Issue #77)
 
-This standalone test uses Node.js, Playwright and Chromium. There is no frontend build or production dependency. Install Playwright in a temporary directory, and download the exact OpenLayers asset referenced by `Api/wwwroot/index.html`:
+This standalone test uses Node.js, Playwright and Chromium. There is no frontend build or production dependency. Install Playwright in a temporary directory; the tests use the bundled OpenLayers assets:
 
 ```bash
 npm install --prefix /tmp/toured-browser-tests playwright
-curl -fsSL https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js -o /tmp/toured-browser-tests/ol.js
-PLAYWRIGHT_MODULE=/tmp/toured-browser-tests/node_modules/playwright OPENLAYERS_JS=/tmp/toured-browser-tests/ol.js node TourEd.Tests/Browser/snapshot-initialization.cjs
+PLAYWRIGHT_MODULE=/tmp/toured-browser-tests/node_modules/playwright node TourEd.Tests/Browser/snapshot-initialization.cjs
 ```
 
 `CHROMIUM_PATH` defaults to `/usr/bin/chromium`. The script starts a temporary HTTP server, serves the real app, intercepts backend requests with a controlled session and point fixture, and blocks external requests. No production service or account is used. Chromium and the server close when the test ends.
@@ -23,3 +22,7 @@ Covered interleavings:
 - A's confirmed session expires before its final write.
 
 For a negative control, `TOURED_SCRIPT` can point to an older copy of `toured.js`; `SCENARIOS=queued` or `SCENARIOS=completed-old` selects a deterministic regression case. The pre-fix implementation fails both. These frontend fixtures supplement the .NET integration suite; they do not replace backend authentication and entitlement tests.
+
+## Local OpenLayers installation (Issue #84)
+
+Run `PLAYWRIGHT_MODULE=/tmp/toured-browser-tests/node_modules/playwright node TourEd.Tests/Browser/local-openlayers.cjs`. Fresh browser contexts allow real service workers. DNS blocks every foreign host, including tile hosts, while the local server supplies session fixtures. The test covers root and PathBase hosting, anonymous and authenticated startup, local library/license cache entries, and offline reload.

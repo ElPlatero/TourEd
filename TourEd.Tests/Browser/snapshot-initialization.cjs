@@ -1,4 +1,4 @@
-// Run: PLAYWRIGHT_MODULE=/path/to/playwright OPENLAYERS_JS=/path/to/ol.js node TourEd.Tests/Browser/snapshot-initialization.cjs
+// Run: PLAYWRIGHT_MODULE=/path/to/playwright node TourEd.Tests/Browser/snapshot-initialization.cjs
 // Two pages in one BrowserContext deliberately share cookies and real IndexedDB.
 // Separate Playwright BrowserContexts would isolate storage and cannot reproduce this race.
 const assert = require('node:assert/strict');
@@ -7,7 +7,7 @@ const { join, resolve } = require('node:path');
 const { createServer } = require('node:http');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = resolve(__dirname, '../../Api/wwwroot');
-const ol = readFileSync(process.env.OPENLAYERS_JS, 'utf8');
+
 let script = readFileSync(process.env.TOURED_SCRIPT || join(root, 'js/toured.js'), 'utf8');
 // Pause immediately before the production write transaction, after any earlier reads.
 script = script.replace('const updateStoredSnapshot =', 'const performStoredSnapshotUpdate =')
@@ -63,7 +63,7 @@ async function until(probe, predicate) {
                 visitedOn: null, visitedAt: null, countsTowardProgress: true, tours: [] });
             await context.route('**/*', async route => {
                 const url = new URL(route.request().url());
-                if (url.origin !== origin) return route.fulfill({ body: url.pathname.endsWith('ol.js') ? ol : '', contentType: 'text/javascript' });
+                if (url.origin !== origin) return route.abort();
                 const json = body => route.fulfill({ json: body });
                 if (url.pathname === '/auth/session') return json({ authenticated, email, expiresAt: new Date(Date.now() + 3600000).toISOString() });
                 if (url.pathname === '/auth/logout') { authenticated = false; return json({}); }

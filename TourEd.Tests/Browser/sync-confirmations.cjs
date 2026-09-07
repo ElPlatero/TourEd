@@ -5,7 +5,7 @@ const { join, resolve } = require('node:path');
 const { createServer } = require('node:http');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = resolve(__dirname, '../../Api/wwwroot');
-const ol = readFileSync(process.env.OPENLAYERS_JS, 'utf8');
+
 let script = readFileSync(process.env.TOURED_SCRIPT || join(root, 'js/toured.js'), 'utf8');
 // Expose production functions solely to await completion and trigger reconnection.
 script = script.replace(/    initialize\(\);\r?\n\}\)\(\);/, `    window.__syncTest = {
@@ -63,7 +63,7 @@ const finishSync = page => page.evaluate(async () => {
                 ...(id === 1 ? state : { isVisited: false, visitedOn: null, visitedAt: null }), countsTowardProgress: true, tours: [] });
             await context.route('**/*', async route => {
                 const url = new URL(route.request().url());
-                if (url.origin !== origin) return route.fulfill({ body: url.pathname.endsWith('ol.js') ? ol : '', contentType: 'text/javascript' });
+                if (url.origin !== origin) return route.abort();
                 const json = body => route.fulfill({ json: body });
                 if (url.pathname === '/auth/session') return json({ authenticated, email, expiresAt: new Date(Date.now() + 3600000).toISOString() });
                 if (url.pathname === '/auth/logout') { authenticated = false; return json({}); }

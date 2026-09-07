@@ -4,8 +4,7 @@ The standalone test uses Node.js, Playwright and Chromium. It adds no frontend b
 
 ```bash
 npm install --prefix /tmp/toured-browser-tests playwright
-curl -fsSL https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js -o /tmp/toured-browser-tests/ol.js
-PLAYWRIGHT_MODULE=/tmp/toured-browser-tests/node_modules/playwright OPENLAYERS_JS=/tmp/toured-browser-tests/ol.js node TourEd.Tests/Browser/sync-confirmations.cjs
+PLAYWRIGHT_MODULE=/tmp/toured-browser-tests/node_modules/playwright node TourEd.Tests/Browser/sync-confirmations.cjs
 ```
 
 `CHROMIUM_PATH` defaults to `/usr/bin/chromium`. The test serves the real app from a temporary local HTTP server, intercepts API responses, and blocks external requests. Two tabs share one Playwright BrowserContext and real IndexedDB; separate BrowserContexts would isolate storage. Chromium and the server close after the tests.

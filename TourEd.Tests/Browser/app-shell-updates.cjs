@@ -6,7 +6,6 @@ const { createServer } = require('node:http');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = resolve(__dirname, '../../Api/wwwroot');
 const workerSource = readFileSync(process.env.TOURED_WORKER || join(root, 'service-worker.js'), 'utf8');
-const ol = readFileSync(process.env.OPENLAYERS_JS, 'utf8');
 let release = 'A', failInstall = false;
 const hits = [];
 const server = createServer((req, res) => {
@@ -22,8 +21,6 @@ const server = createServer((req, res) => {
         res.writeHead(302, { Location: url.pathname.startsWith('/toured/') ? '/toured/' : '/' });
         return res.end();
     }
-    if (pathname === '/external/ol.js') { res.setHeader('Content-Type', 'text/javascript'); return res.end(ol); }
-    if (pathname === '/external/ol.css') { res.setHeader('Content-Type', 'text/css'); return res.end(''); }
     const file = pathname === '/' ? 'index.html' : pathname === '/datenschutz/' ? 'datenschutz/index.html' : pathname.slice(1);
     try {
         if (failInstall && file === 'img/icon-512.png') { res.writeHead(500); return res.end('Injected install failure'); }
@@ -37,12 +34,6 @@ const server = createServer((req, res) => {
         }
         if (file === 'css/toured.css') body += `\n:root { --test-release: ${release}; }`;
         if (file === 'service-worker.js') body = body.toString().replace(/toured-shell-v\d+/, `toured-shell-test-${release}`);
-        if (file.endsWith('.html') || file === 'service-worker.js') {
-            const origin = `http://127.0.0.1:${server.address().port}`;
-            body = body.toString()
-                .replaceAll('https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css', `${origin}/external/ol.css`)
-                .replaceAll('https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js', `${origin}/external/ol.js`);
-        }
         const type = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.html') ? 'text/html' : file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.webmanifest') ? 'application/manifest+json' : 'application/octet-stream';
         res.setHeader('Content-Type', type);
         // Deliberately leave unversioned assets in HTTP cache. Worker installation

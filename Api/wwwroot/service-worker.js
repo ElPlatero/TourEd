@@ -1,12 +1,15 @@
 (() => {
     "use strict";
 
-    const CACHE_NAME = "toured-shell-v16";
+    const CACHE_NAME = "toured-shell-v17";
 
     const CORE_ASSETS = [
         "./",
         "css/toured.css",
         "js/toured.js",
+        "vendor/openlayers/5.3.0/ol.js",
+        "vendor/openlayers/5.3.0/ol.css",
+        "vendor/openlayers/5.3.0/LICENSE.md",
         "manifest.webmanifest",
         "img/toured-logo-transparent.svg",
         "img/pin_icon_neutral.svg",
@@ -20,12 +23,8 @@
         "datenschutz/index.html"
     ];
 
-    const EXTERNAL_ASSETS = [
-        "https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/css/ol.css",
-        "https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.3.0/build/ol.js"
-    ];
     const CORE_URLS = CORE_ASSETS.map(asset => new URL(asset, self.location).href);
-    const CACHEABLE_URLS = new Set([...CORE_URLS, ...EXTERNAL_ASSETS]);
+    const CACHEABLE_URLS = new Set(CORE_URLS);
 
     self.addEventListener("install", event => {
         event.waitUntil(
@@ -35,7 +34,7 @@
                     await Promise.all(
                         [...CACHEABLE_URLS].map(async url => {
                             const request = new Request(url, {
-                                mode: url.startsWith(self.location.origin) ? "same-origin" : "cors",
+                                mode: "same-origin",
                                 cache: "reload"
                             });
                             const response = await fetch(request);
@@ -99,32 +98,6 @@
 
         // Strict requirement: Never cache OpenStreetMap tiles in SW
         if (url.hostname === "tile.openstreetmap.org") {
-            return;
-        }
-
-        // Handle exact external OpenLayers CDN assets (cache-first)
-        if (EXTERNAL_ASSETS.includes(event.request.url)) {
-            event.respondWith(
-                (async () => {
-                    const cache = await caches.open(CACHE_NAME);
-                    const cached = await cache.match(event.request);
-                    if (cached) {
-                        return cached;
-                    }
-                    try {
-                        const response = await fetch(event.request);
-                        if (response.ok || response.type === "opaque") {
-                            await cache.put(event.request, response.clone());
-                        }
-                        return response;
-                    } catch (err) {
-                        if (cached) {
-                            return cached;
-                        }
-                        throw err;
-                    }
-                })()
-            );
             return;
         }
 
