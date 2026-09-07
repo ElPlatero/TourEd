@@ -213,6 +213,7 @@ Useful query behavior:
 - `provider=all` returns all providers enabled for the authenticated user.
 - `vis=true` returns visited points for the authenticated user.
 - `vis=false` returns unvisited points for the authenticated user.
+- Omitting `vis` returns both visited and unvisited points with the authenticated user’s own visit state and optional date/time. Visit metadata always uses the authenticated identity independently of the optional visit-state filter.
 - Geo filtering exists via query parameters and is used server-side.
 
 Point DTOs include a stable internal id, provider and series metadata, optional number, name, position, explicit visit state, optional visit date/time, and tours.
