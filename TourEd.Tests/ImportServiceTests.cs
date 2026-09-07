@@ -455,7 +455,7 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task HarzerWandernadelImportWithinUnitOfWorkPreservesPointIdsAndVisits()
+    public async Task HarzerWandernadelImportPreservesPointIdsAndVisits()
     {
         await using var context = await CreateContextAsync();
         var repository = new TouredRepository(context);
@@ -477,11 +477,7 @@ public sealed class ImportServiceTests : IDisposable
             .ToArray();
         var manager = CreateImportManager(context, repository, null, null, importedPoints);
 
-        using (var unitOfWork = new UnitOfWork(context))
-        {
-            await manager.ImportHarzerWandernadelDataAsync();
-            await unitOfWork.CommitAsync();
-        }
+        await manager.ImportHarzerWandernadelDataAsync();
 
         var storedPoints = await context.StampingPoints.AsNoTracking()
             .Where(point => point.ProviderId == StampingProvider.HarzerWandernadelId)
@@ -647,7 +643,8 @@ public sealed class ImportServiceTests : IDisposable
             new StubTouringenStampingPointImportService(CreateTouringenPoints(rawData)),
             Options.Create(new TouringenWebsiteConfiguration { StempelstellenUri = new Uri("https://example.test/stamping-points") }),
             new HikingToursImportService(),
-            repository);
+            repository,
+            () => new UnitOfWork(context));
     }
 
     private static IReadOnlyList<StampingPoint> CreateTouringenPoints(string? rawData)

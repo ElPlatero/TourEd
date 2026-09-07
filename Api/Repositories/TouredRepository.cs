@@ -510,16 +510,24 @@ public class TouredRepository : IUserService
         return savedPoints;
     }
 
+    public static void ValidateStampingPointSourceImport(int providerId, StampingPointSourceSnapshot snapshot)
+    {
+        if (snapshot.Points.Count == 0 || snapshot.Points.Any(point => point.ProviderId != providerId))
+        {
+            throw new InvalidOperationException("A provider source import must contain points for exactly that provider.");
+        }
+        _ = snapshot.Points.Where(point => point.Number.HasValue)
+            .ToDictionary(point => (point.SeriesId, point.Number));
+        _ = snapshot.Points.ToDictionary(point => (point.ProviderId, point.ExternalId));
+    }
+
     public async Task<IReadOnlyList<StampingPoint>> SaveStampingPointSourceImportAsync(
         int providerId,
         StampingPointSourceSnapshot snapshot,
         int hikingToursCount = 0,
         CancellationToken cancellationToken = default)
     {
-        if (snapshot.Points.Count == 0 || snapshot.Points.Any(point => point.ProviderId != providerId))
-        {
-            throw new InvalidOperationException("A provider source import must contain points for exactly that provider.");
-        }
+        ValidateStampingPointSourceImport(providerId, snapshot);
 
         var savedPoints = await SaveStampingPointsAsync(snapshot.Points.ToArray());
         var provider = await _dbContext.StampingProviders.SingleAsync(
