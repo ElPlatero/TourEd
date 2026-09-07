@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Api.Repositories;
 using Microsoft.Extensions.Options;
+using TourEd.Lib.Abstractions;
 using TourEd.Lib.Abstractions.Interfaces;
 using TourEd.Lib.Abstractions.Interfaces.Services;
 using TourEd.Lib.Abstractions.Models;
@@ -21,9 +22,10 @@ public partial class ImportManager : IImportManager
     private readonly ITouringenStampingPointImportService _touringenStampingPointImporter;
     private readonly IImportService<HikingTour> _hikingToursImporter;
     private readonly TouredRepository _repository;
+    private readonly Func<IUnitOfWork> _createUnitOfWork;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, TouredRepository repository)
+    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, TouredRepository repository, Func<IUnitOfWork> createUnitOfWork)
     {
         _getCurrentUser = () => httpContextAccessor.HttpContext?.User.GetUser();
         _htmlParser = htmlParser;
@@ -31,6 +33,7 @@ public partial class ImportManager : IImportManager
         _touringenStampingPointImporter = touringenStampingPointImporter;
         _hikingToursImporter = hikingToursImporter;
         _repository = repository;
+        _createUnitOfWork = createUnitOfWork;
         _configuration = options.Value;
     }
 
@@ -57,33 +60,43 @@ public partial class ImportManager : IImportManager
             .ToArray();
 
         var hikingTours = _hikingToursImporter.Import(standardImportData).ToArray();
-        var savedStampingPoints = await _repository.SaveStampingPointSourceImportAsync(
-            StampingProvider.TouringenId,
-            snapshot,
-            hikingTours.Length,
-            cancellationToken);
+        TouredRepository.ValidateStampingPointSourceImport(StampingProvider.TouringenId, snapshot);
+        var standardNumbers = snapshot.Points
+            .Where(point => point.SeriesId == StampingSeries.TouringenStandardId && point.Number.HasValue)
+            .Select(point => point.Number!.Value).ToHashSet();
+        var numbersByExternalId = standardImportData
+            .SelectMany(area => area.Touren.SelectMany(tour => tour.StampPoints))
+            .Union(standardImportData.SelectMany(area => area.OrphanedStampPoints))
+            .DistinctBy(point => point.Id)
+            .ToDictionary(point => point.Id, point => point.StampPointNumber);
+        _ = hikingTours.ToDictionary(tour => tour.Id);
+        if (numbersByExternalId.Values.Any(number => !standardNumbers.Contains(number)) ||
+            hikingTours.SelectMany(tour => tour.StampingPoints)
+                .Any(point => !numbersByExternalId.ContainsKey(point.StampingPointId)))
+        {
+            throw new InvalidDataException("Tour relationships must reference imported standard stamping points.");
+        }
 
+        // All external data and relationships have been parsed and validated.
+        // Only resolving generated IDs and persisting the complete import need a transaction.
+        using var unitOfWork = _createUnitOfWork();
+        var savedStampingPoints = await _repository.SaveStampingPointSourceImportAsync(
+            StampingProvider.TouringenId, snapshot, hikingTours.Length, cancellationToken);
         var stampingPointIdsByNumber = savedStampingPoints
-            .Where(p => p.SeriesId == StampingSeries.TouringenStandardId && p.Number.HasValue)
-            .ToDictionary(p => p.Number!.Value, p => p.Id);
-        var stampingPointIdsByExternalId = standardImportData
-            .SelectMany(p => p.Touren.SelectMany(q => q.StampPoints))
-            .Union(standardImportData.SelectMany(p => p.OrphanedStampPoints))
-            .DistinctBy(p => p.Id)
-            .ToDictionary(
-                p => p.Id.ToString(CultureInfo.InvariantCulture),
-                p => stampingPointIdsByNumber[p.StampPointNumber]);
+            .Where(point => point.SeriesId == StampingSeries.TouringenStandardId && point.Number.HasValue)
+            .ToDictionary(point => point.Number!.Value, point => point.Id);
 
         foreach (var hikingTour in hikingTours)
         {
             hikingTour.StampingPoints = hikingTour.StampingPoints.Select(point => new SortedStampingPoint(point.Position)
             {
-                StampingPointId = stampingPointIdsByExternalId[point.StampingPointId.ToString(CultureInfo.InvariantCulture)],
+                StampingPointId = stampingPointIdsByNumber[numbersByExternalId[point.StampingPointId]],
                 Tour = hikingTour
             }).ToList();
         }
 
         await _repository.SaveHikingToursAsync(hikingTours);
+        await unitOfWork.CommitAsync();
     }
 
     public async Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default)
@@ -95,10 +108,13 @@ public partial class ImportManager : IImportManager
         {
             throw new InvalidDataException("The HWN import must contain every regular number from 1 through 222 exactly once.");
         }
+        TouredRepository.ValidateStampingPointSourceImport(StampingProvider.HarzerWandernadelId, snapshot);
+        using var unitOfWork = _createUnitOfWork();
         await _repository.SaveStampingPointSourceImportAsync(
             StampingProvider.HarzerWandernadelId,
             snapshot,
             cancellationToken: cancellationToken);
+        await unitOfWork.CommitAsync();
     }
 
     public async Task ImportUserDataAsync(Stream stream)
@@ -114,6 +130,9 @@ public partial class ImportManager : IImportManager
             visits.Add((Convert.ToInt32(match.Groups[1].Value), GetDateTime(match)));
         }
 
+        // Keep entitlement checks with the writes, but never hold the transaction
+        // while reading or parsing the uploaded file.
+        using var unitOfWork = _createUnitOfWork();
         var providerFilter = await _repository.GetStampingProviderFilterAsync(userId: user.Id);
         var stampingPointsMap = (await _repository.GetStampingPointsAsync(
                 providerFilter: providerFilter,
@@ -136,6 +155,7 @@ public partial class ImportManager : IImportManager
         }
 
         await _repository.SaveUserDataAsync(importedVisits.ToArray());
+        await unitOfWork.CommitAsync();
         return;
 
         static DateTime? GetDateTime(Match m)

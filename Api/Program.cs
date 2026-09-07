@@ -45,6 +45,7 @@ builder.Services
     .AddSingleton<DataRetentionCleanupService>()
     .AddHostedService(serviceProvider => serviceProvider.GetRequiredService<DataRetentionCleanupService>())
     .AddTransient<IUnitOfWork, UnitOfWork>()
+    .AddTransient<Func<IUnitOfWork>>(services => () => services.GetRequiredService<IUnitOfWork>())
     .AddTouredAuthentication(builder.Configuration)
     .AddTouredDataProtection(builder.Configuration)
     .AddSingleton<IHttpContextAccessor, HttpContextAccessor>()

@@ -99,6 +99,8 @@ Maintenance/admin flow:
 
 Admin/import operations are intentionally terminal/API driven.
 
+Import controllers do not resolve a transaction eagerly. `ImportManager` downloads, parses, and validates source snapshots and tour references before creating a `UnitOfWork` through an injected factory. Each complete provider import then persists points, relationships, provenance/readiness, and its import record in one transaction. CSV files are read and parsed before transaction creation; database-dependent provider/entitlement checks stay inside the transaction with the visit writes. Regression tests pause source downloads and CSV reads while an independent SQLite connection writes a visit, and inject final-save failures to verify full rollback.
+
 ## Solution Structure
 
 The solution has three projects:

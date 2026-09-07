@@ -1,15 +1,7 @@
-﻿using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using Api.Authentication;
-using Api.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
-using TourEd.Lib.Abstractions;
 using TourEd.Lib.Abstractions.Interfaces;
-using TourEd.Lib.Abstractions.Interfaces.Services;
-using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Abstractions.Options;
 
 namespace Api.Controllers.Admin;
 
@@ -24,47 +16,31 @@ public class ImportsController : ControllerBase
     }
     
     [HttpPost("touringen")]
-    public async Task<IActionResult> CreateNewTouringenImport([FromServices] IUnitOfWork unitOfWork, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateNewTouringenImport(CancellationToken cancellationToken)
     {
-        using (unitOfWork)
-        {
-            await _importManager.ImportTouringenDataAsync(cancellationToken);
-            await unitOfWork.CommitAsync();
-            return Ok();
-        }
-    }
-
-    [HttpPost("harzer-wandernadel")]
-    public async Task<IActionResult> CreateNewHarzerWandernadelImport(
-        [FromServices] IUnitOfWork unitOfWork,
-        CancellationToken cancellationToken)
-    {
-        using (unitOfWork)
-        {
-            await _importManager.ImportHarzerWandernadelDataAsync(cancellationToken);
-            await unitOfWork.CommitAsync();
-            return Ok();
-        }
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> CreateNewUserDataImport([FromForm] IFormFileCollection csvImport,[FromServices] IUnitOfWork unitOfWork)
-    {
-        using (unitOfWork)
-        await using (var stream = csvImport[0].OpenReadStream())
-        {
-            try
-            {
-                await _importManager.ImportUserDataAsync(stream);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return StatusCode(StatusCodes.Status403Forbidden);
-            }
-            await unitOfWork.CommitAsync();
-        }
-
+        await _importManager.ImportTouringenDataAsync(cancellationToken);
         return Ok();
     }
 
+    [HttpPost("harzer-wandernadel")]
+    public async Task<IActionResult> CreateNewHarzerWandernadelImport(CancellationToken cancellationToken)
+    {
+        await _importManager.ImportHarzerWandernadelDataAsync(cancellationToken);
+        return Ok();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateNewUserDataImport([FromForm] IFormFileCollection csvImport)
+    {
+        await using var stream = csvImport[0].OpenReadStream();
+        try
+        {
+            await _importManager.ImportUserDataAsync(stream);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden);
+        }
+        return Ok();
+    }
 }
