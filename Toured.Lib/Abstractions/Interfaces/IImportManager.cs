@@ -4,5 +4,5 @@ public interface IImportManager
 {
     Task ImportTouringenDataAsync(CancellationToken cancellationToken = default);
     Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default);
-    Task ImportUserDataAsync(Stream stream);
+    Task<TourEd.Lib.Abstractions.Models.UserDataImportResult> ImportUserDataAsync(Stream stream);
 }

@@ -274,11 +274,11 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
             return Task.CompletedTask;
         }
 
-        public Task ImportUserDataAsync(Stream stream)
+        public Task<TourEd.Lib.Abstractions.Models.UserDataImportResult> ImportUserDataAsync(Stream stream)
         {
             CapturePrincipal();
             Interlocked.Increment(ref _userImportCount);
-            return Task.CompletedTask;
+            return Task.FromResult(new TourEd.Lib.Abstractions.Models.UserDataImportResult(1, 0, 0, []));
         }
 
         private void CapturePrincipal()

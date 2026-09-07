@@ -609,9 +609,9 @@ public class TouredRepository : IUserService
         await _dbContext.SaveChangesAsync();
     }
 
-    public async Task SaveUserDataAsync(params UserVisit[] visits)
+    public async Task<int> SaveUserDataAsync(params UserVisit[] visits)
     {
-        if (!visits.Any()) return;
+        if (!visits.Any()) return 0;
         if (visits.Select(p => p.UserId).Distinct().Count() > 1) throw new InvalidOperationException("Can only import one user at a time.");
         if (visits.GroupBy(p => p.StampingPointId).Any(p => p.Count() > 1)) throw new InvalidOperationException("Stamping points can only be visited once. Remove duplicate entries.");
         var updatedVisits = visits.ToDictionary(p => p.StampingPointId);
@@ -628,6 +628,7 @@ public class TouredRepository : IUserService
 
         await _dbContext.SaveChangesAsync();
         updatedEntries.ForEach(p => _dbContext.Entry(p).State = EntityState.Detached);
+        return updatedEntries.Count;
     }
     
     
