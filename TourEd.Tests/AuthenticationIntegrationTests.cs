@@ -428,6 +428,79 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.All(visitedPoints.Concat(unvisitedPoints), point => Assert.Equal(StampingProvider.TouringenSlug, point.Provider.Slug));
     }
 
+    [Theory]
+    [InlineData("", "none")]
+    [InlineData("", "date")]
+    [InlineData("", "time")]
+    [InlineData("?provider=touringen", "none")]
+    [InlineData("?provider=touringen", "date")]
+    [InlineData("?provider=touringen", "time")]
+    [InlineData("?provider=all", "none")]
+    [InlineData("?provider=all", "date")]
+    [InlineData("?provider=all", "time")]
+    public async Task UnfilteredPointListsIncludeOnlyTheCurrentAccountsVisitMetadata(string query, string timestampMode)
+    {
+        const string secondEmail = "second-points@example.test";
+        var visitedOn = new DateOnly(2026, 8, 28);
+        var visitedAt = new TimeOnly(12, 0);
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            var firstUser = await context.Users.SingleAsync(user => user.Email == FakeGoogleHandler.Email);
+            var firstVisit = await context.UserVisits.SingleAsync(visit => visit.UserId == firstUser.Id);
+            firstVisit.Visited = timestampMode == "none" ? null : visitedOn.ToDateTime(visitedAt);
+            firstVisit.HasVisitedTime = timestampMode == "time";
+            var secondUser = new User { Email = secondEmail, DefaultStampingProviderId = StampingProvider.TouringenId };
+            context.Users.Add(secondUser);
+            await context.SaveChangesAsync();
+            context.UserStampingProviders.Add(new UserStampingProvider
+            {
+                UserId = secondUser.Id,
+                StampingProviderId = StampingProvider.TouringenId
+            });
+            var secondPoint = await context.StampingPoints.SingleAsync(point =>
+                point.ProviderId == StampingProvider.TouringenId && point.Number == UnvisitedPointNumber);
+            context.UserVisits.Add(new UserVisit
+            {
+                UserId = secondUser.Id,
+                StampingPointId = secondPoint.Id,
+                Visited = new DateTime(2026, 8, 27, 9, 15, 0),
+                HasVisitedTime = true
+            });
+            await context.SaveChangesAsync();
+        }
+
+        using var firstClient = CreateClient(_factory);
+        await LoginAsync(firstClient);
+        var first = await firstClient.GetFromJsonAsync<GetStampingPointsResponse>("/api/points" + query);
+        Assert.NotNull(first);
+        var visited = Assert.Single(first.StampingPoints, point =>
+            point.Provider.Slug == StampingProvider.TouringenSlug && point.Number == VisitedPointNumber);
+        Assert.True(visited.IsVisited);
+        Assert.Equal(timestampMode == "none" ? (DateOnly?)null : visitedOn, visited.VisitedOn);
+        Assert.Equal(timestampMode == "time" ? visitedAt : (TimeOnly?)null, visited.VisitedAt);
+        var open = Assert.Single(first.StampingPoints, point =>
+            point.Provider.Slug == StampingProvider.TouringenSlug && point.Number == UnvisitedPointNumber);
+        Assert.False(open.IsVisited);
+        Assert.Null(open.VisitedOn);
+        Assert.Null(open.VisitedAt);
+
+        using var secondClient = CreateClient(_factory);
+        using var callback = await secondClient.GetAsync($"/fake-google/callback?email={secondEmail}&subject=second-points-subject");
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
+        var second = await secondClient.GetFromJsonAsync<GetStampingPointsResponse>("/api/points" + query);
+        Assert.NotNull(second);
+        Assert.All(second.StampingPoints, point => Assert.Equal(StampingProvider.TouringenSlug, point.Provider.Slug));
+        var otherAccountsPoint = Assert.Single(second.StampingPoints, point => point.Number == VisitedPointNumber);
+        Assert.False(otherAccountsPoint.IsVisited);
+        Assert.Null(otherAccountsPoint.VisitedOn);
+        Assert.Null(otherAccountsPoint.VisitedAt);
+        var ownPoint = Assert.Single(second.StampingPoints, point => point.Number == UnvisitedPointNumber);
+        Assert.True(ownPoint.IsVisited);
+        Assert.Equal(new DateOnly(2026, 8, 27), ownPoint.VisitedOn);
+        Assert.Equal(new TimeOnly(9, 15), ownPoint.VisitedAt);
+    }
+
     [Fact]
     public async Task AnonymousRequestsToPointsEndpointsAreRejectedWithUnauthorized()
     {

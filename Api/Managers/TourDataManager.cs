@@ -18,7 +18,7 @@ public class TourDataManager
     public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? Visit)>> GetStampingPointsAsync(string? providerSlug = null, int? currentUserId = null, (Position, decimal)? geoFilter = null, (int UserId, bool ExcludeVisited)? userFilter = null)
     {
         var providerFilter = await _repository.GetStampingProviderFilterAsync(providerSlug, currentUserId);
-        return await _repository.GetStampingPointsAsync(geoFilter: geoFilter, providerFilter: providerFilter, userId: userFilter?.UserId, excludeVisited: userFilter?.ExcludeVisited);
+        return await _repository.GetStampingPointsAsync(geoFilter: geoFilter, providerFilter: providerFilter, userId: currentUserId, excludeVisited: userFilter?.ExcludeVisited);
     }
 
     public async Task<(StampingPoint Point, List<HikingTour>? Tours)?> GetStampingPointOrDefaultAsync(int stampingPointId)
