@@ -1340,16 +1340,13 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     {
         using var client = CreateClient(_factory);
 
-        var frontendScript = await client.GetStringAsync("/js/toured.js");
+        var frontend = await client.GetStringAsync("/");
         var privacyResponse = await client.GetAsync("/datenschutz/");
-        var privacyNotice = await privacyResponse.Content.ReadAsStringAsync();
+        var privacyNotice = WebUtility.HtmlDecode(await privacyResponse.Content.ReadAsStringAsync());
 
         Assert.Equal(HttpStatusCode.OK, privacyResponse.StatusCode);
-        Assert.Contains("href=\"https://github.com/ElPlatero/TourEd\"", frontendScript, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("aria-label=\"TourEd-Quellcode auf GitHub (AGPL-3.0)\"", frontendScript, StringComparison.Ordinal);
-        Assert.Contains(">&copy; TourEd</a> · <a class=\"footer-link\" href=\"datenschutz/\">Datenschutz</a>", frontendScript, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("TourEd 2023", frontendScript, StringComparison.Ordinal);
-        Assert.Contains("rel=\"noopener noreferrer\"", frontendScript, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("https://github.com/ElPlatero/TourEd", frontend, StringComparison.Ordinal);
+        Assert.Contains("TourEd-Quellcode auf GitHub (AGPL-3.0-only)", frontend, StringComparison.Ordinal);
         Assert.Contains("name=\"robots\" content=\"noindex, nofollow, noarchive\"", privacyNotice, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("info@toured-app.de", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("dsgvo@baelgun.de", privacyNotice, StringComparison.OrdinalIgnoreCase);
@@ -1390,6 +1387,70 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("ausdrücklich keine OpenStreetMap-Kartenkacheln im Service-Worker-Cache", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Die anonyme Kartenansicht ist ohne Benutzerkonto möglich", privacyNotice, StringComparison.Ordinal);
         Assert.DoesNotContain("Google Hosted Libraries", privacyNotice, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("datenschutz")]
+    [InlineData("impressum")]
+    [InlineData("lizenzen")]
+    public async Task LegalPagesArePublicAndShareNavigation(string page)
+    {
+        using var client = CreateClient(_factory);
+        var html = await client.GetStringAsync($"/{page}/");
+        Assert.Equal(html, await client.GetStringAsync($"/{page}/index.html"));
+        Assert.Contains("Zur Karte</a>", html, StringComparison.Ordinal);
+        Assert.Contains("Rechtliche Informationen", html, StringComparison.Ordinal);
+        foreach (var target in new[] { "datenschutz", "impressum", "lizenzen" })
+            Assert.Contains($"href=\"../{target}/\"", html, StringComparison.Ordinal);
+        Assert.Contains($"href=\"../{page}/\" aria-current=\"page\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("href=\"../css/legal.css\"", html, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/providers")).StatusCode);
+    }
+
+    [Fact]
+    public async Task LegalContactDetailsRenderWithoutScriptAndRobotsRemainPublic()
+    {
+        using var client = CreateClient(_factory);
+        foreach (var page in new[] { "datenschutz", "impressum", "lizenzen" })
+        {
+            var html = await client.GetStringAsync($"/{page}/");
+            Assert.DoesNotContain("info@toured-app.de", html, StringComparison.Ordinal);
+            Assert.Contains("mailto:info@toured-app.de", WebUtility.HtmlDecode(html), StringComparison.Ordinal);
+            Assert.Contains("noindex, nofollow, noarchive", html, StringComparison.Ordinal);
+        }
+        var imprint = await client.GetStringAsync("/impressum/");
+        var privacy = await client.GetStringAsync("/datenschutz/");
+        var address = System.Text.RegularExpressions.Regex.Match(imprint, "<address>(.*?)</address>",
+            System.Text.RegularExpressions.RegexOptions.Singleline).Groups[1].Value;
+        Assert.False(string.IsNullOrWhiteSpace(address));
+        // The same operator details stay readable in both pages after HTML decoding.
+        foreach (var line in address.Split("<br />").Take(3))
+            Assert.Contains(line.Trim(), privacy, StringComparison.Ordinal);
+        Assert.DoesNotContain("<script", imprint, StringComparison.OrdinalIgnoreCase);
+        var robots = await client.GetStringAsync("/robots.txt");
+        Assert.Contains("User-agent: *", robots, StringComparison.Ordinal);
+        foreach (var page in new[] { "datenschutz", "impressum", "lizenzen" })
+            Assert.Contains($"Disallow: /{page}", robots, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LicensesPreserveIndependentThirdPartyTermsAndLocalAgpl()
+    {
+        using var client = CreateClient(_factory);
+        var html = await client.GetStringAsync("/lizenzen/");
+        Assert.Contains("AGPL-3.0-only", html, StringComparison.Ordinal);
+        Assert.Contains("individuell abgeschlossene Vereinbarung", html, StringComparison.Ordinal);
+        Assert.Contains("weder fremde Software noch fremde Daten", html, StringComparison.Ordinal);
+        Assert.Contains("OpenLayers 5.3.0", html, StringComparison.Ordinal);
+        Assert.Contains("Copyright 2005-present OpenLayers Contributors. All rights reserved.", html, StringComparison.Ordinal);
+        Assert.Contains("Redistributions of source code must retain", html, StringComparison.Ordinal);
+        Assert.Contains("Redistributions in binary form must reproduce", html, StringComparison.Ordinal);
+        Assert.Contains("ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.", html, StringComparison.Ordinal);
+        Assert.Contains("either expressed or implied, of OpenLayers Contributors.", html, StringComparison.Ordinal);
+        var agpl = await client.GetStringAsync("/lizenzen/agpl-3.0.txt");
+        Assert.Contains("GNU AFFERO GENERAL PUBLIC LICENSE", agpl, StringComparison.Ordinal);
+        Assert.Contains("13. Remote Network Interaction", agpl, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1455,7 +1516,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v17", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v18", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);

@@ -12,6 +12,7 @@
 *.cjs text eol=crlf
 *.svg text eol=crlf
 *.md text eol=crlf
+*.txt text eol=crlf
 *.yml text eol=crlf
 *.config text eol=crlf
 *.service text eol=crlf
