@@ -784,6 +784,7 @@ public class TouredRepository : IUserService
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await ClaimRegistrationDecisionAsync(request, RegistrationRequestStatus.Approved, cancellationToken);
 
         var existingUser = await _dbContext.Users
             .FirstOrDefaultAsync(u => u.GoogleSubject == request.GoogleSubject, cancellationToken);
@@ -818,10 +819,6 @@ public class TouredRepository : IUserService
 
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
-
-        request.Status = RegistrationRequestStatus.Approved;
-        request.DecidedAt = DateTime.UtcNow;
-        request.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.AdminAuditEntries.Add(CreateAudit(
             actorUserId,
@@ -860,10 +857,7 @@ public class TouredRepository : IUserService
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-        request.Status = RegistrationRequestStatus.Rejected;
-        request.DecidedAt = DateTime.UtcNow;
-        request.UpdatedAt = DateTime.UtcNow;
+        await ClaimRegistrationDecisionAsync(request, RegistrationRequestStatus.Rejected, cancellationToken);
 
         _dbContext.AdminAuditEntries.Add(CreateAudit(
             actorUserId,
@@ -882,6 +876,32 @@ public class TouredRepository : IUserService
             request.Status.ToString().ToLowerInvariant(),
             request.CreatedAt,
             request.DecidedAt);
+    }
+
+    private async Task ClaimRegistrationDecisionAsync(
+        RegistrationRequest request,
+        RegistrationRequestStatus status,
+        CancellationToken cancellationToken)
+    {
+        var decidedAt = DateTime.UtcNow;
+        // Both callers own a transaction. Claim the still-pending row before any
+        // user or audit writes, even if another request decided it after our read.
+        var updated = await _dbContext.RegistrationRequests
+            .Where(r => r.Id == request.Id && r.Status == RegistrationRequestStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(r => r.Status, status)
+                .SetProperty(r => r.DecidedAt, decidedAt)
+                .SetProperty(r => r.UpdatedAt, decidedAt), cancellationToken);
+        if (updated != 1)
+        {
+            throw new RegistrationRequestAlreadyDecidedException(request.Id);
+        }
+
+        // Keep the tracked entity and response consistent with the claimed status.
+        // SaveChanges and all remaining writes still run inside the same transaction.
+        request.Status = status;
+        request.DecidedAt = decidedAt;
+        request.UpdatedAt = decidedAt;
     }
 
     public async Task<int> CleanupExpiredRegistrationRequestsAsync(

@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -7,6 +8,7 @@ using Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TourEd.Lib.Abstractions.Models;
@@ -27,7 +29,11 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
         _factory = new AdminWebApplicationFactory(_databasePath, _keysPath);
         await using var scope = _factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<DataContext>();
-        await context.Database.MigrateAsync();
+        // Migrations belong to the production context type, not the interceptor subclass.
+        await using (var migrationContext = new DataContext(scope.ServiceProvider.GetRequiredService<IConfiguration>()))
+        {
+            await migrationContext.Database.MigrateAsync();
+        }
 
         var admin = new User { Email = AdminEmail };
         context.Users.Add(admin);
@@ -241,6 +247,117 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
         Assert.Equal(auditCountAfterFirstDecision, await verifyContext.AdminAuditEntries.CountAsync());
     }
 
+    [Theory]
+    [InlineData("approve", "approve")]
+    [InlineData("approve", "reject")]
+    [InlineData("reject", "approve")]
+    [InlineData("reject", "reject")]
+    public async Task OverlappingDecisionsReturnConflictWithoutLosingTheWinningDecision(
+        string winningDecision, string delayedDecision)
+    {
+        var requestId = await AddPendingRequestAsync();
+        using var delayedClient = CreateAuthorizedClient();
+        using var winningClient = CreateAuthorizedClient();
+        var pause = _factory.TransactionGate.PauseNextTransaction();
+        var delayedTask = delayedClient.PostAsync($"/api/admin/registrations/{requestId}/{delayedDecision}", null);
+
+        try
+        {
+            // The delayed HTTP request has already read Pending, but has not begun
+            // its transaction. A separate request/DbContext now completes a decision.
+            await pause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            using var winningResponse = await winningClient.PostAsync(
+                $"/api/admin/registrations/{requestId}/{winningDecision}", null);
+            Assert.Equal(HttpStatusCode.OK, winningResponse.StatusCode);
+        }
+        finally
+        {
+            pause.Release.TrySetResult();
+        }
+
+        using var delayedResponse = await delayedTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(HttpStatusCode.Conflict, delayedResponse.StatusCode);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+        var request = await context.RegistrationRequests.SingleAsync(r => r.Id == requestId);
+        var approved = winningDecision == "approve";
+        Assert.Equal(approved ? RegistrationRequestStatus.Approved : RegistrationRequestStatus.Rejected, request.Status);
+        Assert.NotNull(request.DecidedAt);
+        Assert.Equal(request.DecidedAt, request.UpdatedAt);
+        var audit = Assert.Single(await context.AdminAuditEntries
+            .Where(a => a.RegistrationRequestId == requestId).ToListAsync());
+        Assert.Equal(approved ? "registration.approved" : "registration.rejected", audit.Action);
+        Assert.Equal(_adminUserId, audit.ActorUserId);
+        Assert.Null(audit.ProviderSlug);
+        var users = await context.Users.Include(u => u.StampingProviders)
+            .Where(u => u.GoogleSubject == request.GoogleSubject).ToListAsync();
+        if (approved)
+        {
+            var user = Assert.Single(users);
+            Assert.Equal(user.Id, audit.TargetUserId);
+            Assert.Equal(request.Email, user.Email);
+            Assert.Null(user.DefaultStampingProviderId);
+            Assert.Empty(user.StampingProviders);
+        }
+        else
+        {
+            Assert.Empty(users);
+            Assert.Null(audit.TargetUserId);
+        }
+    }
+
+    [Theory]
+    [InlineData("approve")]
+    [InlineData("reject")]
+    public async Task AuditFailureRollsBackTheEntireDecision(string decision)
+    {
+        var requestId = await AddPendingRequestAsync();
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            await context.Database.ExecuteSqlRawAsync("""
+                CREATE TRIGGER fail_registration_audit BEFORE INSERT ON AdminAuditEntries
+                BEGIN SELECT RAISE(ABORT, 'Injected audit failure'); END;
+                """);
+            var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+            await Assert.ThrowsAsync<DbUpdateException>(() => decision == "approve"
+                ? repository.ApproveRegistrationRequestAsync(requestId, _adminUserId)
+                : repository.RejectRegistrationRequestAsync(requestId, _adminUserId));
+        }
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+            var request = await context.RegistrationRequests.SingleAsync(r => r.Id == requestId);
+            Assert.Equal(RegistrationRequestStatus.Pending, request.Status);
+            Assert.Null(request.DecidedAt);
+            Assert.Empty(await context.Users.Where(u => u.GoogleSubject == request.GoogleSubject).ToListAsync());
+            Assert.Empty(await context.AdminAuditEntries.Where(a => a.RegistrationRequestId == requestId).ToListAsync());
+            await context.Database.ExecuteSqlRawAsync("DROP TRIGGER fail_registration_audit;");
+        }
+
+        using var client = CreateAuthorizedClient();
+        using var retry = await client.PostAsync($"/api/admin/registrations/{requestId}/{decision}", null);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+    }
+
+    private async Task<int> AddPendingRequestAsync()
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<DataContext>();
+        var request = new RegistrationRequest
+        {
+            GoogleSubject = "concurrent-applicant",
+            Email = "concurrent-applicant@example.test",
+            Status = RegistrationRequestStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        };
+        context.RegistrationRequests.Add(request);
+        await context.SaveChangesAsync();
+        return request.Id;
+    }
+
     [Fact]
     public async Task ExpiredRegistrationRequestsArePurgedAfter30Days()
     {
@@ -345,9 +462,14 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
 
     private sealed class AdminWebApplicationFactory(string databasePath, string keysPath) : WebApplicationFactory<Program>
     {
+        public TransactionGateInterceptor TransactionGate { get; } = new();
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Testing");
+            builder.ConfigureServices(services =>
+                services.AddScoped<DataContext>(provider => new InterceptedDataContext(
+                    provider.GetRequiredService<IConfiguration>(), TransactionGate)));
             builder.ConfigureAppConfiguration((_, config) =>
             {
                 config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -362,4 +484,48 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
             });
         }
     }
+
+    private sealed class InterceptedDataContext(IConfiguration configuration, TransactionGateInterceptor gate)
+        : DataContext(configuration)
+    {
+        protected override void OnConfiguring(DbContextOptionsBuilder options)
+        {
+            base.OnConfiguring(options);
+            options.AddInterceptors(gate);
+        }
+    }
+
+    private sealed class TransactionPause
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class TransactionGateInterceptor : DbTransactionInterceptor
+    {
+        private TransactionPause? _nextPause;
+
+        public TransactionPause PauseNextTransaction()
+        {
+            var pause = new TransactionPause();
+            Assert.Null(Interlocked.CompareExchange(ref _nextPause, pause, null));
+            return pause;
+        }
+
+        public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(
+            DbConnection connection,
+            TransactionStartingEventData eventData,
+            InterceptionResult<DbTransaction> result,
+            CancellationToken cancellationToken = default)
+        {
+            var pause = Interlocked.Exchange(ref _nextPause, null);
+            if (pause is not null)
+            {
+                pause.Entered.TrySetResult();
+                await pause.Release.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
+            }
+            return result;
+        }
+    }
+
 }
