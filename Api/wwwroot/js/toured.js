@@ -96,6 +96,7 @@
     const DB_VERSION = 1;
     const STORE_NAME = "snapshots";
     const SNAPSHOT_KEY = "current";
+    const SNAPSHOT_REVISION_KEY = "revision";
     const SNAPSHOT_SCHEMA_VERSION = 3;
     const SYNC_LEASE_MILLISECONDS = 30000;
     const RETRY_MAX_MILLISECONDS = 60000;
@@ -161,35 +162,18 @@
         }
     });
 
-    const readStoredSnapshot = async () => {
+    const readStoredSnapshot = async (key = SNAPSHOT_KEY) => {
         const db = await openDatabase();
         if (!db) return null;
         return new Promise(resolve => {
             try {
                 const tx = db.transaction(STORE_NAME, "readonly");
                 const store = tx.objectStore(STORE_NAME);
-                const request = store.get(SNAPSHOT_KEY);
+                const request = store.get(key);
                 request.onsuccess = () => resolve(request.result || null);
                 request.onerror = () => resolve(null);
             } catch {
                 resolve(null);
-            }
-        });
-    };
-
-    const writeStoredSnapshot = async snapshot => {
-        const db = await openDatabase();
-        if (!db) return false;
-        return new Promise(resolve => {
-            try {
-                const tx = db.transaction(STORE_NAME, "readwrite");
-                const store = tx.objectStore(STORE_NAME);
-                store.put({ ...snapshot, key: SNAPSHOT_KEY });
-                tx.oncomplete = () => resolve(true);
-                tx.onerror = () => resolve(false);
-                tx.onabort = () => resolve(false);
-            } catch {
-                resolve(false);
             }
         });
     };
@@ -201,11 +185,13 @@
             try {
                 const tx = db.transaction(STORE_NAME, "readwrite");
                 const store = tx.objectStore(STORE_NAME);
+                const revisionRequest = store.get(SNAPSHOT_REVISION_KEY);
                 const request = store.get(SNAPSHOT_KEY);
                 let nextSnapshot = null;
                 request.onsuccess = () => {
-                    nextSnapshot = mutation(request.result || null);
-                    if (nextSnapshot) {
+                    const snapshot = request.result || null;
+                    nextSnapshot = mutation(snapshot, revisionRequest.result?.value ?? null);
+                    if (nextSnapshot && nextSnapshot !== snapshot) {
                         store.put({ ...nextSnapshot, key: SNAPSHOT_KEY });
                     }
                 };
@@ -227,6 +213,8 @@
                 const tx = db.transaction(STORE_NAME, "readwrite");
                 const store = tx.objectStore(STORE_NAME);
                 store.delete(SNAPSHOT_KEY);
+                // Keep only an anonymous invalidation token after personal data is purged.
+                store.put({ key: SNAPSHOT_REVISION_KEY, value: crypto.randomUUID() });
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => resolve();
             } catch {
@@ -253,17 +241,17 @@
         return snapshot;
     };
 
+    // Migrations must also use the latest snapshot inside a single transaction.
     const getStoredSnapshot = () => queueSnapshotOperation(async () => {
-        const stored = await readStoredSnapshot();
-        const normalized = normalizeSnapshot(stored);
-        if (stored && stored.schemaVersion !== SNAPSHOT_SCHEMA_VERSION && normalized) {
-            await writeStoredSnapshot(normalized);
-        }
-        return normalized;
+        const result = await mutateStoredSnapshot(normalizeSnapshot);
+        return result.ok ? result.snapshot : null;
     });
 
+    const getSnapshotRevision = () => queueSnapshotOperation(async () =>
+        (await readStoredSnapshot(SNAPSHOT_REVISION_KEY))?.value ?? null);
+
     const updateStoredSnapshot = mutation => queueSnapshotOperation(
-        () => mutateStoredSnapshot(snapshot => mutation(normalizeSnapshot(snapshot))));
+        () => mutateStoredSnapshot((snapshot, revision) => mutation(normalizeSnapshot(snapshot), revision)));
 
     const clearStoredSnapshot = () => queueSnapshotOperation(deleteStoredSnapshot);
 
@@ -2596,6 +2584,9 @@
 
         setOfflineMode(false);
 
+        let snapshotRevision = await getSnapshotRevision();
+        if (generation !== app.loadGeneration) return;
+
         let session = null;
         let isNetworkError = false;
         let isHttpError = false;
@@ -2671,10 +2662,12 @@
         setSession(session);
 
         const existingSnapshot = await getStoredSnapshot();
+        if (generation !== app.loadGeneration) return;
         if (existingSnapshot &&
             existingSnapshot.email &&
             existingSnapshot.email.toLocaleLowerCase() !== session.email.toLocaleLowerCase()) {
             await clearPersonalData();
+            snapshotRevision = await getSnapshotRevision();
         } else if (isSnapshotValid(existingSnapshot)) {
             setPendingActions(existingSnapshot.pendingActions);
             if (existingSnapshot.pendingActions.length > 0) {
@@ -2718,36 +2711,52 @@
                 return;
             }
 
-            const currentSnapshot = await getStoredSnapshot();
-            const pendingActions = isSnapshotValid(currentSnapshot)
-                ? currentSnapshot.pendingActions
-                : [];
-            setPendingActions(pendingActions);
-            const { unvisited, visited } = overlayPendingActions(
-                serverUnvisited,
-                serverVisited,
-                pendingActions);
-            cachePoints(unvisited, VisitState.open);
-            cachePoints(visited, VisitState.visited);
-            const pointCount = renderSelectedPoints();
-            renderSearchResults();
-
+            let initializedSnapshot = {
+                schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+                email: session.email,
+                expiresAt: session.expiresAt,
+                providers,
+                unvisitedPoints: serverUnvisited,
+                visitedPoints: serverVisited,
+                pendingActions: [],
+                savedAt: new Date().toISOString()
+            };
+            let storageFailed = false;
             if (session.expiresAt) {
-                const stored = await updateStoredSnapshot(snapshot => ({
-                    ...(snapshot ?? {}),
-                    schemaVersion: SNAPSHOT_SCHEMA_VERSION,
-                    email: session.email,
-                    expiresAt: session.expiresAt,
-                    providers,
-                    unvisitedPoints: unvisited,
-                    visitedPoints: visited,
-                    pendingActions,
-                    savedAt: new Date().toISOString()
-                }));
-                if (!stored.ok) {
-                    setMapStatus("Der Offline-Datenstand konnte nicht sicher gespeichert werden.", "error");
+                const stored = await updateStoredSnapshot((snapshot, revision) => {
+                    if (generation !== app.loadGeneration || !app.authenticated ||
+                        app.sessionEmail?.toLocaleLowerCase() !== session.email.toLocaleLowerCase() ||
+                        !(Date.parse(session.expiresAt) > Date.now()) ||
+                        revision !== snapshotRevision ||
+                        (snapshot && snapshot.email?.toLocaleLowerCase() !== session.email.toLocaleLowerCase())) {
+                        return null;
+                    }
+                    // Never merge actions read before this transaction: another tab may
+                    // have queued or completed them while the server responses were loading.
+                    const pendingActions = isSnapshotValid(snapshot) ? snapshot.pendingActions : [];
+                    const { unvisited, visited } = overlayPendingActions(
+                        serverUnvisited, serverVisited, pendingActions);
+                    return {
+                        ...snapshot,
+                        ...initializedSnapshot,
+                        unvisitedPoints: unvisited,
+                        visitedPoints: visited,
+                        pendingActions
+                    };
+                });
+                if (generation !== app.loadGeneration) return;
+                if (stored.ok && !stored.snapshot) {
+                    setSession({ authenticated: false });
+                    resetPointCache();
+                    clearMarkers();
+                    showAuthBarrier();
+                    return;
                 }
+                storageFailed = !stored.ok;
+                if (stored.snapshot) initializedSnapshot = stored.snapshot;
             }
+            if (generation !== app.loadGeneration) return;
+            const pointCount = loadSnapshotData(initializedSnapshot);
 
             if (app.backOnlineNoticePending) {
                 app.backOnlineNoticePending = false;
@@ -2760,9 +2769,13 @@
                     }
                 }, 1800);
             }
+            if (storageFailed) {
+                setMapStatus("Der Offline-Datenstand konnte nicht sicher gespeichert werden.", "error");
+            }
             if (!openPendingPointLink()) {
                 restoreLockedInfo(activePointId, activePixel, activeLocked);
             }
+            if (app.pendingActions.size > 0) scheduleSynchronizationRetry();
         } catch (error) {
             if (generation === app.loadGeneration) {
                 if (error?.status === 401) {
