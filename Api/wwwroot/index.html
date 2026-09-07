@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="css/toured.css" />
     <script defer src="vendor/openlayers/5.3.0/ol.js"></script>
     <script defer src="js/toured.js"></script>
+    <link rel="stylesheet" href="css/legal.css" />
 </head>
 <body>
 <main id="appShell" inert aria-hidden="true">
@@ -309,6 +310,15 @@
         </div>
     </dialog>
 
+    <footer class="map-legal-footer"><nav class="legal-nav" aria-label="Rechtliche Informationen">
+    <a href="https://github.com/ElPlatero/TourEd" target="_blank" rel="noopener noreferrer" aria-label="TourEd-Quellcode auf GitHub (AGPL-3.0-only)">&copy; TourEd</a>
+    <span aria-hidden="true">·</span>
+    <a href="datenschutz/">Datenschutz</a>
+    <span aria-hidden="true">·</span>
+    <a href="impressum/">Impressum</a>
+    <span aria-hidden="true">·</span>
+    <a href="lizenzen/">Lizenzen</a>
+</nav></footer>
 </main>
 
 <div id="updatePrompt" class="update-prompt" hidden role="status" aria-live="polite" aria-label="Aktualisierung verfügbar">
@@ -339,7 +349,15 @@
             <span>Mit Google anmelden</span>
         </a>
         <div class="auth-barrier__footer">
-            <a href="datenschutz/index.html" class="auth-barrier__privacy-link">Datenschutzerklärung</a>
+            <nav class="legal-nav" aria-label="Rechtliche Informationen">
+    <a href="https://github.com/ElPlatero/TourEd" target="_blank" rel="noopener noreferrer" aria-label="TourEd-Quellcode auf GitHub (AGPL-3.0-only)">&copy; TourEd</a>
+    <span aria-hidden="true">·</span>
+    <a href="datenschutz/">Datenschutz</a>
+    <span aria-hidden="true">·</span>
+    <a href="impressum/">Impressum</a>
+    <span aria-hidden="true">·</span>
+    <a href="lizenzen/">Lizenzen</a>
+</nav>
         </div>
     </div>
 </div>

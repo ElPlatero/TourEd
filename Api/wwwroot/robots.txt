@@ -1,0 +1,10 @@
+# Cooperative crawling restrictions, not access protection or an indexing guarantee.
+# noindex/nofollow/noarchive are HTML meta directives, not robots.txt rules.
+# For a PathBase deployment, also serve these rules in the origin-root /robots.txt.
+User-agent: *
+Disallow: /datenschutz
+Disallow: /impressum
+Disallow: /lizenzen
+Disallow: /*/datenschutz
+Disallow: /*/impressum
+Disallow: /*/lizenzen

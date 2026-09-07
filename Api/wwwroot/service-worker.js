@@ -1,11 +1,12 @@
 (() => {
     "use strict";
 
-    const CACHE_NAME = "toured-shell-v17";
+    const CACHE_NAME = "toured-shell-v18";
 
     const CORE_ASSETS = [
         "./",
         "css/toured.css",
+        "css/legal.css",
         "js/toured.js",
         "vendor/openlayers/5.3.0/ol.js",
         "vendor/openlayers/5.3.0/ol.css",
@@ -20,7 +21,12 @@
         "img/apple-touch-icon.png",
         "favicon.ico",
         "datenschutz/",
-        "datenschutz/index.html"
+        "datenschutz/index.html",
+        "impressum/",
+        "impressum/index.html",
+        "lizenzen/",
+        "lizenzen/index.html",
+        "lizenzen/agpl-3.0.txt"
     ];
 
     const CORE_URLS = CORE_ASSETS.map(asset => new URL(asset, self.location).href);
@@ -112,13 +118,25 @@
         if (event.request.mode === "navigate") {
             const shellUrl = new URL("./", self.location);
             const indexUrl = new URL("index.html", self.location);
-            const privacyUrl = new URL("datenschutz/", self.location);
-            const privacyIndexUrl = new URL("datenschutz/index.html", self.location);
+            const licenseUrl = new URL("lizenzen/agpl-3.0.txt", self.location);
+            const legalPage = ["datenschutz", "impressum", "lizenzen"].find(page => {
+                const path = new URL(`${page}/`, self.location).pathname;
+                return url.pathname === path || url.pathname === `${path}index.html` || url.pathname === path.slice(0, -1);
+            });
             let cachedUrl;
             if (url.pathname === shellUrl.pathname || url.pathname === indexUrl.pathname) {
                 cachedUrl = shellUrl.href;
-            } else if (url.pathname === privacyUrl.pathname || url.pathname === privacyIndexUrl.pathname) {
-                cachedUrl = privacyUrl.href;
+            } else if (url.pathname === licenseUrl.pathname) {
+                cachedUrl = licenseUrl.href;
+            } else if (legalPage) {
+                // Keep relative stylesheet/navigation links valid for slashless URLs offline too.
+                const canonical = new URL(`${legalPage}/`, self.location);
+                if (url.pathname === canonical.pathname.slice(0, -1)) {
+                    canonical.search = url.search;
+                    event.respondWith(Response.redirect(canonical.href, 302));
+                    return;
+                }
+                cachedUrl = canonical.href;
             } else {
                 return;
             }

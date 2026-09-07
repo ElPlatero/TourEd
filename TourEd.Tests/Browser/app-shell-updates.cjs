@@ -21,7 +21,7 @@ const server = createServer((req, res) => {
         res.writeHead(302, { Location: url.pathname.startsWith('/toured/') ? '/toured/' : '/' });
         return res.end();
     }
-    const file = pathname === '/' ? 'index.html' : pathname === '/datenschutz/' ? 'datenschutz/index.html' : pathname.slice(1);
+    const file = pathname === '/' ? 'index.html' :  /^\/(datenschutz|impressum|lizenzen)\/$/.test(pathname) ? pathname.slice(1) + 'index.html' : pathname.slice(1);
     try {
         if (failInstall && file === 'img/icon-512.png') { res.writeHead(500); return res.end('Injected install failure'); }
         let body = file === 'service-worker.js' ? workerSource : readFileSync(join(root, file));
@@ -34,7 +34,7 @@ const server = createServer((req, res) => {
         }
         if (file === 'css/toured.css') body += `\n:root { --test-release: ${release}; }`;
         if (file === 'service-worker.js') body = body.toString().replace(/toured-shell-v\d+/, `toured-shell-test-${release}`);
-        const type = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.html') ? 'text/html' : file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.webmanifest') ? 'application/manifest+json' : 'application/octet-stream';
+        const type = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.html') ? 'text/html' : file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.webmanifest') ? 'application/manifest+json' : file.endsWith('.txt') ? 'text/plain' : 'application/octet-stream';
         res.setHeader('Content-Type', type);
         // Deliberately leave unversioned assets in HTTP cache. Worker installation
         // must reload them, independently of the previous release's HTTP lifetime.
@@ -59,7 +59,7 @@ async function version(page, expected) {
     try {
         for (const base of ['/', '/toured/']) {
             release = 'A'; failInstall = false;
-            const context = await browser.newContext();
+            const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
             const page = await context.newPage();
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
@@ -71,6 +71,17 @@ async function version(page, expected) {
             await version(page, 'A');
             assert.equal(navigations, 1, 'First installation must not reload the page');
             assert.equal(await page.locator('#updatePrompt').isVisible(), false);
+            for (const width of [320, 375, 1280]) {
+                await page.setViewportSize({ width, height: 812 });
+                const links = page.locator('#authBarrier .legal-nav a');
+                assert.equal(await links.count(), 4);
+                for (const link of await links.all()) {
+                    const box = await link.boundingBox();
+                    assert.ok(box && box.height >= 44 && box.x >= 0 && box.x + box.width <= width);
+                }
+            }
+            await page.setViewportSize({ width: 375, height: 812 });
+            await page.screenshot({ path: `/tmp/toured-login-${base === '/' ? 'root' : 'path'}.png` });
             console.log(`PASS ${base} first installation`);
 
             release = 'B';
@@ -99,12 +110,29 @@ async function version(page, expected) {
             await context.setOffline(true);
             await page.goto(origin + base + '?provider=touringen&point=1');
             await version(page, 'A');
-            await page.goto(origin + base + 'datenschutz/?test=offline');
-            assert.equal(await page.locator('meta[name=test-release]').getAttribute('content'), 'A');
+            for (const legal of ['datenschutz', 'impressum', 'lizenzen']) {
+                for (const suffix of ['/?test=offline', '/index.html?test=offline', '?test=offline']) {
+                    await page.goto(origin + base + legal + suffix);
+                    assert.equal(await page.locator('meta[name=test-release]').getAttribute('content'), 'A');
+                    assert.equal(await page.locator('.legal-nav a').count(), 4);
+                    assert.equal(await page.locator('[aria-current="page"]').getAttribute('href'), `../${legal}/`);
+                    assert.equal(await page.locator('.back-link').getAttribute('href'), '../');
+                    if (legal === 'impressum') {
+                        assert.equal(await page.locator('address a').getAttribute('href'), 'mailto:info@toured-app.de');
+                        assert.equal(await page.locator('address a').innerText(), 'info@toured-app.de');
+                        assert.ok((await page.locator('address').innerText()).includes('Deutschland'));
+                    }
+                    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+                }
+            }
+            await page.locator('a[href="agpl-3.0.txt"]').click();
+            assert.ok((await page.locator('body').innerText()).includes('GNU AFFERO GENERAL PUBLIC LICENSE'));
+            await page.goto(origin + base + 'lizenzen/agpl-3.0.txt?offline=1');
+            assert.ok((await page.locator('body').innerText()).includes('GNU AFFERO GENERAL PUBLIC LICENSE'));
             await page.goto(origin + base);
             await version(page, 'A');
             await context.setOffline(false);
-            console.log(`PASS ${base} offline map and privacy navigation`);
+            console.log(`PASS ${base} offline map, all legal pages and license text`);
 
             await page.locator('#updateReloadButton').waitFor({ state: 'visible' });
             const beforeActivation = navigations;

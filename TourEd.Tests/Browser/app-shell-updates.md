@@ -21,7 +21,7 @@ Each sequence runs at `/` and `/toured/` and covers:
 1. First installation claims the page without automatically reloading it or showing an update prompt.
 2. Deploying B keeps A's HTML, JavaScript and CSS together during navigation, including `index.html` and a point-link query, while B waits.
 3. A callback containing OAuth state reaches the server; a stale callback without state redirects locally to the cached app.
-4. Offline navigation loads the active map and privacy page.
+4. Offline navigation loads the active map, all three legal pages (directory, index and slashless URLs, including query parameters), shared navigation and the local AGPL license text. Login footer links are checked at mobile and desktop widths.
 5. Clicking the real update button activates B, reloads once, and loads B's HTML, JavaScript and CSS together.
 6. Auth, API, health and non-GET requests remain uncached; unknown page routes retain the server's 404 response.
 7. Failure to install C leaves B usable and removes C's partial cache.

@@ -757,7 +757,7 @@ input:focus-visible,
 
 #mapLegend {
     position: fixed;
-    bottom: max(2rem, calc(env(safe-area-inset-bottom) + 2rem));
+    bottom: calc(5rem + env(safe-area-inset-bottom));
     left: max(0.5rem, env(safe-area-inset-left));
     z-index: 150;
     display: flex;
@@ -808,7 +808,7 @@ input:focus-visible,
 #infoCard {
     position: fixed;
     right: max(0.5rem, env(safe-area-inset-right));
-    bottom: max(1.75rem, calc(env(safe-area-inset-bottom) + 1.75rem));
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
     left: max(0.5rem, env(safe-area-inset-left));
     z-index: 300;
     max-height: min(65dvh, 32rem);
@@ -1108,19 +1108,16 @@ input:focus-visible,
 
 .ol-attribution {
     right: max(0.25rem, env(safe-area-inset-right)) !important;
-    bottom: max(0.25rem, env(safe-area-inset-bottom)) !important;
+    bottom: calc(3rem + env(safe-area-inset-bottom)) !important;
 }
 
-.ol-attribution .footer-link {
-    color: inherit;
-    opacity: 0.65;
-    text-decoration: none;
-}
-
-.ol-attribution .footer-link:hover,
-.ol-attribution .footer-link:focus {
-    opacity: 1;
-    text-decoration: underline;
+.map-legal-footer {
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 200;
+    padding: 0 max(0.25rem, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(0.25rem, env(safe-area-inset-left));
+    background: var(--surface);
+    color: var(--text);
 }
 
 @media (min-width: 45rem) and (hover: hover) and (pointer: fine) {
@@ -1158,7 +1155,7 @@ input:focus-visible,
 
 .update-prompt {
     position: fixed;
-    bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem));
+    bottom: calc(4.25rem + env(safe-area-inset-bottom));
     left: 50%;
     z-index: 650;
     width: min(26rem, calc(100vw - 2rem));
@@ -1288,6 +1285,8 @@ input:focus-visible,
 }
 
 .auth-barrier__card {
+    max-height: 100%;
+    overflow-y: auto;
     width: 100%;
     max-width: 26rem;
     padding: 2rem 1.75rem 1.5rem;
@@ -1383,16 +1382,6 @@ input:focus-visible,
     padding-top: 1rem;
     border-top: 1px solid rgb(37 37 34 / 12%);
     font-size: 0.85rem;
-}
-
-.auth-barrier__privacy-link {
-    color: var(--text-muted);
-    text-decoration: underline;
-}
-
-.auth-barrier__privacy-link:hover,
-.auth-barrier__privacy-link:focus {
-    color: var(--text);
 }
 
 #appShell[inert] {
