@@ -376,9 +376,9 @@
     });
 
     const markerStyles = {
-        [VisitState.unknown]: createMarkerStyle("img/pin_icon_neutral.svg?v=3"),
-        [VisitState.open]: createMarkerStyle("img/pin_icon_neutral.svg?v=3"),
-        [VisitState.visited]: createMarkerStyle("img/pin_icon_visited.svg?v=3")
+        [VisitState.unknown]: createMarkerStyle("img/pin_icon_neutral.svg"),
+        [VisitState.open]: createMarkerStyle("img/pin_icon_neutral.svg"),
+        [VisitState.visited]: createMarkerStyle("img/pin_icon_visited.svg")
     };
     const clusterStyleCache = new Map();
     const markerSource = new ol.source.Vector();

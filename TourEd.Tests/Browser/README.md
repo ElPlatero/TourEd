@@ -26,3 +26,5 @@ For a negative control, `TOURED_SCRIPT` can point to an older copy of `toured.js
 ## Local OpenLayers installation (Issue #84)
 
 Run `PLAYWRIGHT_MODULE=/tmp/toured-browser-tests/node_modules/playwright node TourEd.Tests/Browser/local-openlayers.cjs`. Fresh browser contexts allow real service workers. DNS blocks every foreign host, including tile hosts, while the local server supplies session fixtures. The test covers root and PathBase hosting, anonymous and authenticated startup, local library/license cache entries, and offline reload.
+
+The authenticated cases include spatially separated open and visited single points. With the ordinary HTTP cache disabled and cleared, offline reload must receive both pin images from the service worker and render their distinct colors in the map canvas. `TOURED_SCRIPT` can point to the pre-fix script as a negative control.
