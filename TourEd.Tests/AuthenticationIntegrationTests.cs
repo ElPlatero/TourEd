@@ -1070,8 +1070,8 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Contains("event.key !== \"Escape\"", script, StringComparison.Ordinal);
         Assert.Contains("hitTolerance", script, StringComparison.Ordinal);
         Assert.Contains("scale: 0.32", script, StringComparison.Ordinal);
-        Assert.Contains("img/pin_icon_neutral.svg?v=3", script, StringComparison.Ordinal);
-        Assert.Contains("img/pin_icon_visited.svg?v=3", script, StringComparison.Ordinal);
+        Assert.Contains("\"img/pin_icon_neutral.svg\"", script, StringComparison.Ordinal);
+        Assert.Contains("\"img/pin_icon_visited.svg\"", script, StringComparison.Ordinal);
         Assert.Contains("attribution: false, zoom: false", script, StringComparison.Ordinal);
         Assert.Contains("VisitState.unknown", script, StringComparison.Ordinal);
         Assert.Contains("elements.mapLegend.hidden = !authenticated", script, StringComparison.Ordinal);
