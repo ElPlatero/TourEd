@@ -14,12 +14,6 @@ public sealed class UnitOfWork : IUnitOfWork
         _transaction = dbContext.Database.BeginTransaction();
     }
 
-    public void Commit()
-    {
-        _committed = true;
-        _transaction.Commit();
-    }
-
     public async Task CommitAsync()
     {
         _committed = true;

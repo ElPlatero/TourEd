@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -273,18 +274,6 @@ public sealed class ImportServiceTests : IDisposable
 
         Assert.Equal(StampingProvider.TouringenSlug, pointResult.Point.Provider.Slug);
         Assert.Equal(StampingProvider.TouringenSlug, Assert.Single(tourResult.Points).Provider.Slug);
-    }
-
-    [Fact]
-    public void TouringenAdapterUsesProviderScopedExternalId()
-    {
-        var rawPoint = CreateRawStampPoint(9_001, 42);
-
-        var point = rawPoint.CreateStampingPoint();
-
-        Assert.Equal(default, point.Id);
-        Assert.Equal(StampingProvider.TouringenId, point.ProviderId);
-        Assert.Equal("9001", point.ExternalId);
     }
 
     [Fact]
@@ -655,9 +644,16 @@ public sealed class ImportServiceTests : IDisposable
             .Union(areas.SelectMany(area => area.OrphanedStampPoints))
             .DistinctBy(point => point.Id)
             .GroupBy(point => point.StampPointNumber)
-            .Select(group => group.MaxBy(point => point.Id)!.CreateStampingPoint())
+            .Select(group => CreateTouringenStandardPoint(group.MaxBy(point => point.Id)!))
             .ToArray();
     }
+
+    private static StampingPoint CreateTouringenStandardPoint(RawStampPoint rawPoint)
+        => new(default, (string.IsNullOrWhiteSpace(rawPoint.Name) ? rawPoint.Title : rawPoint.Name).Trim('"', ' '), rawPoint.Longitude, rawPoint.Latitude, rawPoint.StampPointNumber,
+            rawPoint.StampPointExtendedNumber, StampingProvider.TouringenId, rawPoint.Id.ToString(CultureInfo.InvariantCulture))
+        {
+            SeriesId = StampingSeries.TouringenStandardId
+        };
 
     private static RawStampPoint CreateRawStampPoint(int externalId, int number)
         => new(externalId, $"Point {number}", 50.0m, 11.0m, 1, number, number * 10, $"Point {number}");
