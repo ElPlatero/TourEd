@@ -603,12 +603,6 @@ public class TouredRepository : IUserService
         updatedEntries.ForEach(p => _dbContext.Entry(p).State = EntityState.Detached);
     }
 
-    public async Task SaveImportAsync(int stampingPointsCount, int hikingToursCount)
-    {
-        await _dbContext.AddAsync(new Import(default, default, stampingPointsCount, hikingToursCount));
-        await _dbContext.SaveChangesAsync();
-    }
-
     public async Task<int> SaveUserDataAsync(params UserVisit[] visits)
     {
         if (!visits.Any()) return 0;
@@ -656,14 +650,6 @@ public class TouredRepository : IUserService
                 cancellationToken);
 
         return updatedUsers == 1;
-    }
-
-    public async Task<RegistrationRequest?> GetRegistrationRequestByGoogleSubjectOrDefaultAsync(
-        string googleSubject,
-        CancellationToken cancellationToken = default)
-    {
-        return await _dbContext.RegistrationRequests
-            .FirstOrDefaultAsync(r => r.GoogleSubject == googleSubject, cancellationToken);
     }
 
     public async Task<RegistrationRequest> RecordOrUpdateRegistrationRequestAsync(

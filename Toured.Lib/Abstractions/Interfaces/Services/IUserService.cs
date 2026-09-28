@@ -8,7 +8,6 @@ public interface IUserService
     Task<User?> GetUserByIdOrDefaultAsync(int userId, CancellationToken cancellationToken = default);
     Task<User?> GetUserByGoogleSubjectOrDefaultAsync(string googleSubject, CancellationToken cancellationToken = default);
     Task<bool> TryBindGoogleSubjectAsync(int userId, string googleSubject, CancellationToken cancellationToken = default);
-    Task<RegistrationRequest?> GetRegistrationRequestByGoogleSubjectOrDefaultAsync(string googleSubject, CancellationToken cancellationToken = default);
     Task<RegistrationRequest> RecordOrUpdateRegistrationRequestAsync(string googleSubject, string email, CancellationToken cancellationToken = default);
     Task MarkRegistrationRequestApprovedAsync(string googleSubject, CancellationToken cancellationToken = default);
 }

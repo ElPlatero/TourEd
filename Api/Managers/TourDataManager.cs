@@ -21,18 +21,6 @@ public class TourDataManager
         return await _repository.GetStampingPointsAsync(geoFilter: geoFilter, providerFilter: providerFilter, userId: currentUserId, excludeVisited: userFilter?.ExcludeVisited);
     }
 
-    public async Task<(StampingPoint Point, List<HikingTour>? Tours)?> GetStampingPointOrDefaultAsync(int stampingPointId)
-    {
-        var points = await _repository.GetStampingPointsAsync(stampingPointsNr: stampingPointId);
-        if (points.Count == 0)
-        {
-            return null;
-        }
-
-        var (point, tours, _) = points.First();
-        return (point, tours);
-    }
-
     public Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync(
         int currentUserId,
         (Position Centre, decimal Range)? distance = null)
