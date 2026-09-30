@@ -2,7 +2,7 @@ using Api.Entities;
 
 namespace Api.Imports;
 
-public class HikingToursImportService : IImportService<HikingTour>
+public sealed class HikingToursImportService
 {
     public IEnumerable<HikingTour> Import(RawArea[]? inputData)
     {

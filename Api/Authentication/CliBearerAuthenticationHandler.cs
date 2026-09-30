@@ -11,16 +11,16 @@ public sealed class CliBearerAuthenticationHandler : AuthenticationHandler<CliBe
 {
     private const string BearerScheme = "Bearer";
     private const string FailureMessage = "CLI authentication failed.";
-    private readonly IUserService _userService;
+    private readonly UserRepository _users;
 
     public CliBearerAuthenticationHandler(
-        IUserService userService,
+        UserRepository users,
         IOptionsMonitor<CliBearerAuthenticationOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder)
         : base(options, logger, encoder)
     {
-        _userService = userService;
+        _users = users;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -41,7 +41,7 @@ public sealed class CliBearerAuthenticationHandler : AuthenticationHandler<CliBe
             return AuthenticateResult.Fail(FailureMessage);
         }
 
-        var user = await _userService.GetUserOrDefaultAsync(Options.UserEmail, Context.RequestAborted);
+        var user = await _users.GetUserOrDefaultAsync(Options.UserEmail, Context.RequestAborted);
         if (user is null)
         {
             return AuthenticateResult.Fail(FailureMessage);
