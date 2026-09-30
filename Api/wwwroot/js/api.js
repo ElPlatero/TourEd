@@ -1,5 +1,5 @@
 // HTTP calls to the TourEd backend; callers interpret status codes.
-export const getJson = async (url) => {
+const getJson = async (url) => {
     const response = await fetch(url, {
         headers: { "Accept": "application/json" }
     });
@@ -9,7 +9,7 @@ export const getJson = async (url) => {
     return await response.json();
 };
 
-export const sendVisitStateRequest = async action => {
+const sendVisitStateRequest = async action => {
     const provider = encodeURIComponent(action.providerSlug);
     const response = await fetch(`api/points/id/${action.pointId}/state?provider=${provider}`, {
         method: "PUT",
@@ -29,4 +29,9 @@ export const sendVisitStateRequest = async action => {
         }
     }
     return { response, body };
+};
+
+export {
+    getJson,
+    sendVisitStateRequest
 };

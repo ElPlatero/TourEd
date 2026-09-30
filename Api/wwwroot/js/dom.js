@@ -1,5 +1,5 @@
 // DOM elements of the map page, looked up once at module evaluation.
-export const elements = {
+const elements = {
     accountMenuButton: document.getElementById("accountMenuButton"),
     accountPanel: document.getElementById("accountPanel"),
     appShell: document.getElementById("appShell"),
@@ -82,4 +82,8 @@ export const elements = {
     visitFilterButton: document.getElementById("visitFilterButton"),
     visitLoginLink: document.getElementById("visitLoginLink"),
     visitNowButton: document.getElementById("visitNowButton")
+};
+
+export {
+    elements
 };
