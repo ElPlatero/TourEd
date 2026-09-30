@@ -2,46 +2,19 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Api.ErrorHandling;
 using Api.Extensions;
-using Api.Imports;
-using Api.Managers;
-using Api.Options;
 using Api.Repositories;
-using Api.Services;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
-    .Configure<TouringenWebsiteConfiguration>(builder.Configuration.GetSection("touringen"))
-    .Configure<HarzerWandernadelConfiguration>(builder.Configuration.GetSection("harzerWandernadel"))
-    .AddSingleton(serviceProvider => serviceProvider
-        .GetRequiredService<Microsoft.Extensions.Options.IOptions<HarzerWandernadelConfiguration>>().Value)
     .AddOpenApi("toured")
-    .AddHttpClient<IHtmlParsingService, HtmlParsingService>().Services
-    .AddHttpClient<ITouringenStampingPointImportService, TouringenStampingPointImportService>(client =>
-    {
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; TourEd/1.0; +https://toured-app.de/)");
-        client.Timeout = TimeSpan.FromSeconds(30);
-    }).Services
-    .AddSingleton(serviceProvider => serviceProvider
-        .GetRequiredService<Microsoft.Extensions.Options.IOptions<TouringenWebsiteConfiguration>>().Value)
-    .AddHttpClient<IHarzerWandernadelImportService, HarzerWandernadelImportService>(client =>
-    {
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; TourEd/1.0; +https://toured-app.de/)");
-        client.Timeout = TimeSpan.FromSeconds(30);
-    }).Services
-    .AddImportServices()
+    .AddSingleton<TimeProvider>(TimeProvider.System)
+    .AddImportServices(builder.Configuration)
     .AddRepositories()
     .AddManagers()
-    .AddSingleton<TimeProvider>(TimeProvider.System)
-    .Configure<RegistrationNotificationOptions>(builder.Configuration.GetSection(RegistrationNotificationOptions.SectionName))
-    .AddTransient<IRegistrationNotificationSender, SmtpRegistrationNotificationSender>()
-    .AddSingleton<RegistrationRequestNotificationService>()
-    .AddHostedService(serviceProvider => serviceProvider.GetRequiredService<RegistrationRequestNotificationService>())
-    .AddSingleton<DataRetentionCleanupService>()
-    .AddHostedService(serviceProvider => serviceProvider.GetRequiredService<DataRetentionCleanupService>())
-    .AddScoped<IUnitOfWorkFactory, UnitOfWorkFactory>()
+    .AddBackgroundServices(builder.Configuration)
     .AddTouredAuthentication(builder.Configuration)
     .AddTouredDataProtection(builder.Configuration)
     .AddEndpointsApiExplorer()
@@ -54,7 +27,6 @@ builder.Services
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
-
 
 var app = builder.Build();
 

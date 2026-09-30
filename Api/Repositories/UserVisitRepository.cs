@@ -20,19 +20,26 @@ public sealed class UserVisitRepository
     public Task<UserVisit?> GetUserVisitOrDefaultAsync(User currentUser, int stampingPointId, CancellationToken cancellationToken = default)
         => _dbContext.UserVisits.FirstOrDefaultAsync(p => p.StampingPointId == stampingPointId && p.UserId == currentUser.Id, cancellationToken);
 
-    public async Task AddUserVisitAsync(User currentUser, int stampingPointId, DateTime? visited, bool hasVisitedTime, CancellationToken cancellationToken = default)
+    public async Task AddUserVisitAsync(
+        User currentUser,
+        int stampingPointId,
+        DateTime? visited,
+        bool hasVisitedTime,
+        CancellationToken cancellationToken = default)
     {
-        var dto = await _dbContext.UserVisits.SingleOrDefaultAsync(p => p.UserId == currentUser.Id && p.StampingPointId == stampingPointId, cancellationToken);
-        if (dto == null)
+        var visit = await _dbContext.UserVisits.SingleOrDefaultAsync(
+            p => p.UserId == currentUser.Id && p.StampingPointId == stampingPointId,
+            cancellationToken);
+        if (visit == null)
         {
-            dto = new UserVisit
+            visit = new UserVisit
             {
                 StampingPointId = stampingPointId,
                 UserId = currentUser.Id,
                 Visited = visited,
                 HasVisitedTime = hasVisitedTime
             };
-            await _dbContext.AddAsync(dto, cancellationToken);
+            await _dbContext.AddAsync(visit, cancellationToken);
             try
             {
                 await _dbContext.SaveChangesAsync(cancellationToken);
@@ -48,7 +55,12 @@ public sealed class UserVisitRepository
         }
     }
 
-    public async Task UpdateUserVisitAsync(User currentUser, int stampingPointId, DateTime? visited, bool hasVisitedTime, CancellationToken cancellationToken = default)
+    public async Task UpdateUserVisitAsync(
+        User currentUser,
+        int stampingPointId,
+        DateTime? visited,
+        bool hasVisitedTime,
+        CancellationToken cancellationToken = default)
     {
         var userVisit = await _dbContext.UserVisits.SingleOrDefaultAsync(visit =>
             visit.UserId == currentUser.Id && visit.StampingPointId == stampingPointId, cancellationToken)
@@ -135,8 +147,14 @@ public sealed class UserVisitRepository
     public async Task<int> SaveUserDataAsync(IReadOnlyList<UserVisit> visits, CancellationToken cancellationToken = default)
     {
         if (visits.Count == 0) return 0;
-        if (visits.Select(p => p.UserId).Distinct().Count() > 1) throw new InvalidOperationException("Can only import one user at a time.");
-        if (visits.GroupBy(p => p.StampingPointId).Any(p => p.Count() > 1)) throw new InvalidOperationException("Stamping points can only be visited once. Remove duplicate entries.");
+        if (visits.Select(p => p.UserId).Distinct().Count() > 1)
+        {
+            throw new InvalidOperationException("Can only import one user at a time.");
+        }
+        if (visits.GroupBy(p => p.StampingPointId).Any(p => p.Count() > 1))
+        {
+            throw new InvalidOperationException("Stamping points can only be visited once. Remove duplicate entries.");
+        }
         var updatedVisits = visits.ToDictionary(p => p.StampingPointId);
         List<UserVisit> updatedEntries = new();
         var userId = visits[0].UserId;

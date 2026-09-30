@@ -22,7 +22,9 @@ public sealed class HikingToursImportService
                 hikingTour.IsKidsTour,
                 hikingTour.IsCircularPath,
                 hikingTour.IsLongDistanceTrail);
-            newTour.StampingPoints = hikingTour.StampPoints.Select(p => new SortedStampingPoint(p.Positionsnummer) { StampingPointId = p.Id, Tour = newTour }).ToList();
+            newTour.StampingPoints = hikingTour.StampPoints
+                .Select(p => new SortedStampingPoint(p.Positionsnummer) { StampingPointId = p.Id, Tour = newTour })
+                .ToList();
             yield return newTour;
         }
     }

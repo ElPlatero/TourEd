@@ -4,7 +4,9 @@ public sealed record Position(decimal Longitude, decimal Latitude)
 {
     public static decimal GetDistance(Position x, Position y)
     {
-        static (double, double) GetLonLat(Position position) => (Convert.ToDouble(position.Latitude) * Math.PI / 180.0, Convert.ToDouble(position.Longitude) * Math.PI / 180.0);
+        static (double, double) GetLonLat(Position position) => (
+            Convert.ToDouble(position.Latitude) * Math.PI / 180.0,
+            Convert.ToDouble(position.Longitude) * Math.PI / 180.0);
 
         var (latX, lonX) = GetLonLat(x);
         var (latY, lonY) = GetLonLat(y);
