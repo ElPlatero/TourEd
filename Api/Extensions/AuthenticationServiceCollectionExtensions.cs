@@ -16,6 +16,7 @@ internal static class AuthenticationServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddTransient<GoogleLoginService>();
         services.AddTransient<GoogleOAuthTicketService>();
 
         services.AddAuthentication(options =>

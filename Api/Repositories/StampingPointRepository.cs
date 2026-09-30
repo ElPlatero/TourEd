@@ -66,7 +66,14 @@ public sealed class StampingPointRepository
             join rawTourPoint in _dbContext.StampingPointsInTours on point.Id equals rawTourPoint.StampingPointId into joinedTourPoints
             from tourPoint in joinedTourPoints.DefaultIfEmpty()
             group tourPoint by point into groupedTours
-            select new { Point = groupedTours.Key, UserVisit = userId == null ? null : _dbContext.UserVisits.FirstOrDefault(p => p.StampingPointId == groupedTours.Key.Id && p.UserId == userId), Tours = groupedTours.Select(p => p.Tour).ToList() };
+            select new
+            {
+                Point = groupedTours.Key,
+                UserVisit = userId == null
+                    ? null
+                    : _dbContext.UserVisits.FirstOrDefault(p => p.StampingPointId == groupedTours.Key.Id && p.UserId == userId),
+                Tours = groupedTours.Select(p => p.Tour).ToList()
+            };
 
         if (excludeVisited != null && userId != null)
         {
@@ -75,21 +82,25 @@ public sealed class StampingPointRepository
                 : result.Where(p => _dbContext.UserVisits.Where(q => q.UserId == userId.Value).Any(q => q.StampingPointId == p.Point.Id));
         }
 
-        var dto = await result.ToListAsync(cancellationToken);
+        var rows = await result.ToListAsync(cancellationToken);
         if (criteria.Area is { } area)
         {
-            dto = dto.Where(p => area.Contains(p.Point.Position)).ToList();
+            rows = rows.Where(p => area.Contains(p.Point.Position)).ToList();
         }
-        var providers = await GetStampingProvidersAsync(dto.Select(p => p.Point.ProviderId), cancellationToken);
-        var series = await GetStampingSeriesAsync(dto.Select(p => p.Point.SeriesId), cancellationToken);
-        return dto.Select(p => new StampingPointDetails(
+        var providers = await GetStampingProvidersAsync(rows.Select(p => p.Point.ProviderId), cancellationToken);
+        var series = await GetStampingSeriesAsync(rows.Select(p => p.Point.SeriesId), cancellationToken);
+        return rows.Select(p => new StampingPointDetails(
                 p.Point with { Provider = providers[p.Point.ProviderId], Series = series[p.Point.SeriesId] },
                 p.Tours.Any(q => q != null) ? p.Tours : null,
                 p.UserVisit))
             .ToList();
     }
 
-    public async Task<StampingPoint> GetStampingPointAsync(int stampingPointNumber, StampingProviderFilter providerFilter, string? seriesSlug = null, CancellationToken cancellationToken = default)
+    public async Task<StampingPoint> GetStampingPointAsync(
+        int stampingPointNumber,
+        StampingProviderFilter providerFilter,
+        string? seriesSlug = null,
+        CancellationToken cancellationToken = default)
     {
         if (providerFilter.IncludesAllProviders)
         {
@@ -112,7 +123,10 @@ public sealed class StampingPointRepository
                ?? throw EntityNotFoundException.Create<StampingPoint>(stampingPointNumber);
     }
 
-    public async Task<StampingPoint> GetStampingPointByIdAsync(int stampingPointId, StampingProviderFilter providerFilter, CancellationToken cancellationToken = default)
+    public async Task<StampingPoint> GetStampingPointByIdAsync(
+        int stampingPointId,
+        StampingProviderFilter providerFilter,
+        CancellationToken cancellationToken = default)
     {
         if (providerFilter.IncludesAllProviders)
         {
@@ -210,14 +224,14 @@ public sealed class StampingPointRepository
             group point by tour into groupedStampingPoints
             select new { Tour = groupedStampingPoints.Key, Points = groupedStampingPoints.ToList() };
 
-        var dto = await result.ToListAsync(cancellationToken);
+        var rows = await result.ToListAsync(cancellationToken);
         if (area is not null)
         {
-            dto = dto.Where(p => p.Points.Any(point => area.Contains(point.Position))).ToList();
+            rows = rows.Where(p => p.Points.Any(point => area.Contains(point.Position))).ToList();
         }
-        var providers = await GetStampingProvidersAsync(dto.SelectMany(p => p.Points).Select(p => p.ProviderId), cancellationToken);
-        var series = await GetStampingSeriesAsync(dto.SelectMany(p => p.Points).Select(p => p.SeriesId), cancellationToken);
-        return dto.Select(p => new HikingTourWithPoints(
+        var providers = await GetStampingProvidersAsync(rows.SelectMany(p => p.Points).Select(p => p.ProviderId), cancellationToken);
+        var series = await GetStampingSeriesAsync(rows.SelectMany(p => p.Points).Select(p => p.SeriesId), cancellationToken);
+        return rows.Select(p => new HikingTourWithPoints(
                 p.Tour,
                 p.Points.Select(point => point with { Provider = providers[point.ProviderId], Series = series[point.SeriesId] }).ToList()))
             .ToList();

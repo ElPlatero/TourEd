@@ -27,13 +27,29 @@ public sealed class PointsController : ControllerBase
             return Unauthorized();
         }
 
-        var result = await _manager.GetStampingPointsAsync(query.Provider, currentUser.Id, query.GetAreaOrDefault(), query.GetExcludeVisitedOrDefault(), cancellationToken);
-        return Ok(new GetStampingPointsResponse(result.Count, result.OrderBy(p => p.Point.Provider.Slug).ThenBy(p => p.Point.Series.Slug).ThenBy(p => p.Point.Number.HasValue ? 0 : 1).ThenBy(p => p.Point.Number).ThenBy(p => p.Point.Name).Select(CreateDto)));
+        var result = await _manager.GetStampingPointsAsync(
+            query.Provider,
+            currentUser.Id,
+            query.GetAreaOrDefault(),
+            query.GetExcludeVisitedOrDefault(),
+            cancellationToken);
+        var points = result
+            .OrderBy(p => p.Point.Provider.Slug)
+            .ThenBy(p => p.Point.Series.Slug)
+            .ThenBy(p => p.Point.Number.HasValue ? 0 : 1)
+            .ThenBy(p => p.Point.Number)
+            .ThenBy(p => p.Point.Name)
+            .Select(CreateDto);
+        return Ok(new GetStampingPointsResponse(result.Count, points));
     }
 
     [Authorize]
     [HttpGet("{stampingPointNumber:int:min(1)}")]
-    public async Task<IActionResult> GetVisit(int stampingPointNumber, [FromQuery] string? provider = null, [FromQuery] string? series = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetVisit(
+        int stampingPointNumber,
+        [FromQuery] string? provider = null,
+        [FromQuery] string? series = null,
+        CancellationToken cancellationToken = default)
     {
         if (!User.TryGetUser(out var currentUser))
         {
@@ -46,7 +62,12 @@ public sealed class PointsController : ControllerBase
 
     [Authorize]
     [HttpPut("{stampingPointNumber:int:min(1)}")]
-    public async Task<IActionResult> AddVisit(int stampingPointNumber, [FromBody] SaveVisitRequest request, [FromQuery] string? provider = null, [FromQuery] string? series = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> AddVisit(
+        int stampingPointNumber,
+        [FromBody] SaveVisitRequest request,
+        [FromQuery] string? provider = null,
+        [FromQuery] string? series = null,
+        CancellationToken cancellationToken = default)
     {
         if (!User.TryGetUser(out var currentUser))
         {
@@ -59,7 +80,12 @@ public sealed class PointsController : ControllerBase
 
     [Authorize]
     [HttpPatch("{stampingPointNumber:int:min(1)}")]
-    public async Task<IActionResult> UpdateVisit(int stampingPointNumber, [FromBody] SaveVisitRequest request, [FromQuery] string? provider = null, [FromQuery] string? series = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> UpdateVisit(
+        int stampingPointNumber,
+        [FromBody] SaveVisitRequest request,
+        [FromQuery] string? provider = null,
+        [FromQuery] string? series = null,
+        CancellationToken cancellationToken = default)
     {
         if (!User.TryGetUser(out var currentUser))
         {
@@ -72,7 +98,11 @@ public sealed class PointsController : ControllerBase
 
     [Authorize]
     [HttpDelete("{stampingPointNumber:int:min(1)}")]
-    public async Task<IActionResult> DeleteVisit(int stampingPointNumber, [FromQuery] string? provider = null, [FromQuery] string? series = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> DeleteVisit(
+        int stampingPointNumber,
+        [FromQuery] string? provider = null,
+        [FromQuery] string? series = null,
+        CancellationToken cancellationToken = default)
     {
         if (!User.TryGetUser(out var currentUser))
         {
@@ -116,7 +146,11 @@ public sealed class PointsController : ControllerBase
 
     [Authorize]
     [HttpPut("id/{stampingPointId:int:min(1)}")]
-    public async Task<IActionResult> AddVisitById(int stampingPointId, [FromBody] SaveVisitRequest request, [FromQuery] string? provider = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> AddVisitById(
+        int stampingPointId,
+        [FromBody] SaveVisitRequest request,
+        [FromQuery] string? provider = null,
+        CancellationToken cancellationToken = default)
     {
         if (!User.TryGetUser(out var currentUser)) return Unauthorized();
         await _manager.AddVisitByIdAsync(currentUser, stampingPointId, request.VisitedOn, request.VisitedAt, provider, cancellationToken);
@@ -125,7 +159,11 @@ public sealed class PointsController : ControllerBase
 
     [Authorize]
     [HttpPatch("id/{stampingPointId:int:min(1)}")]
-    public async Task<IActionResult> UpdateVisitById(int stampingPointId, [FromBody] SaveVisitRequest request, [FromQuery] string? provider = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> UpdateVisitById(
+        int stampingPointId,
+        [FromBody] SaveVisitRequest request,
+        [FromQuery] string? provider = null,
+        CancellationToken cancellationToken = default)
     {
         if (!User.TryGetUser(out var currentUser)) return Unauthorized();
         await _manager.UpdateVisitByIdAsync(currentUser, stampingPointId, request.VisitedOn, request.VisitedAt, provider, cancellationToken);

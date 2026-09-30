@@ -285,7 +285,8 @@ public sealed partial class TouringenStampingPointImportService : ITouringenStam
             .ToArray();
         if (gpxEntries.Length != expectedCount)
         {
-            throw new InvalidDataException($"Touringen series '{seriesSlug}' must contain exactly {expectedCount} GPX files, but contains {gpxEntries.Length}.");
+            throw new InvalidDataException(
+                $"Touringen series '{seriesSlug}' must contain exactly {expectedCount} GPX files, but contains {gpxEntries.Length}.");
         }
 
         var points = new List<StampingPoint>(expectedCount);
@@ -342,7 +343,8 @@ public sealed partial class TouringenStampingPointImportService : ITouringenStam
         var name = NaturalTreasurePrefixRegex().Replace(rawName, string.Empty).Trim();
         if (!NaturalTreasureNumbers.TryGetValue(name, out var number))
         {
-            throw new InvalidDataException($"Unknown Touringen natural treasure '{name}' in '{fileName}'. Update the explicit source correction map after verification.");
+            throw new InvalidDataException(
+                $"Unknown Touringen natural treasure '{name}' in '{fileName}'. Update the explicit source correction map after verification.");
         }
         return (number, name);
     }

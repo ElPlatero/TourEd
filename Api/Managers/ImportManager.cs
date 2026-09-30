@@ -24,7 +24,17 @@ public sealed class ImportManager : IImportManager
     private readonly StampingProviderManager _providerManager;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, HikingToursImportService hikingToursImporter, StampingPointRepository points, UserVisitRepository visits, StampingProviderRepository providers, IUnitOfWorkFactory unitOfWorkFactory, StampingProviderManager providerManager)
+    public ImportManager(
+        IHtmlParsingService htmlParser,
+        IHarzerWandernadelImportService harzerWandernadelImporter,
+        ITouringenStampingPointImportService touringenStampingPointImporter,
+        IOptions<TouringenWebsiteConfiguration> options,
+        HikingToursImportService hikingToursImporter,
+        StampingPointRepository points,
+        UserVisitRepository visits,
+        StampingProviderRepository providers,
+        IUnitOfWorkFactory unitOfWorkFactory,
+        StampingProviderManager providerManager)
     {
         _htmlParser = htmlParser;
         _harzerWandernadelImporter = harzerWandernadelImporter;
