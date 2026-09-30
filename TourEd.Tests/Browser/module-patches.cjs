@@ -8,14 +8,16 @@ const { join } = require('node:path');
  * @param {string} root wwwroot directory
  * @param {{name: string, find: (string|RegExp)[], replace: string}[]} rules applied in order;
  *        the first matching alternative of `find` is replaced (first occurrence only)
- * @param {string|undefined} entryOverride optional replacement for js/toured.js (negative controls)
+ * @param {string|undefined} entryOverride optional single-script toured.js for negative controls; it
+ *        imports no modules, so only it is patched and every other file is served unchanged
  * @returns {Map<string, string>} patched sources keyed by path relative to wwwroot
  */
 function loadPatchedModules(root, rules, entryOverride) {
-    const sources = new Map(readdirSync(join(root, 'js'))
-        .filter(name => name.endsWith('.js'))
-        .map(name => [`js/${name}`, readFileSync(join(root, 'js', name), 'utf8')]));
-    if (entryOverride) sources.set('js/toured.js', readFileSync(entryOverride, 'utf8'));
+    const sources = entryOverride
+        ? new Map([['js/toured.js', readFileSync(entryOverride, 'utf8')]])
+        : new Map(readdirSync(join(root, 'js'))
+            .filter(name => name.endsWith('.js'))
+            .map(name => [`js/${name}`, readFileSync(join(root, 'js', name), 'utf8')]));
     for (const rule of rules) {
         const hits = [];
         for (const [file, text] of sources) {

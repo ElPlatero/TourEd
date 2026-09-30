@@ -14,10 +14,15 @@ const syncTestExports = `window.__syncTest = {
 };`;
 const modules = loadPatchedModules(root, [{
     name: 'expose synchronization',
-    // The final initialize() call of the entry module, or of the former single-script
-    // IIFE (then followed by "})();") when TOURED_SCRIPT runs a negative control.
-    find: [/( *)initialize\(\);(\r?\n\}\)\(\);)?\s*$/],
-    replace: `$1${syncTestExports}\n$1initialize();$2\n`
+    // Appended to the module that orchestrates synchronization, where all exposed names are in
+    // scope; for a negative control (TOURED_SCRIPT) inside the former single-script IIFE instead.
+    find: [
+        /(\nconst synchronizePendingActions = [\s\S]*?)(\r?\nexport \{[\s\S]*\};\s*)$/,
+        /( *)initialize\(\);(\r?\n\}\)\(\);)\s*$/
+    ],
+    replace: (match, first, second) => second.startsWith('\n}') || second.startsWith('\r\n}')
+        ? `${first}${syncTestExports}\n${first}initialize();${second}\n`
+        : `${first}\n${syncTestExports}\n${second}`
 }], process.env.TOURED_SCRIPT);
 const server = createServer((req, res) => {
     const path = new URL(req.url, 'http://localhost').pathname;
