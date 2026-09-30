@@ -99,7 +99,7 @@ Maintenance/admin flow:
 
 Admin/import operations are intentionally terminal/API driven.
 
-Import controllers do not resolve a transaction eagerly. `ImportManager` downloads, parses, and validates source snapshots and tour references before creating a `UnitOfWork` through an injected factory. Each complete provider import then persists points, relationships, provenance/readiness, and its import record in one transaction. CSV files are read and parsed before transaction creation; database-dependent provider/entitlement checks stay inside the transaction with the visit writes. Regression tests pause source downloads and CSV reads while an independent SQLite connection writes a visit, and inject final-save failures to verify full rollback.
+Import controllers do not resolve a transaction eagerly. `ImportManager` downloads, parses, and validates source snapshots and tour references before starting a unit of work through the injected `IUnitOfWorkFactory`. Each complete provider import then persists points, relationships, provenance/readiness, and its import record in one transaction. CSV files are read and parsed before transaction creation; database-dependent provider/entitlement checks stay inside the transaction with the visit writes. Regression tests pause source downloads and CSV reads while an independent SQLite connection writes a visit, and inject final-save failures to verify full rollback.
 
 ## Solution Structure
 
@@ -132,6 +132,8 @@ The backend follows a simple layered structure:
 - `TouredRepository` contains EF Core queries and persistence operations.
 - `DataContext` defines SQLite-backed EF Core mappings.
 - `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
+
+Database transactions use one pattern: `await using var unitOfWork = await unitOfWorkFactory.BeginAsync(cancellationToken);` followed by `await unitOfWork.CommitAsync(cancellationToken);`. Disposing without commit rolls back. `IUnitOfWorkFactory` (implemented by `Api/Repositories/UnitOfWorkFactory`) is scoped and shares the request's `DataContext`; a unit started while a transaction is already active joins it, so only the outermost unit commits or rolls back. Repository methods that need atomicity (user deletion, registration decisions, notification marking) use the same pattern and can therefore run inside a caller's unit of work. Do not call `Database.BeginTransaction*` directly or open transactions in constructors.
 
 Expected request failures are signalled with domain exceptions from `TourEd.Lib.Abstractions.Exceptions` and translated centrally by `Api/ErrorHandling/TouredExceptionHandler` into problem responses: `RequestValidationException` → `400` (title `Validation failed`, message as `detail`), `AccessDeniedException` → `403`, `EntityNotFoundException` → `404`, `ConflictException` (including `RegistrationRequestAlreadyDecidedException`) → `409`. Only the `400` message is returned to clients. Controllers do not catch these exceptions. Framework exceptions such as `InvalidOperationException`, `UnauthorizedAccessException`, `InvalidDataException` or `NotSupportedException` are never mapped and remain `500`; provider source-import validation failures therefore stay `500`. Deliberate non-exception results (for example the visit-state `409` carrying a `VisitDto`, or `null` → `404`) are still returned directly by controllers.
 

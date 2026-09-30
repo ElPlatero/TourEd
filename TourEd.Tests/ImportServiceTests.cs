@@ -634,7 +634,7 @@ public sealed class ImportServiceTests : IDisposable
             Options.Create(new TouringenWebsiteConfiguration { StempelstellenUri = new Uri("https://example.test/stamping-points") }),
             new HikingToursImportService(),
             repository,
-            () => new UnitOfWork(context));
+            new UnitOfWorkFactory(context));
     }
 
     private static IReadOnlyList<StampingPoint> CreateTouringenPoints(string? rawData)

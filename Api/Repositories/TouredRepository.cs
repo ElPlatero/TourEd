@@ -3,6 +3,7 @@ using Api.Dto;
 using Api.Managers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using TourEd.Lib.Abstractions;
 using TourEd.Lib.Abstractions.Exceptions;
 using TourEd.Lib.Abstractions.Interfaces.Services;
 using TourEd.Lib.Abstractions.Models;
@@ -12,10 +13,12 @@ namespace Api.Repositories;
 public class TouredRepository : IUserService
 {
     private readonly DataContext _dbContext;
+    private readonly IUnitOfWorkFactory _unitOfWorkFactory;
 
     public TouredRepository(DataContext dbContext)
     {
         _dbContext = dbContext;
+        _unitOfWorkFactory = new UnitOfWorkFactory(dbContext);
     }
 
     public async Task<StampingProviderFilter> GetStampingProviderFilterAsync(string? providerSlug = null, int? userId = null)
@@ -203,7 +206,7 @@ public class TouredRepository : IUserService
         int actorUserId,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
         var user = await _dbContext.Users.SingleOrDefaultAsync(item => item.Id == userId, cancellationToken);
         if (user is null)
         {
@@ -221,7 +224,7 @@ public class TouredRepository : IUserService
         _dbContext.Users.Remove(user);
         _dbContext.AdminAuditEntries.Add(CreateAudit(actorUserId, "user.deleted", userId, null));
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
         return true;
     }
 
@@ -778,7 +781,7 @@ public class TouredRepository : IUserService
             throw new RegistrationRequestAlreadyDecidedException(id);
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
         await ClaimRegistrationDecisionAsync(request, RegistrationRequestStatus.Approved, cancellationToken);
 
         var existingUser = await _dbContext.Users
@@ -823,7 +826,7 @@ public class TouredRepository : IUserService
             request.Id));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return new AdminRegistrationRequestDto(
             request.Id,
@@ -851,7 +854,7 @@ public class TouredRepository : IUserService
             throw new RegistrationRequestAlreadyDecidedException(id);
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
         await ClaimRegistrationDecisionAsync(request, RegistrationRequestStatus.Rejected, cancellationToken);
 
         _dbContext.AdminAuditEntries.Add(CreateAudit(
@@ -862,7 +865,7 @@ public class TouredRepository : IUserService
             request.Id));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
 
         return new AdminRegistrationRequestDto(
             request.Id,
@@ -879,7 +882,7 @@ public class TouredRepository : IUserService
         CancellationToken cancellationToken)
     {
         var decidedAt = DateTime.UtcNow;
-        // Both callers own a transaction. Claim the still-pending row before any
+        // Both callers run inside a unit of work. Claim the still-pending row before any
         // user or audit writes, even if another request decided it after our read.
         var updated = await _dbContext.RegistrationRequests
             .Where(r => r.Id == request.Id && r.Status == RegistrationRequestStatus.Pending)
@@ -952,7 +955,7 @@ public class TouredRepository : IUserService
             return 0;
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
 
         var markedCount = await _dbContext.RegistrationRequests
             .Where(r => requestIds.Contains(r.Id) &&
@@ -970,7 +973,7 @@ public class TouredRepository : IUserService
             throw new InvalidOperationException("The registration notification state is missing.");
         }
 
-        await transaction.CommitAsync(cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
         return markedCount;
     }
 

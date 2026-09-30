@@ -3,41 +3,48 @@ using TourEd.Lib.Abstractions;
 
 namespace Api.Repositories;
 
-public sealed class UnitOfWork : IUnitOfWork
+public sealed class UnitOfWorkFactory : IUnitOfWorkFactory
 {
-    private bool _disposed;
-    private readonly IDbContextTransaction _transaction;
-    private bool _committed;
+    private readonly DataContext _dbContext;
 
-    public UnitOfWork(DataContext dbContext)
+    public UnitOfWorkFactory(DataContext dbContext)
     {
-        _transaction = dbContext.Database.BeginTransaction();
+        _dbContext = dbContext;
     }
 
-    public async Task CommitAsync()
+    public async Task<IUnitOfWork> BeginAsync(CancellationToken cancellationToken = default)
     {
-        _committed = true;
-        await _transaction.CommitAsync();
-    }
-
-    private void Dispose(bool disposing)
-    {
-        if (!_disposed)
+        if (_dbContext.Database.CurrentTransaction is not null)
         {
-            if (disposing)
-            {
-                if (!_committed)
-                {
-                    _transaction.Rollback();
-                }
-                _transaction.Dispose();
-            }
+            return JoinedUnitOfWork.Instance;
         }
-        _disposed = true;
+
+        return new UnitOfWork(await _dbContext.Database.BeginTransactionAsync(cancellationToken));
     }
 
-    public void Dispose()
+    /// <summary>Owns a transaction; disposing an uncommitted EF Core transaction rolls it back.</summary>
+    private sealed class UnitOfWork : IUnitOfWork
     {
-        Dispose(true);
+        private readonly IDbContextTransaction _transaction;
+
+        public UnitOfWork(IDbContextTransaction transaction)
+        {
+            _transaction = transaction;
+        }
+
+        public Task CommitAsync(CancellationToken cancellationToken = default)
+            => _transaction.CommitAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => _transaction.DisposeAsync();
+    }
+
+    /// <summary>Participates in the already active transaction, which its owner commits or rolls back.</summary>
+    private sealed class JoinedUnitOfWork : IUnitOfWork
+    {
+        public static readonly JoinedUnitOfWork Instance = new();
+
+        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

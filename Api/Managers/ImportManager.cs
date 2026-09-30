@@ -21,10 +21,10 @@ public class ImportManager : IImportManager
     private readonly ITouringenStampingPointImportService _touringenStampingPointImporter;
     private readonly IImportService<HikingTour> _hikingToursImporter;
     private readonly TouredRepository _repository;
-    private readonly Func<IUnitOfWork> _createUnitOfWork;
+    private readonly IUnitOfWorkFactory _unitOfWorkFactory;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, TouredRepository repository, Func<IUnitOfWork> createUnitOfWork)
+    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, TouredRepository repository, IUnitOfWorkFactory unitOfWorkFactory)
     {
         _getCurrentUser = () => httpContextAccessor.HttpContext?.User.GetUser();
         _htmlParser = htmlParser;
@@ -32,7 +32,7 @@ public class ImportManager : IImportManager
         _touringenStampingPointImporter = touringenStampingPointImporter;
         _hikingToursImporter = hikingToursImporter;
         _repository = repository;
-        _createUnitOfWork = createUnitOfWork;
+        _unitOfWorkFactory = unitOfWorkFactory;
         _configuration = options.Value;
     }
 
@@ -78,7 +78,7 @@ public class ImportManager : IImportManager
 
         // All external data and relationships have been parsed and validated.
         // Only resolving generated IDs and persisting the complete import need a transaction.
-        using var unitOfWork = _createUnitOfWork();
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
         var savedStampingPoints = await _repository.SaveStampingPointSourceImportAsync(
             StampingProvider.TouringenId, snapshot, hikingTours.Length, cancellationToken);
         var stampingPointIdsByNumber = savedStampingPoints
@@ -95,7 +95,7 @@ public class ImportManager : IImportManager
         }
 
         await _repository.SaveHikingToursAsync(hikingTours);
-        await unitOfWork.CommitAsync();
+        await unitOfWork.CommitAsync(cancellationToken);
     }
 
     public async Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default)
@@ -108,12 +108,12 @@ public class ImportManager : IImportManager
             throw new InvalidDataException("The HWN import must contain every regular number from 1 through 222 exactly once.");
         }
         TouredRepository.ValidateStampingPointSourceImport(StampingProvider.HarzerWandernadelId, snapshot);
-        using var unitOfWork = _createUnitOfWork();
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
         await _repository.SaveStampingPointSourceImportAsync(
             StampingProvider.HarzerWandernadelId,
             snapshot,
             cancellationToken: cancellationToken);
-        await unitOfWork.CommitAsync();
+        await unitOfWork.CommitAsync(cancellationToken);
     }
 
     public async Task<UserDataImportResult> ImportUserDataAsync(Stream stream)
@@ -166,7 +166,7 @@ public class ImportManager : IImportManager
         if (errors.Count > 0) return new(0, 0, errors.Count, errors);
 
         // Parsing finishes before opening the transaction; entitlement checks and all writes stay together.
-        using var unitOfWork = _createUnitOfWork();
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync();
         var providerFilter = await _repository.GetStampingProviderFilterAsync(userId: user.Id);
         var stampingPointsMap = (await _repository.GetStampingPointsAsync(
                 providerFilter: providerFilter,

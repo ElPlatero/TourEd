@@ -20,7 +20,7 @@ public class PointsController : ControllerBase
     [HttpPost, HttpPut]
     public async Task<IActionResult> SavePoints(
         [FromBody] IReadOnlyList<AdminStampingPointRequestDto> requests,
-        [FromServices] IUnitOfWork unitOfWork,
+        [FromServices] IUnitOfWorkFactory unitOfWorkFactory,
         CancellationToken cancellationToken)
     {
         if (requests == null || requests.Count == 0)
@@ -32,11 +32,9 @@ public class PointsController : ControllerBase
             });
         }
 
-        using (unitOfWork)
-        {
-            var result = await _tourDataManager.SaveAdminStampingPointsAsync(requests, cancellationToken);
-            await unitOfWork.CommitAsync();
-            return Ok(result);
-        }
+        await using var unitOfWork = await unitOfWorkFactory.BeginAsync(cancellationToken);
+        var result = await _tourDataManager.SaveAdminStampingPointsAsync(requests, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
+        return Ok(result);
     }
 }
