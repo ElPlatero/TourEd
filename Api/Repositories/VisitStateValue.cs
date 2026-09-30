@@ -1,6 +1,6 @@
 using TourEd.Lib.Abstractions.Models;
 
-namespace Api.Managers;
+namespace Api.Repositories;
 
 public readonly record struct VisitStateValue(bool IsVisited, DateTime? Visited, bool HasVisitedTime)
 {
@@ -10,8 +10,3 @@ public readonly record struct VisitStateValue(bool IsVisited, DateTime? Visited,
         ? Open
         : new VisitStateValue(true, visit.Visited, visit.HasVisitedTime);
 }
-
-public sealed record SynchronizeVisitResult(
-    StampingPoint StampingPoint,
-    UserVisit? Visit,
-    bool IsConflict);

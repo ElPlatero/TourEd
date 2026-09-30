@@ -20,19 +20,23 @@ public class ImportManager : IImportManager
     private readonly IHarzerWandernadelImportService _harzerWandernadelImporter;
     private readonly ITouringenStampingPointImportService _touringenStampingPointImporter;
     private readonly IImportService<HikingTour> _hikingToursImporter;
-    private readonly TouredRepository _repository;
+    private readonly StampingPointRepository _points;
+    private readonly UserVisitRepository _visits;
+    private readonly StampingProviderRepository _providers;
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
     private readonly StampingProviderManager _providerManager;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, TouredRepository repository, IUnitOfWorkFactory unitOfWorkFactory, StampingProviderManager providerManager)
+    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, StampingPointRepository points, UserVisitRepository visits, StampingProviderRepository providers, IUnitOfWorkFactory unitOfWorkFactory, StampingProviderManager providerManager)
     {
         _getCurrentUser = () => httpContextAccessor.HttpContext?.User.GetUser();
         _htmlParser = htmlParser;
         _harzerWandernadelImporter = harzerWandernadelImporter;
         _touringenStampingPointImporter = touringenStampingPointImporter;
         _hikingToursImporter = hikingToursImporter;
-        _repository = repository;
+        _points = points;
+        _visits = visits;
+        _providers = providers;
         _unitOfWorkFactory = unitOfWorkFactory;
         _providerManager = providerManager;
         _configuration = options.Value;
@@ -61,7 +65,7 @@ public class ImportManager : IImportManager
             .ToArray();
 
         var hikingTours = _hikingToursImporter.Import(standardImportData).ToArray();
-        TouredRepository.ValidateStampingPointSourceImport(StampingProvider.TouringenId, snapshot);
+        ValidateSourceImport(StampingProvider.TouringenId, snapshot);
         var standardNumbers = snapshot.Points
             .Where(point => point.SeriesId == StampingSeries.TouringenStandardId && point.Number.HasValue)
             .Select(point => point.Number!.Value).ToHashSet();
@@ -81,7 +85,7 @@ public class ImportManager : IImportManager
         // All external data and relationships have been parsed and validated.
         // Only resolving generated IDs and persisting the complete import need a transaction.
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
-        var savedStampingPoints = await _repository.SaveStampingPointSourceImportAsync(
+        var savedStampingPoints = await SaveSourceImportAsync(
             StampingProvider.TouringenId, snapshot, hikingTours.Length, cancellationToken);
         var stampingPointIdsByNumber = savedStampingPoints
             .Where(point => point.SeriesId == StampingSeries.TouringenStandardId && point.Number.HasValue)
@@ -96,7 +100,7 @@ public class ImportManager : IImportManager
             }).ToList();
         }
 
-        await _repository.SaveHikingToursAsync(hikingTours);
+        await _points.SaveHikingToursAsync(hikingTours);
         await unitOfWork.CommitAsync(cancellationToken);
     }
 
@@ -109,9 +113,9 @@ public class ImportManager : IImportManager
         {
             throw new InvalidDataException("The HWN import must contain every regular number from 1 through 222 exactly once.");
         }
-        TouredRepository.ValidateStampingPointSourceImport(StampingProvider.HarzerWandernadelId, snapshot);
+        ValidateSourceImport(StampingProvider.HarzerWandernadelId, snapshot);
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
-        await _repository.SaveStampingPointSourceImportAsync(
+        await SaveSourceImportAsync(
             StampingProvider.HarzerWandernadelId,
             snapshot,
             cancellationToken: cancellationToken);
@@ -170,7 +174,7 @@ public class ImportManager : IImportManager
         // Parsing finishes before opening the transaction; entitlement checks and all writes stay together.
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync();
         var providerFilter = await _providerManager.ResolveFilterAsync(userId: user.Id);
-        var stampingPointsMap = (await _repository.GetStampingPointsAsync(
+        var stampingPointsMap = (await _points.GetStampingPointsAsync(
                 providerFilter: providerFilter,
                 seriesSlug: StampingSeries.TouringenStandardSlug,
                 stampingPointsNr: visits.Select(p => p.Number).ToArray()))
@@ -194,8 +198,43 @@ public class ImportManager : IImportManager
             });
         }
         if (errors.Count > 0) return new(0, 0, errors.Count, errors);
-        var imported = await _repository.SaveUserDataAsync(importedVisits.ToArray());
+        var imported = await _visits.SaveUserDataAsync(importedVisits.ToArray());
         await unitOfWork.CommitAsync();
         return new(imported, visits.Count - imported, 0, []);
+    }
+
+    /// <summary>Persists a validated provider snapshot, its provenance and the import record.</summary>
+    private async Task<IReadOnlyList<StampingPoint>> SaveSourceImportAsync(
+        int providerId,
+        StampingPointSourceSnapshot snapshot,
+        int hikingToursCount = 0,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSourceImport(providerId, snapshot);
+
+        var savedPoints = await _points.SaveStampingPointsAsync(snapshot.Points.ToArray());
+        var provider = await _providers.GetProviderForUpdateAsync(providerId, cancellationToken);
+        provider.DataSourceUri = snapshot.SourceUri;
+        provider.DataSourceAttribution = snapshot.Attribution;
+        provider.DataLicenseName = snapshot.LicenseName;
+        provider.DataLicenseUri = snapshot.LicenseUri;
+        provider.DataSourceRevision = snapshot.Revision;
+        provider.DataSourceUpdatedAt = snapshot.SourceUpdatedAt;
+        provider.DataImportedAt = DateTime.UtcNow;
+        provider.IsAnonymousAccessAllowed = true;
+        _providers.AddImportRecord(snapshot.Points.Count, hikingToursCount);
+        await _providers.SaveChangesAsync(cancellationToken);
+        return savedPoints;
+    }
+
+    private static void ValidateSourceImport(int providerId, StampingPointSourceSnapshot snapshot)
+    {
+        if (snapshot.Points.Count == 0 || snapshot.Points.Any(point => point.ProviderId != providerId))
+        {
+            throw new InvalidOperationException("A provider source import must contain points for exactly that provider.");
+        }
+        _ = snapshot.Points.Where(point => point.Number.HasValue)
+            .ToDictionary(point => (point.SeriesId, point.Number));
+        _ = snapshot.Points.ToDictionary(point => (point.ProviderId, point.ExternalId));
     }
 }

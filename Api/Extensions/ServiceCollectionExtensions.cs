@@ -27,7 +27,8 @@ internal static class ServiceCollectionExtensions
         services.TryAddTransient<AdminAuditRepository>();
         services.TryAddTransient<StampingProviderRepository>();
         services.TryAddTransient<IGoogleLoginService, GoogleLoginService>();
-        services.TryAddTransient<TouredRepository>();
+        services.TryAddTransient<StampingPointRepository>();
+        services.TryAddTransient<UserVisitRepository>();
         return services;
     }
 

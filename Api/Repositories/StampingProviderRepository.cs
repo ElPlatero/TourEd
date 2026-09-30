@@ -30,6 +30,17 @@ public sealed class StampingProviderRepository
         => _dbContext.StampingProviders.AsNoTracking()
             .SingleAsync(provider => provider.Id == providerId, cancellationToken);
 
+    public Task<StampingProvider> GetProviderForUpdateAsync(int providerId, CancellationToken cancellationToken = default)
+        => _dbContext.StampingProviders.SingleAsync(provider => provider.Id == providerId, cancellationToken);
+
+    /// <summary>Records a completed provider data import; it is persisted with the next save.</summary>
+    public void AddImportRecord(int stampingPointsCount, int hikingToursCount)
+        => _dbContext.Add(new Import(default, default, stampingPointsCount, hikingToursCount));
+
+    /// <summary>Persists all pending changes of the request's shared <see cref="DataContext"/>.</summary>
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default)
+        => _dbContext.SaveChangesAsync(cancellationToken);
+
     /// <summary>Returns a provider only when its imported data is ready and its provenance is complete.</summary>
     public Task<StampingProvider?> FindPublicDataProviderAsync(string providerSlug, CancellationToken cancellationToken = default)
     {

@@ -8,12 +8,12 @@ namespace Api.Managers;
 public sealed class StampingProviderManager
 {
     private readonly StampingProviderRepository _providers;
-    private readonly TouredRepository _repository;
+    private readonly StampingPointRepository _points;
 
-    public StampingProviderManager(StampingProviderRepository providers, TouredRepository repository)
+    public StampingProviderManager(StampingProviderRepository providers, StampingPointRepository points)
     {
         _providers = providers;
-        _repository = repository;
+        _points = points;
     }
 
     /// <summary>
@@ -116,7 +116,7 @@ public sealed class StampingProviderManager
             throw new AccessDeniedException("This stamping provider is not enabled for the user.");
         }
 
-        var points = await _repository.GetPointsForProviderAsync(provider.Id, cancellationToken);
+        var points = await _points.GetPointsForProviderAsync(provider.Id, cancellationToken);
         return (provider, points);
     }
 }

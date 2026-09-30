@@ -258,7 +258,7 @@ public sealed class ImportServiceTests : IDisposable
     public async Task PointAndTourQueriesLoadTheProviderNavigation()
     {
         await using var context = await CreateContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
         var point = Assert.Single(await repository.SaveStampingPointsAsync(
             CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42)));
         var tour = new HikingTour(7, "Test tour", null, null, null, false, false, false);
@@ -284,7 +284,7 @@ public sealed class ImportServiceTests : IDisposable
         context.StampingProviders.Add(CreateProvider(99, "other"));
         context.StampingSeries.Add(CreateSeries(30, 99, "standard"));
         await context.SaveChangesAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
 
         var savedPoints = await repository.SaveStampingPointsAsync(
             CreatePoint("Touringen", StampingProvider.TouringenId, "shared", 42),
@@ -323,7 +323,7 @@ public sealed class ImportServiceTests : IDisposable
     public async Task TouringenImportPreservesVisitsWhenCorrectingStandardPointsOneThroughEight()
     {
         await using var context = await CreateContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
 
         var oldPoints = Enumerable.Range(1, 8).Select(number =>
             CreatePoint($"Old Naturschatz {number}", StampingProvider.TouringenId, $"standard-{number}", number) with
@@ -408,7 +408,7 @@ public sealed class ImportServiceTests : IDisposable
         });
         await context.SaveChangesAsync();
 
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
         var points = await repository.SaveStampingPointsAsync(
             CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42),
             CreatePoint("Other", 99, "other-42", 42));
@@ -435,7 +435,7 @@ public sealed class ImportServiceTests : IDisposable
         };
         context.Users.Add(user);
         await context.SaveChangesAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
         var manager = CreateImportManager(context, repository, user, null);
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
 
@@ -448,7 +448,7 @@ public sealed class ImportServiceTests : IDisposable
     public async Task HarzerWandernadelImportPreservesPointIdsAndVisits()
     {
         await using var context = await CreateContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
         var existingPoints = await repository.SaveStampingPointsAsync(
             CreatePoint("Existing 44", StampingProvider.HarzerWandernadelId, "HWN044", 44),
             CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45));
@@ -457,7 +457,7 @@ public sealed class ImportServiceTests : IDisposable
         var user = new User { Email = "hwn@example.test" };
         context.Users.Add(user);
         await context.SaveChangesAsync();
-        await repository.AddUserVisitAsync(user, existing45.Id, new DateTime(2026, 8, 30, 12, 0, 0), true);
+        await new UserVisitRepository(context).AddUserVisitAsync(user, existing45.Id, new DateTime(2026, 8, 30, 12, 0, 0), true);
         var importedPoints = Enumerable.Range(1, 222)
             .Select(number => CreatePoint(
                 $"Imported {number}",
@@ -494,7 +494,7 @@ public sealed class ImportServiceTests : IDisposable
     public async Task IncompleteHarzerWandernadelSnapshotDoesNotPublishProviderData()
     {
         await using var context = await CreateContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
         var existing = Assert.Single(await repository.SaveStampingPointsAsync(
             CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45)));
         var manager = CreateImportManager(
@@ -522,7 +522,7 @@ public sealed class ImportServiceTests : IDisposable
     public async Task TouringenImportMapsTourRelationsToGeneratedPointIds()
     {
         await using var context = await CreateContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
         var firstRawPoint = CreateRawStampPoint(9_001, 42);
         var secondRawPoint = CreateRawStampPoint(9_002, 42);
         var firstRawTour = new RawTour(101, "First tour", [firstRawPoint], false, true, false, null, "Start", "End");
@@ -544,13 +544,13 @@ public sealed class ImportServiceTests : IDisposable
     public async Task TouringenImportPreservesExistingVisitsWhenUpdatingCanonicalStandardPoints()
     {
         await using var context = await CreateContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
         var existing = Assert.Single(await repository.SaveStampingPointsAsync(
             CreatePoint("Urwaldpfad Leutenberg", StampingProvider.TouringenId, "976", 1)));
         var user = new User { Email = "visited@example.test" };
         context.Users.Add(user);
         await context.SaveChangesAsync();
-        await repository.AddUserVisitAsync(user, existing.Id, null, false);
+        await new UserVisitRepository(context).AddUserVisitAsync(user, existing.Id, null, false);
         var canonicalRawPoint = CreateRawStampPoint(101, 1) with
         {
             Title = "Schleifkotengrund",
@@ -574,7 +574,7 @@ public sealed class ImportServiceTests : IDisposable
     public async Task TouringenImportSavesOsmProvenanceAndEnablesGeoJsonExport()
     {
         await using var context = await CreateContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new StampingPointRepository(context);
         var canonicalRawPoint = CreateRawStampPoint(101, 1);
         var rawTour = new RawTour(101, "Tour", [canonicalRawPoint], false, true, false, null, "Start", "End");
         var rawData = JsonSerializer.Serialize(new[] { new RawArea(1, "Area", [rawTour], []) });
@@ -611,7 +611,7 @@ public sealed class ImportServiceTests : IDisposable
 
     private static ImportManager CreateImportManager(
         DataContext context,
-        TouredRepository repository,
+        StampingPointRepository repository,
         User? user,
         string? rawData,
         IReadOnlyList<StampingPoint>? harzerWandernadelPoints = null)
@@ -634,6 +634,8 @@ public sealed class ImportServiceTests : IDisposable
             Options.Create(new TouringenWebsiteConfiguration { StempelstellenUri = new Uri("https://example.test/stamping-points") }),
             new HikingToursImportService(),
             repository,
+            new UserVisitRepository(context),
+            new StampingProviderRepository(context),
             new UnitOfWorkFactory(context),
             new StampingProviderManager(new StampingProviderRepository(context), repository));
     }
