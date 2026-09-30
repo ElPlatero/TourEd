@@ -43,7 +43,7 @@ public sealed record StampingProviderDetailsDto(
             isEnabled && isDataReady && provider.DataImportedAt is not null);
 
     public static StampingProviderDetailsDto Create(StampingProvider provider)
-        => Create(provider, true, provider.IsAnonymousAccessAllowed, null, null);
+        => Create(provider, true, provider.IsDataReady, null, null);
 
     private static string? GetPublicHttpUrl(Uri? websiteUri)
     {

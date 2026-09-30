@@ -228,7 +228,7 @@ public class ImportManager : IImportManager
         provider.DataSourceRevision = snapshot.Revision;
         provider.DataSourceUpdatedAt = snapshot.SourceUpdatedAt;
         provider.DataImportedAt = DateTime.UtcNow;
-        provider.IsAnonymousAccessAllowed = true;
+        provider.IsDataReady = true;
         _providers.AddImportRecord(snapshot.Points.Count, hikingToursCount);
         await _providers.SaveChangesAsync(cancellationToken);
         return savedPoints;
