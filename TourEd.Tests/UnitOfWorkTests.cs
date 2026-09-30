@@ -78,7 +78,7 @@ public sealed class UnitOfWorkTests : IDisposable
                 new UserRepository(context),
                 new RegistrationRequestRepository(context),
                 new AdminAuditRepository(context),
-                new TouredRepository(context),
+                new StampingProviderRepository(context),
                 new UnitOfWorkFactory(context));
             Assert.True(await manager.DeleteUserAsync(userId, actorId, CancellationToken.None));
         }

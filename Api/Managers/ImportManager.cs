@@ -22,9 +22,10 @@ public class ImportManager : IImportManager
     private readonly IImportService<HikingTour> _hikingToursImporter;
     private readonly TouredRepository _repository;
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
+    private readonly StampingProviderManager _providerManager;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, TouredRepository repository, IUnitOfWorkFactory unitOfWorkFactory)
+    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, TouredRepository repository, IUnitOfWorkFactory unitOfWorkFactory, StampingProviderManager providerManager)
     {
         _getCurrentUser = () => httpContextAccessor.HttpContext?.User.GetUser();
         _htmlParser = htmlParser;
@@ -33,6 +34,7 @@ public class ImportManager : IImportManager
         _hikingToursImporter = hikingToursImporter;
         _repository = repository;
         _unitOfWorkFactory = unitOfWorkFactory;
+        _providerManager = providerManager;
         _configuration = options.Value;
     }
 
@@ -167,7 +169,7 @@ public class ImportManager : IImportManager
 
         // Parsing finishes before opening the transaction; entitlement checks and all writes stay together.
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync();
-        var providerFilter = await _repository.GetStampingProviderFilterAsync(userId: user.Id);
+        var providerFilter = await _providerManager.ResolveFilterAsync(userId: user.Id);
         var stampingPointsMap = (await _repository.GetStampingPointsAsync(
                 providerFilter: providerFilter,
                 seriesSlug: StampingSeries.TouringenStandardSlug,

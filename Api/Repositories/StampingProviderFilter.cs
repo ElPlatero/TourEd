@@ -1,4 +1,4 @@
-namespace Api.Managers;
+namespace Api.Repositories;
 
 public record StampingProviderFilter(int? ProviderId, int? UserId = null, bool IsAnonymousOnly = false)
 {
