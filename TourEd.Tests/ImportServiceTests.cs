@@ -260,7 +260,7 @@ public sealed class ImportServiceTests : IDisposable
         await using var context = await CreateContextAsync();
         var repository = new StampingPointRepository(context);
         var point = Assert.Single(await repository.SaveStampingPointsAsync(
-            CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42)));
+            [CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42)]));
         var tour = new HikingTour(7, "Test tour", null, null, null, false, false, false);
         context.HikingTours.Add(tour);
         context.StampingPointsInTours.Add(new SortedStampingPoint(1)
@@ -287,19 +287,21 @@ public sealed class ImportServiceTests : IDisposable
         var repository = new StampingPointRepository(context);
 
         var savedPoints = await repository.SaveStampingPointsAsync(
+        [
             CreatePoint("Touringen", StampingProvider.TouringenId, "shared", 42),
             CreatePoint("Natural treasure", StampingProvider.TouringenId, "natural-42", 42) with
             {
                 SeriesId = StampingSeries.TouringenNaturalTreasuresId
             },
-            CreatePoint("Other", 99, "shared", 42));
+            CreatePoint("Other", 99, "shared", 42)
+        ]);
 
         Assert.Equal(3, savedPoints.Count);
         Assert.All(savedPoints, point => Assert.True(point.Id > 0));
         Assert.NotEqual(savedPoints[0].Id, savedPoints[1].Id);
 
         var updatedPoint = CreatePoint("Touringen updated", StampingProvider.TouringenId, "updated", 42) with { Id = 99_999 };
-        var updated = Assert.Single(await repository.SaveStampingPointsAsync(updatedPoint));
+        var updated = Assert.Single(await repository.SaveStampingPointsAsync([updatedPoint]));
 
         Assert.Equal(savedPoints[0].Id, updated.Id);
         Assert.Equal(3, await context.StampingPoints.CountAsync(p => p.ProviderId == StampingProvider.TouringenId || p.ProviderId == 99));
@@ -312,8 +314,8 @@ public sealed class ImportServiceTests : IDisposable
             ValidFrom = new DateOnly(2026, 6, 1),
             ValidUntil = new DateOnly(2026, 10, 31)
         };
-        var savedTemporary = Assert.Single(await repository.SaveStampingPointsAsync(temporary));
-        var updatedTemporary = Assert.Single(await repository.SaveStampingPointsAsync(temporary with { Name = "Updated temporary special" }));
+        var savedTemporary = Assert.Single(await repository.SaveStampingPointsAsync([temporary]));
+        var updatedTemporary = Assert.Single(await repository.SaveStampingPointsAsync([temporary with { Name = "Updated temporary special" }]));
         Assert.Equal(savedTemporary.Id, updatedTemporary.Id);
         Assert.Null(updatedTemporary.Number);
         Assert.Equal(4, await context.StampingPoints.CountAsync(p => p.ProviderId == StampingProvider.TouringenId || p.ProviderId == 99));
@@ -410,18 +412,50 @@ public sealed class ImportServiceTests : IDisposable
 
         var repository = new StampingPointRepository(context);
         var points = await repository.SaveStampingPointsAsync(
+        [
             CreatePoint("Touringen", StampingProvider.TouringenId, "touringen-42", 42),
-            CreatePoint("Other", 99, "other-42", 42));
+            CreatePoint("Other", 99, "other-42", 42)
+        ]);
         var otherPoint = points.Single(p => p.ProviderId == 99);
-        var manager = CreateImportManager(context, repository, user, null);
+        var manager = CreateImportManager(context, repository, null);
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
 
-        await manager.ImportUserDataAsync(stream);
+        await manager.ImportUserDataAsync(user, stream);
 
         var visit = Assert.Single(await context.UserVisits.AsNoTracking().ToListAsync());
         Assert.Equal(otherPoint.Id, visit.StampingPointId);
         Assert.Equal(new DateTime(2026, 2, 1, 12, 30, 0), visit.Visited);
         Assert.True(visit.HasVisitedTime);
+    }
+
+    [Fact]
+    public async Task UserImportStopsWhenCancelled()
+    {
+        await using var context = await CreateContextAsync();
+        var user = new User { Email = "cancelled@example.test", DefaultStampingProviderId = StampingProvider.TouringenId };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        var repository = new StampingPointRepository(context);
+        var manager = CreateImportManager(context, repository, null);
+        await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => manager.ImportUserDataAsync(user, stream, new CancellationToken(canceled: true)));
+
+        Assert.Empty(await context.UserVisits.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
+    public async Task SavingPointsStopsWhenCancelled()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new StampingPointRepository(context);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => repository.SaveStampingPointsAsync(
+            [CreatePoint("Cancelled", StampingProvider.TouringenId, "cancelled-42", 42)],
+            new CancellationToken(canceled: true)));
+
+        Assert.False(await context.StampingPoints.AsNoTracking().AnyAsync(point => point.ExternalId == "cancelled-42"));
     }
 
     [Fact]
@@ -436,10 +470,10 @@ public sealed class ImportServiceTests : IDisposable
         context.Users.Add(user);
         await context.SaveChangesAsync();
         var repository = new StampingPointRepository(context);
-        var manager = CreateImportManager(context, repository, user, null);
+        var manager = CreateImportManager(context, repository, null);
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
 
-        await Assert.ThrowsAsync<AccessDeniedException>(() => manager.ImportUserDataAsync(stream));
+        await Assert.ThrowsAsync<AccessDeniedException>(() => manager.ImportUserDataAsync(user, stream));
 
         Assert.Empty(await context.UserVisits.AsNoTracking().ToListAsync());
     }
@@ -450,8 +484,10 @@ public sealed class ImportServiceTests : IDisposable
         await using var context = await CreateContextAsync();
         var repository = new StampingPointRepository(context);
         var existingPoints = await repository.SaveStampingPointsAsync(
+        [
             CreatePoint("Existing 44", StampingProvider.HarzerWandernadelId, "HWN044", 44),
-            CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45));
+            CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45)
+        ]);
         var existing44 = existingPoints.Single(point => point.Number == 44);
         var existing45 = existingPoints.Single(point => point.Number == 45);
         var user = new User { Email = "hwn@example.test" };
@@ -465,7 +501,7 @@ public sealed class ImportServiceTests : IDisposable
                 $"osm-node-{number}",
                 number))
             .ToArray();
-        var manager = CreateImportManager(context, repository, null, null, importedPoints);
+        var manager = CreateImportManager(context, repository, null, importedPoints);
 
         await manager.ImportHarzerWandernadelDataAsync();
 
@@ -496,11 +532,10 @@ public sealed class ImportServiceTests : IDisposable
         await using var context = await CreateContextAsync();
         var repository = new StampingPointRepository(context);
         var existing = Assert.Single(await repository.SaveStampingPointsAsync(
-            CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45)));
+            [CreatePoint("Existing 45", StampingProvider.HarzerWandernadelId, "HWN045", 45)]));
         var manager = CreateImportManager(
             context,
             repository,
-            null,
             null,
             [CreatePoint("Incomplete 45", StampingProvider.HarzerWandernadelId, "osm-node-45", 45)]);
 
@@ -528,7 +563,7 @@ public sealed class ImportServiceTests : IDisposable
         var firstRawTour = new RawTour(101, "First tour", [firstRawPoint], false, true, false, null, "Start", "End");
         var secondRawTour = new RawTour(102, "Second tour", [secondRawPoint], false, true, false, null, "Start", "End");
         var rawData = JsonSerializer.Serialize(new[] { new RawArea(1, "Area", [firstRawTour, secondRawTour], []) });
-        var manager = CreateImportManager(context, repository, null, rawData);
+        var manager = CreateImportManager(context, repository, rawData);
 
         await manager.ImportTouringenDataAsync();
 
@@ -546,7 +581,7 @@ public sealed class ImportServiceTests : IDisposable
         await using var context = await CreateContextAsync();
         var repository = new StampingPointRepository(context);
         var existing = Assert.Single(await repository.SaveStampingPointsAsync(
-            CreatePoint("Urwaldpfad Leutenberg", StampingProvider.TouringenId, "976", 1)));
+            [CreatePoint("Urwaldpfad Leutenberg", StampingProvider.TouringenId, "976", 1)]));
         var user = new User { Email = "visited@example.test" };
         context.Users.Add(user);
         await context.SaveChangesAsync();
@@ -560,7 +595,7 @@ public sealed class ImportServiceTests : IDisposable
         };
         var rawTour = new RawTour(101, "Tour", [canonicalRawPoint], false, true, false, null, "Start", "End");
         var rawData = JsonSerializer.Serialize(new[] { new RawArea(1, "Area", [rawTour], []) });
-        var manager = CreateImportManager(context, repository, null, rawData);
+        var manager = CreateImportManager(context, repository, rawData);
 
         await manager.ImportTouringenDataAsync();
 
@@ -578,7 +613,7 @@ public sealed class ImportServiceTests : IDisposable
         var canonicalRawPoint = CreateRawStampPoint(101, 1);
         var rawTour = new RawTour(101, "Tour", [canonicalRawPoint], false, true, false, null, "Start", "End");
         var rawData = JsonSerializer.Serialize(new[] { new RawArea(1, "Area", [rawTour], []) });
-        var manager = CreateImportManager(context, repository, null, rawData);
+        var manager = CreateImportManager(context, repository, rawData);
 
         await manager.ImportTouringenDataAsync();
 
@@ -612,22 +647,10 @@ public sealed class ImportServiceTests : IDisposable
     private static ImportManager CreateImportManager(
         DataContext context,
         StampingPointRepository repository,
-        User? user,
         string? rawData,
         IReadOnlyList<StampingPoint>? harzerWandernadelPoints = null)
     {
-        var httpContext = new DefaultHttpContext();
-        if (user != null)
-        {
-            httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
-            [
-                new Claim(Constants.ClaimsNames.UserId, user.Id.ToString()),
-                new Claim(Constants.ClaimsNames.UserEmail, user.Email)
-            ], "test"));
-        }
-
         return new ImportManager(
-            new HttpContextAccessor { HttpContext = httpContext },
             new StubHtmlParsingService(rawData),
             new StubHarzerWandernadelImportService(harzerWandernadelPoints ?? []),
             new StubTouringenStampingPointImportService(CreateTouringenPoints(rawData)),
@@ -693,7 +716,7 @@ public sealed class ImportServiceTests : IDisposable
 
     private sealed class StubHtmlParsingService(string? rawData) : IHtmlParsingService
     {
-        public Task<string?> GetRawDmoStringAsync(Uri uri) => Task.FromResult(rawData);
+        public Task<string?> GetRawDmoStringAsync(Uri uri, CancellationToken cancellationToken = default) => Task.FromResult(rawData);
     }
 
     private sealed class StubHarzerWandernadelImportService(IReadOnlyList<StampingPoint> points) : IHarzerWandernadelImportService

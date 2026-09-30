@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TourEd.Lib.Abstractions.Interfaces;
 using TourEd.Lib.Abstractions.Models;
+using TourEd.Lib.Extensions;
 
 namespace Api.Controllers.Admin;
 
@@ -31,7 +32,7 @@ public class ImportsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateNewUserDataImport([FromForm] IFormFileCollection csvImport)
+    public async Task<IActionResult> CreateNewUserDataImport([FromForm] IFormFileCollection csvImport, CancellationToken cancellationToken)
     {
         if (csvImport.Count != 1 || csvImport[0].Length == 0)
         {
@@ -39,7 +40,7 @@ public class ImportsController : ControllerBase
                 [new(null, "Upload exactly one non-empty CSV file in csvImport.")]));
         }
         await using var stream = csvImport[0].OpenReadStream();
-        var result = await _importManager.ImportUserDataAsync(stream);
+        var result = await _importManager.ImportUserDataAsync(User.GetUser(), stream, cancellationToken);
         return result.Errors.Count > 0 ? BadRequest(result) : Ok(result);
     }
 }

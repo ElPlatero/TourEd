@@ -48,7 +48,6 @@ builder.Services
     .AddScoped<IUnitOfWorkFactory, UnitOfWorkFactory>()
     .AddTouredAuthentication(builder.Configuration)
     .AddTouredDataProtection(builder.Configuration)
-    .AddSingleton<IHttpContextAccessor, HttpContextAccessor>()
     .AddEndpointsApiExplorer()
     .AddDbContext<DataContext>(options => options.UseSqlite(builder.Configuration.GetConnectionString("TouredDb")))
     .AddTouredHealthChecks()

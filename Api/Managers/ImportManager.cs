@@ -8,14 +8,12 @@ using TourEd.Lib.Abstractions.Interfaces;
 using TourEd.Lib.Abstractions.Interfaces.Services;
 using TourEd.Lib.Abstractions.Models;
 using TourEd.Lib.Abstractions.Options;
-using TourEd.Lib.Extensions;
 
 namespace Api.Managers;
 
 public class ImportManager : IImportManager
 {
     private static readonly HashSet<int> TouringenNaturalTreasureAreaIds = [102, 103, 104, 105, 106, 107, 108, 109];
-    private readonly Func<User?> _getCurrentUser;
     private readonly IHtmlParsingService _htmlParser;
     private readonly IHarzerWandernadelImportService _harzerWandernadelImporter;
     private readonly ITouringenStampingPointImportService _touringenStampingPointImporter;
@@ -27,9 +25,8 @@ public class ImportManager : IImportManager
     private readonly StampingProviderManager _providerManager;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHttpContextAccessor httpContextAccessor, IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, StampingPointRepository points, UserVisitRepository visits, StampingProviderRepository providers, IUnitOfWorkFactory unitOfWorkFactory, StampingProviderManager providerManager)
+    public ImportManager(IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, StampingPointRepository points, UserVisitRepository visits, StampingProviderRepository providers, IUnitOfWorkFactory unitOfWorkFactory, StampingProviderManager providerManager)
     {
-        _getCurrentUser = () => httpContextAccessor.HttpContext?.User.GetUser();
         _htmlParser = htmlParser;
         _harzerWandernadelImporter = harzerWandernadelImporter;
         _touringenStampingPointImporter = touringenStampingPointImporter;
@@ -44,7 +41,7 @@ public class ImportManager : IImportManager
 
     public async Task ImportTouringenDataAsync(CancellationToken cancellationToken = default)
     {
-        var rawDataTask = _htmlParser.GetRawDmoStringAsync(_configuration.StempelstellenUri);
+        var rawDataTask = _htmlParser.GetRawDmoStringAsync(_configuration.StempelstellenUri, cancellationToken);
         var stampingPointSnapshotTask = _touringenStampingPointImporter.DownloadStampingPointsAsync(cancellationToken);
         await Task.WhenAll(rawDataTask, stampingPointSnapshotTask);
         var rawData = await rawDataTask;
@@ -100,7 +97,7 @@ public class ImportManager : IImportManager
             }).ToList();
         }
 
-        await _points.SaveHikingToursAsync(hikingTours);
+        await _points.SaveHikingToursAsync(hikingTours, cancellationToken);
         await unitOfWork.CommitAsync(cancellationToken);
     }
 
@@ -122,15 +119,17 @@ public class ImportManager : IImportManager
         await unitOfWork.CommitAsync(cancellationToken);
     }
 
-    public async Task<UserDataImportResult> ImportUserDataAsync(Stream stream)
+    public async Task<UserDataImportResult> ImportUserDataAsync(
+        User user,
+        Stream stream,
+        CancellationToken cancellationToken = default)
     {
-        var user = _getCurrentUser() ?? throw new NotSupportedException("This operation needs authorization.");
         using var reader = new StreamReader(stream);
         List<(int Line, int Number, DateTime? Visited, bool HasTime)> visits = [];
         List<UserDataImportError> errors = [];
         HashSet<int> numbers = [];
         var lineNumber = 0;
-        while (await reader.ReadLineAsync() is { } line)
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
             lineNumber++;
             var fields = line.Split(';');
@@ -172,12 +171,13 @@ public class ImportManager : IImportManager
         if (errors.Count > 0) return new(0, 0, errors.Count, errors);
 
         // Parsing finishes before opening the transaction; entitlement checks and all writes stay together.
-        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync();
-        var providerFilter = await _providerManager.ResolveFilterAsync(userId: user.Id);
+        await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
+        var providerFilter = await _providerManager.ResolveFilterAsync(userId: user.Id, cancellationToken: cancellationToken);
         var stampingPointsMap = (await _points.GetStampingPointsAsync(
                 providerFilter: providerFilter,
                 seriesSlug: StampingSeries.TouringenStandardSlug,
-                stampingPointsNr: visits.Select(p => p.Number).ToArray()))
+                stampingPointNumbers: visits.Select(p => p.Number).ToArray(),
+                cancellationToken: cancellationToken))
             .Select(p => p.Point)
             .Where(point => point.Number.HasValue)
             .ToDictionary(point => point.Number!.Value);
@@ -198,8 +198,8 @@ public class ImportManager : IImportManager
             });
         }
         if (errors.Count > 0) return new(0, 0, errors.Count, errors);
-        var imported = await _visits.SaveUserDataAsync(importedVisits.ToArray());
-        await unitOfWork.CommitAsync();
+        var imported = await _visits.SaveUserDataAsync(importedVisits, cancellationToken);
+        await unitOfWork.CommitAsync(cancellationToken);
         return new(imported, visits.Count - imported, 0, []);
     }
 
@@ -212,7 +212,7 @@ public class ImportManager : IImportManager
     {
         ValidateSourceImport(providerId, snapshot);
 
-        var savedPoints = await _points.SaveStampingPointsAsync(snapshot.Points.ToArray());
+        var savedPoints = await _points.SaveStampingPointsAsync(snapshot.Points.ToArray(), cancellationToken);
         var provider = await _providers.GetProviderForUpdateAsync(providerId, cancellationToken);
         provider.DataSourceUri = snapshot.SourceUri;
         provider.DataSourceAttribution = snapshot.Attribution;
