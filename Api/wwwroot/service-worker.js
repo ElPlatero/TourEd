@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const CACHE_NAME = "toured-shell-v19";
+    const CACHE_NAME = "toured-shell-v20";
 
     const CORE_ASSETS = [
         "./",
@@ -11,6 +11,7 @@
         "js/api.js",
         "js/constants.js",
         "js/dom.js",
+        "js/snapshot-store.js",
         "vendor/openlayers/5.3.0/ol.js",
         "vendor/openlayers/5.3.0/ol.css",
         "vendor/openlayers/5.3.0/LICENSE.md",
