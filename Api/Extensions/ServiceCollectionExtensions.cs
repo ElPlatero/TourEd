@@ -1,4 +1,4 @@
-﻿using Api.Authentication;
+using Api.Authentication;
 using Api.Entities;
 using Api.Imports;
 using Api.Managers;

@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace Api.Imports;
@@ -12,7 +12,7 @@ public partial class HtmlParsingService : IHtmlParsingService
     {
         _client = client;
     }
-    
+
     public async Task<string?> GetRawDmoStringAsync(Uri uri, CancellationToken cancellationToken = default)
     {
         var body = await GetBodyAsync(_client, uri, cancellationToken);

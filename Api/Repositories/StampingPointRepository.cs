@@ -61,11 +61,11 @@ public sealed class StampingPointRepository
 
         if (excludeVisited != null && userId != null)
         {
-            result = excludeVisited.Value 
-                ? result.Where(p => _dbContext.UserVisits.Where(q => q.UserId == userId.Value).All(q => q.StampingPointId != p.Point.Id)) 
+            result = excludeVisited.Value
+                ? result.Where(p => _dbContext.UserVisits.Where(q => q.UserId == userId.Value).All(q => q.StampingPointId != p.Point.Id))
                 : result.Where(p => _dbContext.UserVisits.Where(q => q.UserId == userId.Value).Any(q => q.StampingPointId == p.Point.Id));
         }
-        
+
         var dto = await result.ToListAsync(cancellationToken);
         if (geoFilter != null)
         {

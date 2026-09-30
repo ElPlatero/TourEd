@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Api.Imports;
@@ -6,7 +6,7 @@ namespace Api.Imports;
 public class BooleanConverter : JsonConverter<bool>
 {
     public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options) => writer.WriteBooleanValue(value);
-    
+
     public override bool Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => reader.TokenType switch
     {
         JsonTokenType.True => true,

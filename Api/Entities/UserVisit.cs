@@ -1,10 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Api.Entities;
 
 public class UserVisit
-{   
+{
     public int Id { get; set; }
     public int UserId { get; set; }
     public DateTime? Visited { get; set; }

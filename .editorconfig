@@ -1,0 +1,28 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+indent_size = 2
+
+# EF Core tooling generates migrations with a byte order mark.
+[Api/Migrations/**.cs]
+charset = utf-8-bom
+
+# Executable and shell-sourced server files use Unix line endings (see .gitattributes).
+[deploy/server/*]
+end_of_line = lf
+
+[*.cs]
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_style_namespace_declarations = file_scoped:suggestion

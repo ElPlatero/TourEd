@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Authentication;
 using System.Security.Claims;
 using Api.Entities;

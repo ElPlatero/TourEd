@@ -1,4 +1,4 @@
-﻿namespace Api.ErrorHandling;
+namespace Api.ErrorHandling;
 
 public class EntityNotFoundException : Exception
 {

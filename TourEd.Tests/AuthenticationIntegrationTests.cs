@@ -1,5 +1,5 @@
-using System.Net.Http.Json;
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -12,9 +12,9 @@ using Api.Controllers.Tours;
 using Api.Dto;
 using Api.Entities;
 using Api.Repositories;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;

@@ -1,4 +1,4 @@
-﻿namespace Api.Entities;
+namespace Api.Entities;
 
 public record Position(decimal Longitude, decimal Latitude)
 {

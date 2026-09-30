@@ -1,9 +1,9 @@
 using Api.Authentication;
 using Api.Entities;
 using Api.Repositories;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Api.Extensions;
