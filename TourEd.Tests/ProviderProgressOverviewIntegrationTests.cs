@@ -344,7 +344,7 @@ public sealed class ProviderProgressOverviewIntegrationTests : IAsyncLifetime
 
         var html = await client.GetStringAsync("/");
         var css = await client.GetStringAsync("/css/toured.css");
-        var js = await client.GetStringAsync("/js/toured.js");
+        var js = await FrontendSources.GetScriptAsync(client);
 
         // HTML Progress Overview elements
         Assert.Contains("id=\"progressOverview\"", html, StringComparison.OrdinalIgnoreCase);
