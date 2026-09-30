@@ -2,6 +2,7 @@ using Api.Authentication;
 using Api.Dto;
 using Api.Entities;
 using Api.Managers;
+using Api.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -28,16 +29,16 @@ public sealed class ToursController : ControllerBase
         var result = await _manager.GetHikingToursAsync(
             currentUser.Id,
             query.Longitude != default && query.Latitude != default && query.Radius != default
-                ? (new Position(query.Longitude, query.Latitude), query.Radius * 1000)
+                ? new GeoCircle(new Position(query.Longitude, query.Latitude), query.Radius * 1000)
                 : null,
             cancellationToken);
         return Ok(new GetHikingToursResponse(result.Count, result.SelectMany(p => p.Points.Select(q => q.Id)).Distinct().Count(), result.Select(CreateDto)));
     }
 
-    private static TourDto CreateDto((HikingTour Tour, List<StampingPoint>? Points) data)
+    private static TourDto CreateDto(HikingTourWithPoints data)
     {
         var result = TourDto.Create(data.Tour);
-        if (data.Points != null) result.StampingPoints = data.Points.Select(p => StampingPointDto.Create(p));
+        result.StampingPoints = data.Points.Select(p => StampingPointDto.Create(p));
         return result;
     }
 

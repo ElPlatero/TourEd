@@ -180,10 +180,13 @@ public sealed class ImportManager : IImportManager
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
         var providerFilter = await _providerManager.ResolveFilterAsync(userId: user.Id, cancellationToken: cancellationToken);
         var stampingPointsMap = (await _points.GetStampingPointsAsync(
-                providerFilter: providerFilter,
-                seriesSlug: StampingSeries.DefaultSlug,
-                stampingPointNumbers: visits.Select(p => p.Number).ToArray(),
-                cancellationToken: cancellationToken))
+                new StampingPointCriteria
+                {
+                    ProviderFilter = providerFilter,
+                    SeriesSlug = StampingSeries.DefaultSlug,
+                    StampingPointNumbers = visits.Select(p => p.Number).ToArray()
+                },
+                cancellationToken))
             .Select(p => p.Point)
             .Where(point => point.Number.HasValue)
             .ToDictionary(point => point.Number!.Value);

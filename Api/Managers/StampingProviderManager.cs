@@ -100,7 +100,7 @@ public sealed class StampingProviderManager
             providerDtos);
     }
 
-    public async Task<(StampingProvider Provider, List<StampingPoint> Points)?> GetPublicProviderDataAsync(
+    public async Task<ProviderPointData?> GetPublicProviderDataAsync(
         string providerSlug,
         int userId,
         CancellationToken cancellationToken = default)
@@ -117,6 +117,6 @@ public sealed class StampingProviderManager
         }
 
         var points = await _points.GetPointsForProviderAsync(provider.Id, cancellationToken);
-        return (provider, points);
+        return new ProviderPointData(provider, points);
     }
 }

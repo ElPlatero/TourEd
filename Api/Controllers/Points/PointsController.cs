@@ -27,7 +27,7 @@ public sealed class PointsController : ControllerBase
             return Unauthorized();
         }
 
-        var result = await _manager.GetStampingPointsAsync(query.Provider, currentUser.Id, query.GetGeoFilterOrDefault(), query.GetUserFilterOrDefault(currentUser), cancellationToken);
+        var result = await _manager.GetStampingPointsAsync(query.Provider, currentUser.Id, query.GetAreaOrDefault(), query.GetExcludeVisitedOrDefault(), cancellationToken);
         return Ok(new GetStampingPointsResponse(result.Count, result.OrderBy(p => p.Point.Provider.Slug).ThenBy(p => p.Point.Series.Slug).ThenBy(p => p.Point.Number.HasValue ? 0 : 1).ThenBy(p => p.Point.Number).ThenBy(p => p.Point.Name).Select(CreateDto)));
     }
 
@@ -141,7 +141,7 @@ public sealed class PointsController : ControllerBase
         return NoContent();
     }
 
-    private static StampingPointDto CreateDto((StampingPoint Point, List<HikingTour>? Tours, UserVisit? Visit) data)
+    private static StampingPointDto CreateDto(StampingPointDetails data)
     {
         var result = StampingPointDto.Create(data.Point, data.Visit);
         if (data.Tours != null) result.Tours = data.Tours.Select(TourCompactDto.Create);

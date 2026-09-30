@@ -268,7 +268,7 @@ public sealed class ImportServiceTests : IDisposable
         });
         await context.SaveChangesAsync();
 
-        var pointResult = Assert.Single(await repository.GetStampingPointsAsync(providerFilter: StampingProviderFilter.Single(StampingProvider.TouringenId)));
+        var pointResult = Assert.Single(await repository.GetStampingPointsAsync(new StampingPointCriteria { ProviderFilter = StampingProviderFilter.Single(StampingProvider.TouringenId) }));
         var tourResult = Assert.Single(await repository.GetHikingToursAsync());
 
         Assert.Equal(StampingProvider.TouringenSlug, pointResult.Point.Provider.Slug);
