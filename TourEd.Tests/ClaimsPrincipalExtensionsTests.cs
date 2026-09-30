@@ -1,6 +1,5 @@
 using System.Security.Claims;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Extensions;
+using Api.Authentication;
 
 namespace TourEd.Tests;
 

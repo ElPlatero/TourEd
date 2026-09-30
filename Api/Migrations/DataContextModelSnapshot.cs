@@ -17,7 +17,7 @@ namespace Api.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.AdminAuditEntry", b =>
+            modelBuilder.Entity("Api.Entities.AdminAuditEntry", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -55,7 +55,7 @@ namespace Api.Migrations
                     b.ToTable("AdminAuditEntries");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.HikingTour", b =>
+            modelBuilder.Entity("Api.Entities.HikingTour", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -88,7 +88,7 @@ namespace Api.Migrations
                     b.ToTable("HikingTours");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.Import", b =>
+            modelBuilder.Entity("Api.Entities.Import", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -110,7 +110,7 @@ namespace Api.Migrations
                     b.ToTable("Imports");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.RegistrationNotificationState", b =>
+            modelBuilder.Entity("Api.Entities.RegistrationNotificationState", b =>
                 {
                     b.Property<int>("Id")
                         .HasColumnType("INTEGER");
@@ -129,7 +129,7 @@ namespace Api.Migrations
                         });
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.RegistrationRequest", b =>
+            modelBuilder.Entity("Api.Entities.RegistrationRequest", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -175,7 +175,7 @@ namespace Api.Migrations
                     b.ToTable("RegistrationRequests");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.SortedStampingPoint", b =>
+            modelBuilder.Entity("Api.Entities.SortedStampingPoint", b =>
                 {
                     b.Property<int>("Position")
                         .HasColumnType("INTEGER")
@@ -197,7 +197,7 @@ namespace Api.Migrations
                     b.ToTable("SortedStampingPoint", (string)null);
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.StampingPoint", b =>
+            modelBuilder.Entity("Api.Entities.StampingPoint", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -998,7 +998,7 @@ namespace Api.Migrations
                         });
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.StampingProvider", b =>
+            modelBuilder.Entity("Api.Entities.StampingProvider", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1146,7 +1146,7 @@ namespace Api.Migrations
                         });
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.StampingSeries", b =>
+            modelBuilder.Entity("Api.Entities.StampingSeries", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1277,7 +1277,7 @@ namespace Api.Migrations
                         });
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.User", b =>
+            modelBuilder.Entity("Api.Entities.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1303,7 +1303,7 @@ namespace Api.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.UserStampingProvider", b =>
+            modelBuilder.Entity("Api.Entities.UserStampingProvider", b =>
                 {
                     b.Property<int>("UserId")
                         .HasColumnType("INTEGER");
@@ -1318,7 +1318,7 @@ namespace Api.Migrations
                     b.ToTable("UserStampingProviders");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.UserVisit", b =>
+            modelBuilder.Entity("Api.Entities.UserVisit", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -1349,15 +1349,15 @@ namespace Api.Migrations
                     b.ToTable("UserVisit", (string)null);
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.SortedStampingPoint", b =>
+            modelBuilder.Entity("Api.Entities.SortedStampingPoint", b =>
                 {
-                    b.HasOne("TourEd.Lib.Abstractions.Models.StampingPoint", "StampingPoint")
+                    b.HasOne("Api.Entities.StampingPoint", "StampingPoint")
                         .WithMany()
                         .HasForeignKey("StampingPointId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("TourEd.Lib.Abstractions.Models.HikingTour", "Tour")
+                    b.HasOne("Api.Entities.HikingTour", "Tour")
                         .WithMany("StampingPoints")
                         .HasForeignKey("TourId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1368,15 +1368,15 @@ namespace Api.Migrations
                     b.Navigation("Tour");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.StampingPoint", b =>
+            modelBuilder.Entity("Api.Entities.StampingPoint", b =>
                 {
-                    b.HasOne("TourEd.Lib.Abstractions.Models.StampingProvider", "Provider")
+                    b.HasOne("Api.Entities.StampingProvider", "Provider")
                         .WithMany()
                         .HasForeignKey("ProviderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("TourEd.Lib.Abstractions.Models.StampingSeries", "Series")
+                    b.HasOne("Api.Entities.StampingSeries", "Series")
                         .WithMany()
                         .HasForeignKey("SeriesId", "ProviderId")
                         .HasPrincipalKey("Id", "ProviderId")
@@ -1388,9 +1388,9 @@ namespace Api.Migrations
                     b.Navigation("Series");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.StampingSeries", b =>
+            modelBuilder.Entity("Api.Entities.StampingSeries", b =>
                 {
-                    b.HasOne("TourEd.Lib.Abstractions.Models.StampingProvider", "Provider")
+                    b.HasOne("Api.Entities.StampingProvider", "Provider")
                         .WithMany()
                         .HasForeignKey("ProviderId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -1399,9 +1399,9 @@ namespace Api.Migrations
                     b.Navigation("Provider");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.User", b =>
+            modelBuilder.Entity("Api.Entities.User", b =>
                 {
-                    b.HasOne("TourEd.Lib.Abstractions.Models.StampingProvider", "DefaultStampingProvider")
+                    b.HasOne("Api.Entities.StampingProvider", "DefaultStampingProvider")
                         .WithMany()
                         .HasForeignKey("DefaultStampingProviderId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -1409,15 +1409,15 @@ namespace Api.Migrations
                     b.Navigation("DefaultStampingProvider");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.UserStampingProvider", b =>
+            modelBuilder.Entity("Api.Entities.UserStampingProvider", b =>
                 {
-                    b.HasOne("TourEd.Lib.Abstractions.Models.StampingProvider", "StampingProvider")
+                    b.HasOne("Api.Entities.StampingProvider", "StampingProvider")
                         .WithMany("Users")
                         .HasForeignKey("StampingProviderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("TourEd.Lib.Abstractions.Models.User", "User")
+                    b.HasOne("Api.Entities.User", "User")
                         .WithMany("StampingProviders")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1428,26 +1428,26 @@ namespace Api.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.UserVisit", b =>
+            modelBuilder.Entity("Api.Entities.UserVisit", b =>
                 {
-                    b.HasOne("TourEd.Lib.Abstractions.Models.User", null)
+                    b.HasOne("Api.Entities.User", null)
                         .WithMany("VisitedStampingPoints")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.HikingTour", b =>
+            modelBuilder.Entity("Api.Entities.HikingTour", b =>
                 {
                     b.Navigation("StampingPoints");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.StampingProvider", b =>
+            modelBuilder.Entity("Api.Entities.StampingProvider", b =>
                 {
                     b.Navigation("Users");
                 });
 
-            modelBuilder.Entity("TourEd.Lib.Abstractions.Models.User", b =>
+            modelBuilder.Entity("Api.Entities.User", b =>
                 {
                     b.Navigation("StampingProviders");
 

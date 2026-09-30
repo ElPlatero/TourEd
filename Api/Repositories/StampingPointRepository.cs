@@ -1,6 +1,6 @@
+using Api.Entities;
+using Api.ErrorHandling;
 using Microsoft.EntityFrameworkCore;
-using TourEd.Lib.Abstractions.Exceptions;
-using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Repositories;
 

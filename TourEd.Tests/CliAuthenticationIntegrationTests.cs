@@ -1,25 +1,25 @@
 using System.Collections.Concurrent;
-using System.Net;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Security.Claims;
 using System.Text;
 using Api.Authentication;
+using Api.Dto;
+using Api.Entities;
+using Api.Managers;
 using Api.Repositories;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Abstractions.Interfaces;
-using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
 
@@ -275,14 +275,14 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
             return Task.CompletedTask;
         }
 
-        public Task<TourEd.Lib.Abstractions.Models.UserDataImportResult> ImportUserDataAsync(
-            TourEd.Lib.Abstractions.Models.User user,
+        public Task<UserDataImportResult> ImportUserDataAsync(
+            User user,
             Stream stream,
             CancellationToken cancellationToken = default)
         {
             CapturePrincipal();
             Interlocked.Increment(ref _userImportCount);
-            return Task.FromResult(new TourEd.Lib.Abstractions.Models.UserDataImportResult(1, 0, 0, []));
+            return Task.FromResult(new UserDataImportResult(1, 0, 0, []));
         }
 
         private void CapturePrincipal()

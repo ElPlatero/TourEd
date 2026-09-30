@@ -1,5 +1,5 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -10,10 +10,11 @@ using Api.Controllers.Points;
 using Api.Controllers.Providers;
 using Api.Controllers.Tours;
 using Api.Dto;
+using Api.Entities;
 using Api.Repositories;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -24,9 +25,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Abstractions.Interfaces.Services;
-using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
 

@@ -103,22 +103,17 @@ Import controllers do not resolve a transaction eagerly. `ImportManager` downloa
 
 ## Solution Structure
 
-The solution has three projects:
+The solution has two projects (the former `Toured.Lib` was merged into `Api` on 30 September 2026):
 
 - `Api`
-  - ASP.NET Core REST API.
+  - ASP.NET Core REST API; namespaces follow the folders.
+  - `Controllers`, `Managers`, `Repositories` (including `Configurations`, `Seeds`, unit of work), `Dto`, `Migrations`.
+  - `Entities`: EF Core entity types (`User`, `StampingPoint`, `StampingProvider`, `StampingSeries`, `UserVisit`, …).
+  - `Imports`: Touringen/HWN source import services, HTML parsing, raw import models and their JSON converters.
+  - `Authentication`: cookie/CLI/Google authentication, `GoogleLoginService`, claim names and `ClaimsPrincipal` extensions.
+  - `ErrorHandling`: domain exceptions and the central exception handler.
+  - `Options`, `Services` (hosted background services), `Extensions` (service registration).
   - Static HTML map and image assets under `wwwroot`.
-  - Controllers for points, tours, and imports.
-  - EF Core SQLite persistence.
-  - Repository and manager classes.
-  - Database migrations.
-  - DTOs for HTTP responses.
-- `Toured.Lib`
-  - Domain and raw import models.
-  - Shared abstractions and interfaces.
-  - Import services.
-  - HTML parsing service.
-  - Utility extensions and JSON converters.
 - `TourEd.Tests`
   - xUnit test project.
   - Covers provider-aware persistence/import behavior, readiness, Google account binding, and backend authentication integration.
@@ -133,11 +128,10 @@ The backend follows a simple layered structure:
 - `GoogleLoginService` depends on `IUserService` (implemented by `UserRepository`) and `IRegistrationRequestService` (implemented by `RegistrationRequestRepository`).
 - Controllers pass the acting user explicitly to managers (for example `ImportManager.ImportUserDataAsync(user, stream, cancellationToken)`); managers and repositories do not read the HTTP context, and `IHttpContextAccessor` is not registered. Every asynchronous controller, manager, repository and HTTP-client path accepts and forwards a `CancellationToken`; collection-saving repository methods take `IReadOnlyList<T>` instead of `params` arrays so the token can follow.
 - `DataContext` defines SQLite-backed EF Core mappings by applying one `IEntityTypeConfiguration<T>` per entity from `Api/Repositories/Configurations`; seed data lives in `Api/Repositories/Seeds` and is referenced from those configurations. Changing either requires a migration, and `dotnet ef migrations has-pending-model-changes --project Api` must report no changes for pure restructurings. It receives `DbContextOptions<DataContext>`; the SQLite connection is configured only in `Program.cs` (`AddDbContext`), and tests build the same options through `TourEd.Tests/TestDbContextOptions`. Provider and series slugs are stored lowercase (seeded constants), so repositories compare them directly against normalized input without `ToLower()`. `StampingSeries.DefaultSlug` (`standard`) names every provider's standard series.
-- `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
 
 Database transactions use one pattern: `await using var unitOfWork = await unitOfWorkFactory.BeginAsync(cancellationToken);` followed by `await unitOfWork.CommitAsync(cancellationToken);`. Disposing without commit rolls back. `IUnitOfWorkFactory` (implemented by `Api/Repositories/UnitOfWorkFactory`) is scoped and shares the request's `DataContext`; a unit started while a transaction is already active joins it, so only the outermost unit commits or rolls back. Repository methods that need atomicity (user deletion, registration decisions, notification marking) use the same pattern and can therefore run inside a caller's unit of work. Do not call `Database.BeginTransaction*` directly or open transactions in constructors.
 
-Expected request failures are signalled with domain exceptions from `TourEd.Lib.Abstractions.Exceptions` and translated centrally by `Api/ErrorHandling/TouredExceptionHandler` into problem responses: `RequestValidationException` → `400` (title `Validation failed`, message as `detail`), `AccessDeniedException` → `403`, `EntityNotFoundException` → `404`, `ConflictException` (including `RegistrationRequestAlreadyDecidedException`) → `409`. Only the `400` message is returned to clients. Controllers do not catch these exceptions. Framework exceptions such as `InvalidOperationException`, `UnauthorizedAccessException`, `InvalidDataException` or `NotSupportedException` are never mapped and remain `500`; provider source-import validation failures therefore stay `500`. Deliberate non-exception results (for example the visit-state `409` carrying a `VisitDto`, or `null` → `404`) are still returned directly by controllers.
+Expected request failures are signalled with domain exceptions from `Api.ErrorHandling` and translated centrally by `Api/ErrorHandling/TouredExceptionHandler` into problem responses: `RequestValidationException` → `400` (title `Validation failed`, message as `detail`), `AccessDeniedException` → `403`, `EntityNotFoundException` → `404`, `ConflictException` (including `RegistrationRequestAlreadyDecidedException`) → `409`. Only the `400` message is returned to clients. Controllers do not catch these exceptions. Framework exceptions such as `InvalidOperationException`, `UnauthorizedAccessException`, `InvalidDataException` or `NotSupportedException` are never mapped and remain `500`; provider source-import validation failures therefore stay `500`. Deliberate non-exception results (for example the visit-state `409` carrying a `VisitDto`, or `null` → `404`) are still returned directly by controllers.
 
 Provider data is represented by `StampingProvider`; collections and editions are represented by `StampingSeries`. The seeded Touringen series are Standard, Naturschätze, Familienwanderwege Rhön, and the variable temporary Sonderstempel collection. HWN, Malerweg (8 points), Schluchtensteig (6 points), Heidschnuckenweg (13 points), Harzer Klosterwanderweg (16 points), Bliessteig (10 points), and Kellerwaldsteig (10 unnumbered points) each have one standard series. Numbered points are unique by series and number; unnumbered points retain identity through their provider-scoped external id. A point's provider and series are constrained to match. `UserStampingProvider` uses `(UserId, StampingProviderId)` as its unique key. Removing an entitlement hides its provider and visits without deleting visit rows; restoring it makes those visits visible again. Deleting a user cascades to entitlements.
 
@@ -305,7 +299,7 @@ The API uses:
 - SQLite
 - Swagger in development
 
-`Toured.Lib` has no ASP.NET Core framework dependency. Browser and CLI authentication handlers belong to `Api`; do not introduce ASP.NET Identity or local-password dependencies.
+Do not introduce ASP.NET Identity or local-password dependencies.
 
 The configured database connection is:
 

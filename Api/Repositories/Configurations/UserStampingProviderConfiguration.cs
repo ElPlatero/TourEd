@@ -1,6 +1,6 @@
-using Microsoft.EntityFrameworkCore;
+using Api.Entities;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using TourEd.Lib.Abstractions.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Api.Repositories.Configurations;
 

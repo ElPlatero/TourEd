@@ -1,7 +1,5 @@
+using Api.Entities;
 using Microsoft.EntityFrameworkCore;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Abstractions.Interfaces.Services;
-using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Repositories;
 

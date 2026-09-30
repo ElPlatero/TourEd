@@ -1,4 +1,4 @@
-using TourEd.Lib.Abstractions.Exceptions;
+using Api.ErrorHandling;
 
 namespace Api.Repositories;
 

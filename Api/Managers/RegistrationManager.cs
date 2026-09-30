@@ -1,7 +1,6 @@
 using Api.Dto;
+using Api.Entities;
 using Api.Repositories;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Managers;
 

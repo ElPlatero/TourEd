@@ -1,10 +1,11 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Api.Authentication;
 using Api.Controllers.Points;
 using Api.Dto;
+using Api.Entities;
 using Api.Repositories;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
@@ -15,7 +16,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TourEd.Lib.Abstractions.Models;
 using Xunit;
 
 namespace TourEd.Tests;

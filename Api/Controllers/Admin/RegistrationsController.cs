@@ -1,9 +1,9 @@
 using Api.Authentication;
 using Api.Dto;
+using Api.Entities;
 using Api.Managers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TourEd.Lib.Extensions;
 
 namespace Api.Controllers.Admin;
 

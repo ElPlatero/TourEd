@@ -1,4 +1,5 @@
 using Api.Dto;
+using Api.Entities;
 
 namespace Api.Controllers.Points;
 

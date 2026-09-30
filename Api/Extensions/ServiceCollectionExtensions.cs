@@ -1,10 +1,9 @@
-﻿using Api.Managers;
+﻿using Api.Authentication;
+using Api.Entities;
+using Api.Imports;
+using Api.Managers;
 using Api.Repositories;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using TourEd.Lib.Abstractions.Interfaces;
-using TourEd.Lib.Abstractions.Interfaces.Services;
-using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Services;
 
 namespace Api.Extensions;
 

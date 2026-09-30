@@ -1,12 +1,10 @@
+using System.Security.Claims;
+using Api.Authentication;
+using Api.Entities;
 using Api.Managers;
 using Api.Repositories;
-using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Abstractions.Exceptions;
-using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Services;
 
 namespace TourEd.Tests;
 

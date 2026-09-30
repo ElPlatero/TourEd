@@ -25,10 +25,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Toured.Lib\TourEd.Lib.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
       <_ContentIncludedByDefault Remove="Api\obj\Api.csproj.nuget.dgspec.json" />
       <_ContentIncludedByDefault Remove="Api\obj\project.assets.json" />
     </ItemGroup>
