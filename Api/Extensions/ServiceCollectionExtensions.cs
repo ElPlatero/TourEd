@@ -20,7 +20,11 @@ internal static class ServiceCollectionExtensions
 
     public static IServiceCollection AddRepositories(this IServiceCollection services)
     {
-        services.TryAddTransient<IUserService, TouredRepository>();
+        services.TryAddTransient<UserRepository>();
+        services.TryAddTransient<IUserService>(provider => provider.GetRequiredService<UserRepository>());
+        services.TryAddTransient<RegistrationRequestRepository>();
+        services.TryAddTransient<IRegistrationRequestService>(provider => provider.GetRequiredService<RegistrationRequestRepository>());
+        services.TryAddTransient<AdminAuditRepository>();
         services.TryAddTransient<IGoogleLoginService, GoogleLoginService>();
         services.TryAddTransient<TouredRepository>();
         return services;
@@ -29,6 +33,7 @@ internal static class ServiceCollectionExtensions
     public static IServiceCollection AddManagers(this IServiceCollection services)
     {
         services.TryAddTransient<AdminUserManager>();
+        services.TryAddTransient<RegistrationManager>();
         services.TryAddTransient<TourDataManager>();
         services.TryAddTransient<StampingProviderManager>();
         return services;

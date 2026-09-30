@@ -51,7 +51,7 @@ public sealed class DataRetentionCleanupServiceTests : IDisposable
         context.AdminAuditEntries.AddRange(freshEntry, exactBoundaryEntry, oneTickOlderEntry, olderEntry);
         await context.SaveChangesAsync();
 
-        var repository = new TouredRepository(context);
+        var repository = new AdminAuditRepository(context);
         var createdBefore = now - TimeSpan.FromDays(90);
         var deletedCount = await repository.CleanupExpiredAdminAuditEntriesAsync(createdBefore);
 
@@ -105,7 +105,7 @@ public sealed class DataRetentionCleanupServiceTests : IDisposable
         }
         await context.SaveChangesAsync();
 
-        var repository = new TouredRepository(context);
+        var repository = new AdminAuditRepository(context);
         var createdBefore = now - TimeSpan.FromDays(90);
         var deletedCount = await repository.CleanupExpiredAdminAuditEntriesAsync(createdBefore);
 
@@ -189,7 +189,8 @@ public sealed class DataRetentionCleanupServiceTests : IDisposable
         services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<TimeProvider>(timeProvider);
         services.AddDbContext<DataContext>();
-        services.AddScoped<TouredRepository>();
+        services.AddScoped<RegistrationRequestRepository>();
+        services.AddScoped<AdminAuditRepository>();
         services.AddSingleton<DataRetentionCleanupService>();
         await using var serviceProvider = services.BuildServiceProvider();
 
@@ -260,7 +261,8 @@ public sealed class DataRetentionCleanupServiceTests : IDisposable
         services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<TimeProvider>(timeProvider);
         services.AddDbContext<DataContext>();
-        services.AddScoped<TouredRepository>();
+        services.AddScoped<RegistrationRequestRepository>();
+        services.AddScoped<AdminAuditRepository>();
         await using var innerProvider = services.BuildServiceProvider();
 
         // Fail only the first scope (registration cleanup)

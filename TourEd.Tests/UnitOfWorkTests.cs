@@ -1,3 +1,4 @@
+using Api.Managers;
 using Api.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -57,7 +58,7 @@ public sealed class UnitOfWorkTests : IDisposable
     }
 
     [Fact]
-    public async Task RepositoryTransactionsJoinAnOuterUnitOfWork()
+    public async Task ManagerTransactionsJoinAnOuterUnitOfWork()
     {
         int userId;
         int actorId;
@@ -73,7 +74,13 @@ public sealed class UnitOfWorkTests : IDisposable
         await using (var context = await CreateContextAsync())
         {
             await using var outer = await new UnitOfWorkFactory(context).BeginAsync();
-            Assert.True(await new TouredRepository(context).DeleteAdminUserAsync(userId, actorId));
+            var manager = new AdminUserManager(
+                new UserRepository(context),
+                new RegistrationRequestRepository(context),
+                new AdminAuditRepository(context),
+                new TouredRepository(context),
+                new UnitOfWorkFactory(context));
+            Assert.True(await manager.DeleteUserAsync(userId, actorId, CancellationToken.None));
         }
 
         Assert.True(await UserExistsAsync("target@example.test"));

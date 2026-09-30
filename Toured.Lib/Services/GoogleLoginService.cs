@@ -10,10 +10,12 @@ public sealed class GoogleLoginService : IGoogleLoginService
 {
     private const string AuthenticationType = "TourEdGoogleLogin";
     private readonly IUserService _userService;
+    private readonly IRegistrationRequestService _registrationRequestService;
 
-    public GoogleLoginService(IUserService userService)
+    public GoogleLoginService(IUserService userService, IRegistrationRequestService registrationRequestService)
     {
         _userService = userService;
+        _registrationRequestService = registrationRequestService;
     }
 
     public async Task<User> AuthenticateAsync(GoogleLoginClaims claims, CancellationToken cancellationToken = default)
@@ -52,7 +54,7 @@ public sealed class GoogleLoginService : IGoogleLoginService
         var userBySubject = await _userService.GetUserByGoogleSubjectOrDefaultAsync(claims.Subject, cancellationToken);
         if (userBySubject != null)
         {
-            await _userService.MarkRegistrationRequestApprovedAsync(claims.Subject, cancellationToken);
+            await _registrationRequestService.MarkRegistrationRequestApprovedAsync(claims.Subject, cancellationToken);
             return CreateAuthenticatedResult(userBySubject);
         }
 
@@ -68,14 +70,14 @@ public sealed class GoogleLoginService : IGoogleLoginService
             {
                 var boundUser = await _userService.GetUserByGoogleSubjectOrDefaultAsync(claims.Subject, cancellationToken)
                        ?? throw new InvalidOperationException("The Google account binding could not be loaded.");
-                await _userService.MarkRegistrationRequestApprovedAsync(claims.Subject, cancellationToken);
+                await _registrationRequestService.MarkRegistrationRequestApprovedAsync(claims.Subject, cancellationToken);
                 return CreateAuthenticatedResult(boundUser);
             }
 
             userBySubject = await _userService.GetUserByGoogleSubjectOrDefaultAsync(claims.Subject, cancellationToken);
             if (userBySubject?.Id == userByEmail.Id)
             {
-                await _userService.MarkRegistrationRequestApprovedAsync(claims.Subject, cancellationToken);
+                await _registrationRequestService.MarkRegistrationRequestApprovedAsync(claims.Subject, cancellationToken);
                 return CreateAuthenticatedResult(userBySubject);
             }
 
@@ -87,14 +89,14 @@ public sealed class GoogleLoginService : IGoogleLoginService
             userByEmail = await _userService.GetUserOrDefaultAsync(claims.Email, cancellationToken);
             if (userByEmail?.GoogleSubject == claims.Subject)
             {
-                await _userService.MarkRegistrationRequestApprovedAsync(claims.Subject, cancellationToken);
+                await _registrationRequestService.MarkRegistrationRequestApprovedAsync(claims.Subject, cancellationToken);
                 return CreateAuthenticatedResult(userByEmail);
             }
 
             throw new GoogleLoginRejectedException(GoogleLoginRejectionReason.UserAlreadyBound);
         }
 
-        var registrationRequest = await _userService.RecordOrUpdateRegistrationRequestAsync(
+        var registrationRequest = await _registrationRequestService.RecordOrUpdateRegistrationRequestAsync(
             claims.Subject,
             claims.Email,
             cancellationToken);
