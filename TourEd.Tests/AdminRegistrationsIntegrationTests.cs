@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Api.Dto;
+using Api.Managers;
 using Api.Repositories;
 using Api.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -320,10 +321,10 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
                 CREATE TRIGGER fail_registration_audit BEFORE INSERT ON AdminAuditEntries
                 BEGIN SELECT RAISE(ABORT, 'Injected audit failure'); END;
                 """);
-            var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+            var manager = scope.ServiceProvider.GetRequiredService<RegistrationManager>();
             await Assert.ThrowsAsync<DbUpdateException>(() => decision == "approve"
-                ? repository.ApproveRegistrationRequestAsync(requestId, _adminUserId)
-                : repository.RejectRegistrationRequestAsync(requestId, _adminUserId));
+                ? manager.ApproveRegistrationRequestAsync(requestId, _adminUserId, CancellationToken.None)
+                : manager.RejectRegistrationRequestAsync(requestId, _adminUserId, CancellationToken.None));
         }
 
         await using (var scope = _factory.Services.CreateAsyncScope())
@@ -441,7 +442,7 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
             });
         await context.SaveChangesAsync();
 
-        var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+        var repository = scope.ServiceProvider.GetRequiredService<RegistrationRequestRepository>();
         await repository.CleanupExpiredRegistrationRequestsAsync(now);
 
         var subjects = await context.RegistrationRequests

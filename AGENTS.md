@@ -128,8 +128,9 @@ The solution has three projects:
 The backend follows a simple layered structure:
 
 - Controllers handle HTTP shape and routing.
-- Managers contain application-level orchestration.
-- `TouredRepository` contains EF Core queries and persistence operations.
+- Managers contain application-level orchestration and business rules: validation, audit decisions, unit-of-work boundaries, and mapping to API DTOs.
+- Repositories contain only EF Core queries and persistence operations and return entities or their own read models (for example `UserSummary`), never API DTOs. `UserRepository` (users, Google binding, provider entitlements), `RegistrationRequestRepository` (registration requests and admin notification state) and `AdminAuditRepository` (audit entries) serve administration and registration via `AdminUserManager` and `RegistrationManager`. `TouredRepository` still contains the stamping point, visit, provider-catalog and import queries; it is being split by feature area. Repositories share the request's `DataContext`, so their `SaveChangesAsync` persists all pending changes of that request.
+- `GoogleLoginService` depends on `IUserService` (implemented by `UserRepository`) and `IRegistrationRequestService` (implemented by `RegistrationRequestRepository`).
 - `DataContext` defines SQLite-backed EF Core mappings.
 - `Toured.Lib` contains reusable domain/import/auth pieces used by the API.
 

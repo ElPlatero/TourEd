@@ -10,9 +10,9 @@ namespace Api.Controllers.Admin;
 [ApiController, Route("api/admin/registrations"), Authorize(Policy = TouredAuthorizationPolicies.CliImport)]
 public sealed class RegistrationsController : ControllerBase
 {
-    private readonly AdminUserManager _manager;
+    private readonly RegistrationManager _manager;
 
-    public RegistrationsController(AdminUserManager manager)
+    public RegistrationsController(RegistrationManager manager)
     {
         _manager = manager;
     }

@@ -1,3 +1,4 @@
+using Api.Managers;
 using Api.Repositories;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
@@ -185,13 +186,13 @@ public sealed class GoogleLoginServiceTests : IDisposable
     {
         await using var context = await CreateInitializedContextAsync();
         var service = CreateService(context);
-        var repository = new TouredRepository(context);
+        var registrations = CreateRegistrationManager(context);
 
         await Assert.ThrowsAsync<GoogleLoginRejectedException>(() => service.AuthenticateAsync(
             new GoogleLoginClaims("google-subject-1", "applicant@example.test", true)));
 
         var initialRequest = await context.RegistrationRequests.SingleAsync();
-        await repository.RejectRegistrationRequestAsync(initialRequest.Id, actorUserId: 1);
+        await registrations.RejectRegistrationRequestAsync(initialRequest.Id, actorUserId: 1, CancellationToken.None);
 
         var rejectedRequest = await context.RegistrationRequests.AsNoTracking().SingleAsync();
         Assert.Equal(RegistrationRequestStatus.Rejected, rejectedRequest.Status);
@@ -218,12 +219,13 @@ public sealed class GoogleLoginServiceTests : IDisposable
     {
         await using var context = await CreateInitializedContextAsync();
         var service = CreateService(context);
-        var repository = new TouredRepository(context);
+        var registrations = CreateRegistrationManager(context);
+        var repository = new RegistrationRequestRepository(context);
 
         await service.ProcessLoginAsync(
             new GoogleLoginClaims("expired-rejection", "applicant@example.test", true));
         var request = await context.RegistrationRequests.SingleAsync();
-        await repository.RejectRegistrationRequestAsync(request.Id, actorUserId: 1);
+        await registrations.RejectRegistrationRequestAsync(request.Id, actorUserId: 1, CancellationToken.None);
         request.CreatedAt = DateTime.UtcNow.AddDays(-40);
         request.DecidedAt = DateTime.UtcNow.AddDays(-31);
         request.UpdatedAt = request.DecidedAt;
@@ -261,7 +263,7 @@ public sealed class GoogleLoginServiceTests : IDisposable
         await using var context = await CreateInitializedContextAsync();
         await AddUserAsync(context, "first@example.test", "used-subject");
         var secondUser = await AddUserAsync(context, "second@example.test");
-        var repository = new TouredRepository(context);
+        var repository = new UserRepository(context);
 
         var wasBound = await repository.TryBindGoogleSubjectAsync(secondUser.Id, "used-subject");
 
@@ -321,7 +323,14 @@ public sealed class GoogleLoginServiceTests : IDisposable
     }
 
     private static GoogleLoginService CreateService(DataContext context)
-        => new(new TouredRepository(context));
+        => new(new UserRepository(context), new RegistrationRequestRepository(context));
+
+    private static RegistrationManager CreateRegistrationManager(DataContext context)
+        => new(
+            new RegistrationRequestRepository(context),
+            new UserRepository(context),
+            new AdminAuditRepository(context),
+            new UnitOfWorkFactory(context));
 
     public void Dispose()
     {

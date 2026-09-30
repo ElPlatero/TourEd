@@ -37,7 +37,7 @@ internal sealed class DataRetentionCleanupService(
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
-            var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+            var repository = scope.ServiceProvider.GetRequiredService<RegistrationRequestRepository>();
             var deletedCount = await repository.CleanupExpiredRegistrationRequestsAsync(
                 timeProvider.GetUtcNow().UtcDateTime,
                 cancellationToken);
@@ -63,7 +63,7 @@ internal sealed class DataRetentionCleanupService(
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
-            var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+            var repository = scope.ServiceProvider.GetRequiredService<AdminAuditRepository>();
             var createdBefore = timeProvider.GetUtcNow().UtcDateTime - AdminAuditRetention;
             var deletedCount = await repository.CleanupExpiredAdminAuditEntriesAsync(
                 createdBefore,

@@ -45,7 +45,7 @@ internal sealed class RegistrationRequestNotificationService(
             var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
             await using var scope = scopeFactory.CreateAsyncScope();
-            var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+            var repository = scope.ServiceProvider.GetRequiredService<RegistrationRequestRepository>();
 
             var unnotifiedIds = await repository.GetUnnotifiedPendingRegistrationRequestIdsAsync(cancellationToken);
             if (unnotifiedIds.Count == 0)

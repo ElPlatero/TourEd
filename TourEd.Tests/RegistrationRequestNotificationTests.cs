@@ -732,7 +732,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
     public async Task RepeatedLoginForAlreadyNotifiedPendingRequestDoesNotResetSentAt()
     {
         await using var context = await CreateInitializedContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new RegistrationRequestRepository(context);
         var sentAt = new DateTime(2026, 9, 1, 10, 0, 0, DateTimeKind.Utc);
 
         var request = new RegistrationRequest
@@ -757,7 +757,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
     public async Task EmailChangeForPendingRequestDoesNotResetSentAt()
     {
         await using var context = await CreateInitializedContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new RegistrationRequestRepository(context);
         var sentAt = new DateTime(2026, 9, 1, 10, 0, 0, DateTimeKind.Utc);
 
         var request = new RegistrationRequest
@@ -783,7 +783,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
     public async Task RePendingApprovedRequestResetsSentAtToNull()
     {
         await using var context = await CreateInitializedContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new RegistrationRequestRepository(context);
         var sentAt = new DateTime(2026, 9, 1, 10, 0, 0, DateTimeKind.Utc);
 
         var request = new RegistrationRequest
@@ -810,7 +810,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
     public async Task ExistingOpenRequestFromMigrationHasNullSentAtAndCanBeNotified()
     {
         await using var context = await CreateInitializedContextAsync();
-        var repository = new TouredRepository(context);
+        var repository = new RegistrationRequestRepository(context);
 
         var request = new RegistrationRequest
         {
@@ -893,7 +893,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(context);
-        services.AddScoped<TouredRepository>();
+        services.AddScoped<RegistrationRequestRepository>();
         var serviceProvider = services.BuildServiceProvider();
 
         return new RegistrationRequestNotificationService(
