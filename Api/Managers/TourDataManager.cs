@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Api.Dto;
 using Api.Repositories;
+using TourEd.Lib.Abstractions.Exceptions;
 using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Managers;
@@ -109,7 +110,7 @@ public class TourDataManager
     {
         if (requests == null || requests.Count == 0)
         {
-            throw new InvalidDataException("At least one stamping point must be provided.");
+            throw new RequestValidationException("At least one stamping point must be provided.");
         }
 
         var providers = await _repository.GetStampingProvidersAsync(includeRestrictedProviders: true);
@@ -124,27 +125,27 @@ public class TourDataManager
         {
             if (string.IsNullOrWhiteSpace(request.Name))
             {
-                throw new InvalidDataException("Stamping point name is required.");
+                throw new RequestValidationException("Stamping point name is required.");
             }
 
             if (request.Latitude is < -90m or > 90m)
             {
-                throw new InvalidDataException($"Invalid latitude '{request.Latitude}'. Must be between -90 and 90.");
+                throw new RequestValidationException($"Invalid latitude '{request.Latitude}'. Must be between -90 and 90.");
             }
 
             if (request.Longitude is < -180m or > 180m)
             {
-                throw new InvalidDataException($"Invalid longitude '{request.Longitude}'. Must be between -180 and 180.");
+                throw new RequestValidationException($"Invalid longitude '{request.Longitude}'. Must be between -180 and 180.");
             }
 
             if (request.Number.HasValue && request.Number.Value < 1)
             {
-                throw new InvalidDataException($"Invalid stamping point number '{request.Number}'. Must be positive.");
+                throw new RequestValidationException($"Invalid stamping point number '{request.Number}'. Must be positive.");
             }
 
             if (request.ValidFrom.HasValue && request.ValidUntil.HasValue && request.ValidFrom.Value > request.ValidUntil.Value)
             {
-                throw new InvalidDataException($"ValidFrom '{request.ValidFrom}' cannot be after ValidUntil '{request.ValidUntil}'.");
+                throw new RequestValidationException($"ValidFrom '{request.ValidFrom}' cannot be after ValidUntil '{request.ValidUntil}'.");
             }
 
             var providerSlug = string.IsNullOrWhiteSpace(request.Provider)
@@ -153,7 +154,7 @@ public class TourDataManager
 
             if (!providersBySlug.TryGetValue(providerSlug, out var provider))
             {
-                throw new InvalidDataException($"Unknown stamping provider '{request.Provider}'.");
+                throw new RequestValidationException($"Unknown stamping provider '{request.Provider}'.");
             }
 
             var seriesSlug = string.IsNullOrWhiteSpace(request.Series)
@@ -162,7 +163,7 @@ public class TourDataManager
 
             if (!seriesByProviderAndSlug.TryGetValue((provider.Id, seriesSlug), out var series))
             {
-                throw new InvalidDataException($"Unknown stamping series '{request.Series}' for provider '{provider.Slug}'.");
+                throw new RequestValidationException($"Unknown stamping series '{request.Series}' for provider '{provider.Slug}'.");
             }
 
             string externalId;

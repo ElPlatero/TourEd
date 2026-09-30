@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using TourEd.Lib.Abstractions;
+using TourEd.Lib.Abstractions.Exceptions;
 using TourEd.Lib.Abstractions.Interfaces.Services;
 using TourEd.Lib.Abstractions.Models;
 using TourEd.Lib.Abstractions.Options;
@@ -438,7 +439,7 @@ public sealed class ImportServiceTests : IDisposable
         var manager = CreateImportManager(context, repository, user, null);
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("42;01.02.2026;12:30"));
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => manager.ImportUserDataAsync(stream));
+        await Assert.ThrowsAsync<AccessDeniedException>(() => manager.ImportUserDataAsync(stream));
 
         Assert.Empty(await context.UserVisits.AsNoTracking().ToListAsync());
     }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Api.ErrorHandling;
 using Api.Extensions;
 using Api.Managers;
 using Api.Options;
@@ -52,6 +53,8 @@ builder.Services
     .AddEndpointsApiExplorer()
     .AddDbContext<DataContext>(options => options.UseSqlite(builder.Configuration.GetConnectionString("TouredDb")))
     .AddTouredHealthChecks()
+    .AddProblemDetails()
+    .AddExceptionHandler<TouredExceptionHandler>()
     .AddControllers().AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -60,6 +63,8 @@ builder.Services
     
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {

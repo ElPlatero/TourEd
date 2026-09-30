@@ -34,11 +34,11 @@ public class TouredRepository : IUserService
             }
             if (userId is null && !provider.IsAnonymousAccessAllowed)
             {
-                throw new UnauthorizedAccessException("This stamping provider requires authentication.");
+                throw new AccessDeniedException("This stamping provider requires authentication.");
             }
             if (userId is not null && !await HasStampingProviderAccessAsync(userId.Value, provider.Id))
             {
-                throw new UnauthorizedAccessException("This stamping provider is not enabled for the user.");
+                throw new AccessDeniedException("This stamping provider is not enabled for the user.");
             }
             return userId is null
                 ? StampingProviderFilter.Single(provider.Id)
@@ -59,14 +59,14 @@ public class TouredRepository : IUserService
                 return StampingProviderFilter.SingleForUser(defaultProviderId.Value, userId.Value);
             }
 
-            throw new UnauthorizedAccessException("The user has no enabled default stamping provider.");
+            throw new AccessDeniedException("The user has no enabled default stamping provider.");
         }
 
         var anonymousDefaultProvider = await _dbContext.StampingProviders.AsNoTracking()
             .SingleAsync(provider => provider.Id == StampingProvider.TouringenId);
         if (!anonymousDefaultProvider.IsAnonymousAccessAllowed)
         {
-            throw new UnauthorizedAccessException("The default stamping provider requires authentication.");
+            throw new AccessDeniedException("The default stamping provider requires authentication.");
         }
         return StampingProviderFilter.Single(anonymousDefaultProvider.Id);
     }
@@ -115,7 +115,7 @@ public class TouredRepository : IUserService
             .ToHashSet(StringComparer.Ordinal);
         if (requestedSlugs.Count != request.Providers.Count)
         {
-            throw new InvalidDataException("Provider slugs must be non-empty and unique.");
+            throw new RequestValidationException("Provider slugs must be non-empty and unique.");
         }
 
         var normalizedDefault = string.IsNullOrWhiteSpace(request.DefaultProvider)
@@ -123,7 +123,7 @@ public class TouredRepository : IUserService
             : request.DefaultProvider.Trim().ToLowerInvariant();
         if (normalizedDefault is not null && !requestedSlugs.Contains(normalizedDefault))
         {
-            throw new InvalidDataException("The default provider must be included in Providers.");
+            throw new RequestValidationException("The default provider must be included in Providers.");
         }
 
         var providers = await _dbContext.StampingProviders
@@ -133,7 +133,7 @@ public class TouredRepository : IUserService
         var unknownSlugs = requestedSlugs.Except(foundSlugs).Order().ToArray();
         if (unknownSlugs.Length > 0)
         {
-            throw new InvalidDataException($"Unknown provider(s): {string.Join(", ", unknownSlugs)}.");
+            throw new RequestValidationException($"Unknown provider(s): {string.Join(", ", unknownSlugs)}.");
         }
 
         var user = await _dbContext.Users
@@ -572,7 +572,7 @@ public class TouredRepository : IUserService
 
         if (userId is not null && !await HasStampingProviderAccessAsync(userId.Value, provider.Id, cancellationToken))
         {
-            throw new UnauthorizedAccessException("This stamping provider is not enabled for the user.");
+            throw new AccessDeniedException("This stamping provider is not enabled for the user.");
         }
 
         var points = await _dbContext.StampingPoints.AsNoTracking()
@@ -992,7 +992,7 @@ public class TouredRepository : IUserService
     {
         if (providerFilter.IncludesAllProviders)
         {
-            throw new NotSupportedException("A single stamping point lookup requires one provider.");
+            throw new RequestValidationException("A single stamping point lookup requires one provider.");
         }
 
         var normalizedSeriesSlug = seriesSlug?.Trim().ToLowerInvariant();
@@ -1015,7 +1015,7 @@ public class TouredRepository : IUserService
     {
         if (providerFilter.IncludesAllProviders)
         {
-            throw new NotSupportedException("A single stamping point lookup requires one provider.");
+            throw new RequestValidationException("A single stamping point lookup requires one provider.");
         }
 
         return await _dbContext.StampingPoints.Include(point => point.Provider).Include(point => point.Series)
@@ -1042,12 +1042,12 @@ public class TouredRepository : IUserService
             }
             catch (DbUpdateException exception)
             {
-                throw new InvalidOperationException("This stamping point has already been visited.", exception);
+                throw new ConflictException("This stamping point has already been visited.", exception);
             }
         }
         else
         {
-            throw new InvalidOperationException("This stamping point has already been visited.");
+            throw new ConflictException("This stamping point has already been visited.");
         }
     }
 
