@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Api.Entities;
 
-public record StampingPoint(int Id, string Name, decimal Longitude, decimal Latitude, int? Number, int Code, int ProviderId, string ExternalId)
+public sealed record StampingPoint(int Id, string Name, decimal Longitude, decimal Latitude, int? Number, int Code, int ProviderId, string ExternalId)
 {
     public int SeriesId { get; init; }
     public DateOnly? ValidFrom { get; init; }

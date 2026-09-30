@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Api.Imports;
 
-public record RawTour(
+public sealed record RawTour(
     [property: JsonPropertyName("uid")] int Id,
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("stamp_points")] RawStampPoint[] StampPoints,

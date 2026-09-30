@@ -1,6 +1,6 @@
 namespace Api.Entities;
 
-public record Position(decimal Longitude, decimal Latitude)
+public sealed record Position(decimal Longitude, decimal Latitude)
 {
     public static decimal GetDistance(Position x, Position y)
     {

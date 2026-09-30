@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Api.Entities;
 
-public record Import(int Id, DateTime Date, int StampingPointsCount, int HikingToursCount)
+public sealed record Import(int Id, DateTime Date, int StampingPointsCount, int HikingToursCount)
 {
     internal sealed class Configuration : IEntityTypeConfiguration<Import>
     {

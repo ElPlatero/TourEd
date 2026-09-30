@@ -2,7 +2,7 @@ using Api.Entities;
 
 namespace Api.Dto;
 
-public record StampingPointDto(
+public sealed record StampingPointDto(
     int Id,
     int? Number,
     string Name,

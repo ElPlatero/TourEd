@@ -1,6 +1,6 @@
 namespace Api.ErrorHandling;
 
-public class EntityNotFoundException : Exception
+public sealed class EntityNotFoundException : Exception
 {
     public Type EntityType { get; }
     public object Key { get; }

@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers.Tours;
 
-public class HikingTourQuery
+public sealed class HikingTourQuery
 {
     [FromQuery(Name = "lat")]
     public decimal Latitude { get; set; }

@@ -7,7 +7,7 @@ using Api.Repositories;
 
 namespace Api.Managers;
 
-public class TourDataManager
+public sealed class TourDataManager
 {
     private readonly StampingPointRepository _points;
     private readonly UserVisitRepository _visits;

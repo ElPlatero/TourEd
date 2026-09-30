@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Api.Entities;
 
-public class StampingProvider
+public sealed class StampingProvider
 {
     public const int TouringenId = 1;
     public const string TouringenSlug = "touringen";
