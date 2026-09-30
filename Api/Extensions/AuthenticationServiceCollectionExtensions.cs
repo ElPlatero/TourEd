@@ -57,7 +57,7 @@ internal static class AuthenticationServiceCollectionExtensions
                     }
 
                     var validClaimedUser = claimedUser!;
-                    var userService = context.HttpContext.RequestServices.GetRequiredService<IUserService>();
+                    var userService = context.HttpContext.RequestServices.GetRequiredService<UserRepository>();
                     var storedUser = await userService.GetUserByIdOrDefaultAsync(
                         validClaimedUser.Id,
                         context.HttpContext.RequestAborted);

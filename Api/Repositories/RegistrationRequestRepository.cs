@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Repositories;
 
-public sealed class RegistrationRequestRepository : IRegistrationRequestService
+public sealed class RegistrationRequestRepository
 {
     private readonly DataContext _dbContext;
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;

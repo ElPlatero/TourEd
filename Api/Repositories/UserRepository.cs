@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Repositories;
 
-public sealed class UserRepository : IUserService
+public sealed class UserRepository
 {
     private readonly DataContext _dbContext;
 

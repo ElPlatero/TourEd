@@ -5,9 +5,9 @@ namespace Api.Authentication;
 
 public sealed class GoogleOAuthTicketService
 {
-    private readonly IGoogleLoginService _loginService;
+    private readonly GoogleLoginService _loginService;
 
-    public GoogleOAuthTicketService(IGoogleLoginService loginService)
+    public GoogleOAuthTicketService(GoogleLoginService loginService)
     {
         _loginService = loginService;
     }

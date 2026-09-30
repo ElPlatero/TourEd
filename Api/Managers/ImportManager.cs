@@ -16,7 +16,7 @@ public class ImportManager : IImportManager
     private readonly IHtmlParsingService _htmlParser;
     private readonly IHarzerWandernadelImportService _harzerWandernadelImporter;
     private readonly ITouringenStampingPointImportService _touringenStampingPointImporter;
-    private readonly IImportService<HikingTour> _hikingToursImporter;
+    private readonly HikingToursImportService _hikingToursImporter;
     private readonly StampingPointRepository _points;
     private readonly UserVisitRepository _visits;
     private readonly StampingProviderRepository _providers;
@@ -24,7 +24,7 @@ public class ImportManager : IImportManager
     private readonly StampingProviderManager _providerManager;
     private readonly TouringenWebsiteConfiguration _configuration;
 
-    public ImportManager(IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, IImportService<HikingTour> hikingToursImporter, StampingPointRepository points, UserVisitRepository visits, StampingProviderRepository providers, IUnitOfWorkFactory unitOfWorkFactory, StampingProviderManager providerManager)
+    public ImportManager(IHtmlParsingService htmlParser, IHarzerWandernadelImportService harzerWandernadelImporter, ITouringenStampingPointImportService touringenStampingPointImporter, IOptions<TouringenWebsiteConfiguration> options, HikingToursImportService hikingToursImporter, StampingPointRepository points, UserVisitRepository visits, StampingProviderRepository providers, IUnitOfWorkFactory unitOfWorkFactory, StampingProviderManager providerManager)
     {
         _htmlParser = htmlParser;
         _harzerWandernadelImporter = harzerWandernadelImporter;
