@@ -47,7 +47,7 @@ public sealed class StampingProviderRepository
         var normalizedSlug = providerSlug.Trim().ToLowerInvariant();
         return _dbContext.StampingProviders.AsNoTracking().SingleOrDefaultAsync(
             item => item.Slug == normalizedSlug &&
-                    item.IsAnonymousAccessAllowed &&
+                    item.IsDataReady &&
                     item.DataSourceUri != null &&
                     item.DataSourceAttribution != null &&
                     item.DataLicenseName != null &&

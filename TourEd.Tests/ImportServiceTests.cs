@@ -52,30 +52,30 @@ public sealed class ImportServiceTests : IDisposable
         var providers = await context.StampingProviders.OrderBy(provider => provider.Id).ToArrayAsync();
         Assert.Equal(8, providers.Length);
         Assert.Equal(StampingProvider.TouringenSlug, providers[0].Slug);
-        Assert.True(providers[0].IsAnonymousAccessAllowed);
+        Assert.True(providers[0].IsDataReady);
         Assert.Contains("430 offizielle Stempelstellen", providers[0].Description, StringComparison.Ordinal);
         Assert.Equal(StampingProvider.HarzerWandernadelSlug, providers[1].Slug);
         Assert.Equal("HWN", providers[1].Abbreviation);
-        Assert.False(providers[1].IsAnonymousAccessAllowed);
+        Assert.False(providers[1].IsDataReady);
         Assert.Equal(StampingProvider.MalerwegSlug, providers[2].Slug);
         Assert.Equal("MW", providers[2].Abbreviation);
-        Assert.True(providers[2].IsAnonymousAccessAllowed);
+        Assert.True(providers[2].IsDataReady);
         Assert.Equal(StampingProvider.SchluchtensteigSlug, providers[3].Slug);
         Assert.Equal("SST", providers[3].Abbreviation);
-        Assert.True(providers[3].IsAnonymousAccessAllowed);
+        Assert.True(providers[3].IsDataReady);
         Assert.Equal(StampingProvider.HeidschnuckenwegSlug, providers[4].Slug);
         Assert.Equal("HNW", providers[4].Abbreviation);
-        Assert.True(providers[4].IsAnonymousAccessAllowed);
+        Assert.True(providers[4].IsDataReady);
         Assert.Equal(StampingProvider.HarzerKlosterwanderwegSlug, providers[5].Slug);
         Assert.Equal("HKW", providers[5].Abbreviation);
-        Assert.True(providers[5].IsAnonymousAccessAllowed);
+        Assert.True(providers[5].IsDataReady);
         Assert.Equal(StampingProvider.BliessteigSlug, providers[6].Slug);
         Assert.Equal("BS", providers[6].Abbreviation);
-        Assert.True(providers[6].IsAnonymousAccessAllowed);
+        Assert.True(providers[6].IsDataReady);
         Assert.Equal("Creative Commons Namensnennung 4.0 International (CC BY 4.0)", providers[6].DataLicenseName);
         Assert.Equal(StampingProvider.KellerwaldsteigSlug, providers[7].Slug);
         Assert.Equal("KWS", providers[7].Abbreviation);
-        Assert.True(providers[7].IsAnonymousAccessAllowed);
+        Assert.True(providers[7].IsDataReady);
         Assert.Contains("CC BY-SA 4.0", providers[7].DataLicenseName, StringComparison.Ordinal);
         var series = await context.StampingSeries.OrderBy(item => item.Id).ToArrayAsync();
         Assert.Equal(11, series.Length);
@@ -520,7 +520,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(0, import.HikingToursCount);
         var provider = await context.StampingProviders.AsNoTracking()
             .SingleAsync(item => item.Id == StampingProvider.HarzerWandernadelId);
-        Assert.True(provider.IsAnonymousAccessAllowed);
+        Assert.True(provider.IsDataReady);
         Assert.Equal("44", provider.DataSourceRevision);
         Assert.Equal("© OpenStreetMap contributors", provider.DataSourceAttribution);
         Assert.NotNull(provider.DataImportedAt);
@@ -548,7 +548,7 @@ public sealed class ImportServiceTests : IDisposable
             .SingleAsync(item => item.Id == StampingProvider.HarzerWandernadelId);
         Assert.Equal(existing.Id, stored.Id);
         Assert.Equal("Existing 45", stored.Name);
-        Assert.False(provider.IsAnonymousAccessAllowed);
+        Assert.False(provider.IsDataReady);
         Assert.Null(provider.DataImportedAt);
         Assert.Empty(await context.Imports.AsNoTracking().ToArrayAsync());
     }
@@ -640,7 +640,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal("https://www.openstreetmap.org/relation/14773147", provider.DataSourceUri?.AbsoluteUri);
         Assert.Equal("45", provider.DataSourceRevision);
         Assert.NotNull(provider.DataImportedAt);
-        Assert.True(provider.IsAnonymousAccessAllowed);
+        Assert.True(provider.IsDataReady);
 
         var publicProvider = await new StampingProviderRepository(context).FindPublicDataProviderAsync(StampingProvider.TouringenSlug);
         Assert.NotNull(publicProvider);

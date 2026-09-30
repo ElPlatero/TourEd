@@ -54,7 +54,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             Id = OtherProviderId,
             Slug = "other",
             Name = "Other provider",
-            IsAnonymousAccessAllowed = true,
+            IsDataReady = true,
             Description = "Other provider description.",
             WebsiteUri = new Uri("https://provider.example.test/info")
         });
@@ -63,7 +63,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             Id = 11,
             Slug = "unsupported-link",
             Name = "Unsupported link provider",
-            IsAnonymousAccessAllowed = true,
+            IsDataReady = true,
             Description = "Provider with a non-public website scheme.",
             WebsiteUri = new Uri("ftp://provider.example.test/info")
         });
@@ -697,7 +697,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
             var context = scope.ServiceProvider.GetRequiredService<DataContext>();
             var provider = await context.StampingProviders.SingleAsync(item =>
                 item.Id == StampingProvider.HarzerWandernadelId);
-            provider.IsAnonymousAccessAllowed = true;
+            provider.IsDataReady = true;
             provider.DataSourceUri = new Uri("https://www.openstreetmap.org/relation/148007");
             provider.DataSourceAttribution = "© OpenStreetMap contributors";
             provider.DataLicenseName = "Open Data Commons Open Database License (ODbL) 1.0";

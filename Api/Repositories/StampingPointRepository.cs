@@ -30,7 +30,7 @@ public sealed class StampingPointRepository
         }
         else if (providerFilter is { IsAnonymousOnly: true })
         {
-            query = query.Where(point => point.Provider.IsAnonymousAccessAllowed);
+            query = query.Where(point => point.Provider.IsDataReady);
         }
         if (providerFilter is { IncludesAllProviders: false, ProviderId: { } providerId })
         {

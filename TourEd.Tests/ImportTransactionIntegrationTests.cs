@@ -135,7 +135,7 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
             var point = Assert.Single(await repository.SaveStampingPointsAsync([Sources.Point(providerId, 1) with { Name = "Original" }]));
             originalId = point.Id;
             await scope.ServiceProvider.GetRequiredService<UserVisitRepository>().AddUserVisitAsync(new User { Id = _userId }, point.Id, null, false);
-            originalReadiness = (await db.StampingProviders.SingleAsync(p => p.Id == providerId)).IsAnonymousAccessAllowed;
+            originalReadiness = (await db.StampingProviders.SingleAsync(p => p.Id == providerId)).IsDataReady;
             var failureTrigger = providerSlug == "touringen"
                 ? "CREATE TRIGGER fail_final_import BEFORE INSERT ON SortedStampingPoint BEGIN SELECT RAISE(ABORT, 'Injected import failure'); END;"
                 : "CREATE TRIGGER fail_final_import BEFORE INSERT ON Imports BEGIN SELECT RAISE(ABORT, 'Injected import failure'); END;";
@@ -154,7 +154,7 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
         Assert.Empty(await verify.StampingPointsInTours.ToListAsync());
         Assert.Empty(await verify.Imports.ToListAsync());
         var provider = await verify.StampingProviders.SingleAsync(p => p.Id == providerId);
-        Assert.Equal(originalReadiness, provider.IsAnonymousAccessAllowed);
+        Assert.Equal(originalReadiness, provider.IsDataReady);
         Assert.Null(provider.DataSourceRevision);
         Assert.Null(provider.DataImportedAt);
         Assert.Null(provider.DataSourceUri);

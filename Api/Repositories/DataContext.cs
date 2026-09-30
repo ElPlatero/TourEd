@@ -43,7 +43,7 @@ public class DataContext : DbContext
                 Id = StampingProvider.TouringenId,
                 Slug = StampingProvider.TouringenSlug,
                 Name = "Touringen",
-                IsAnonymousAccessAllowed = true,
+                IsDataReady = true,
                 WebsiteUri = new Uri("https://www.touringen.de/"),
                 Description = "Touringen ist ein im Oktober 2022 von der Funke Mediengruppe in Kooperation mit der Thüringer Tourismus GmbH und regionalen Tourismusverbänden gestartetes System, das Wandererlebnisse mit einem Sammelanreiz verbindet. Nach einer Erweiterung im Juli 2023 umfasst das Netz 430 offizielle Stempelstellen an markanten Aussichtspunkten, Kulturdenkmälern und Naturhighlights in ganz Thüringen sowie im angrenzenden Frankenwald. Neben klassischen Stempel- und Tourenheften gibt es kindgerechte Varianten sowie ein mehrstufiges Abzeichensystem, bei dem Wanderer vom „Hobby Entdecker“ (ab 10 Stempeln) bis zum vollständigen „Touringen Entdecker“ (430 Stempel) mit Pins, Urkunden und einem Eintrag in die „Hall of Fame“ ausgezeichnet werden."
             },
@@ -53,7 +53,7 @@ public class DataContext : DbContext
                 Slug = StampingProvider.HarzerWandernadelSlug,
                 Name = "Harzer Wandernadel",
                 Abbreviation = "HWN",
-                IsAnonymousAccessAllowed = false,
+                IsDataReady = false,
                 WebsiteUri = new Uri("https://www.harzer-wandernadel.de/"),
                 Description = "Die Harzer Wandernadel ist ein seit 2006 bestehendes Wanderstempelsystem im Harz mit 222 regulären Stempelstellen. Wandernde sammeln die Stempel in einem Wanderpass und können damit verschiedene Leistungsabzeichen bis zum Harzer Wanderkaiser erreichen."
             },
@@ -63,7 +63,7 @@ public class DataContext : DbContext
                 Slug = StampingProvider.MalerwegSlug,
                 Name = "Malerweg",
                 Abbreviation = "MW",
-                IsAnonymousAccessAllowed = true,
+                IsDataReady = true,
                 WebsiteUri = new Uri("https://www.saechsische-schweiz.de/malerweg"),
                 Description = "Der Malerweg im Elbsandsteingebirge der Sächsischen Schweiz gehört zu den traditionsreichsten und beliebtesten Wanderwegen Deutschlands. Der offizielle Wanderpass umfasst 8 Stempelstellen entlang der Etappen."
             },
@@ -73,7 +73,7 @@ public class DataContext : DbContext
                 Slug = StampingProvider.SchluchtensteigSlug,
                 Name = "Schluchtensteig",
                 Abbreviation = "SST",
-                IsAnonymousAccessAllowed = true,
+                IsDataReady = true,
                 WebsiteUri = new Uri("https://www.schluchtensteig.de/"),
                 Description = "Der Schluchtensteig im Naturpark Südschwarzwald führt über 119 Kilometer in 6 Etappen von Stühlingen quer durch spektakuläre Schluchten bis nach Wehr. Entlang der Etappenorte laden Stempelstellen zum Eintragen in den Wanderpass ein."
             },
@@ -83,7 +83,7 @@ public class DataContext : DbContext
                 Slug = StampingProvider.HeidschnuckenwegSlug,
                 Name = "Heidschnuckenweg",
                 Abbreviation = "HNW",
-                IsAnonymousAccessAllowed = true,
+                IsDataReady = true,
                 WebsiteUri = new Uri("https://www.heidschnuckenweg.de/"),
                 Description = "Der Heidschnuckenweg verbindet auf über 220 Kilometern in 13 Etappen Hamburg-Fischbek durch die Lüneburger Heide mit der Residenzstadt Celle. Mit dem offiziellen Wanderpass werden gesammelte Stempel mit Heidschnucken-Wandernadeln belohnt."
             },
@@ -93,7 +93,7 @@ public class DataContext : DbContext
                 Slug = StampingProvider.HarzerKlosterwanderwegSlug,
                 Name = "Harzer Klosterwanderweg",
                 Abbreviation = "HKW",
-                IsAnonymousAccessAllowed = true,
+                IsDataReady = true,
                 WebsiteUri = new Uri("https://www.harzinfo.de/erlebnisse/harzer-kloester/harzer-klosterwanderweg"),
                 Description = "Der Harzer Klosterwanderweg führt über rund 117 Kilometer entlang geschichtsträchtiger Klöster und Kirchen am Nordrand des Harzes von Goslar bis Halberstadt. 16 markante rote Stempelkästen der Harzer Wandernadel laden zum Sammeln im Begleitheft ein."
             },
@@ -103,7 +103,7 @@ public class DataContext : DbContext
                 Slug = StampingProvider.BliessteigSlug,
                 Name = "Bliessteig",
                 Abbreviation = "BS",
-                IsAnonymousAccessAllowed = true,
+                IsDataReady = true,
                 WebsiteUri = new Uri("https://www.saarpfalz-touristik.de/erlebnisse/wandern/wanderservice/stempelstationen"),
                 Description = "Der rund 106 Kilometer lange Bliessteig führt in neun Etappen von Sarreguemines durch den Bliesgau bis nach Bexbach. An den Etappenorten stehen 10 feste Stempelstationen.",
                 DataSourceUri = new Uri("https://www.saarpfalz-touristik.de/touren/bliessteig-c62caf7374"),
@@ -119,7 +119,7 @@ public class DataContext : DbContext
                 Slug = StampingProvider.KellerwaldsteigSlug,
                 Name = "Kellerwaldsteig",
                 Abbreviation = "KWS",
-                IsAnonymousAccessAllowed = true,
+                IsDataReady = true,
                 WebsiteUri = new Uri("https://www.naturpark-kellerwald-edersee.de/wandern/wanderpass-kellerwaldsteig"),
                 Description = "Der 164 Kilometer lange Kellerwaldsteig führt durch den Naturpark Kellerwald-Edersee, am Edersee und am Nationalpark entlang. Zehn feste Wanderpass-Stationen verbinden Stanzmotive mit Geocaches; ein vollständiger Pass kann gegen eine Wandermünze eingetauscht werden.",
                 DataSourceUri = new Uri("https://www.naturpark-kellerwald-edersee.de/wandern/wanderpass-kellerwaldsteig"),

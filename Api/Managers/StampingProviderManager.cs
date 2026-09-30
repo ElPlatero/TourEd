@@ -35,7 +35,7 @@ public sealed class StampingProviderManager
         {
             var provider = await _providers.FindBySlugAsync(providerSlug, cancellationToken)
                 ?? throw EntityNotFoundException.Create<StampingProvider>(providerSlug);
-            if (userId is null && !provider.IsAnonymousAccessAllowed)
+            if (userId is null && !provider.IsDataReady)
             {
                 throw new AccessDeniedException("This stamping provider requires authentication.");
             }
@@ -60,7 +60,7 @@ public sealed class StampingProviderManager
         }
 
         var anonymousDefaultProvider = await _providers.GetProviderAsync(StampingProvider.TouringenId, cancellationToken);
-        if (!anonymousDefaultProvider.IsAnonymousAccessAllowed)
+        if (!anonymousDefaultProvider.IsDataReady)
         {
             throw new AccessDeniedException("The default stamping provider requires authentication.");
         }
@@ -79,7 +79,7 @@ public sealed class StampingProviderManager
         var providerDtos = providers.Select(provider =>
         {
             var isEnabled = enabledProviderIds.Contains(provider.Id);
-            var isDataReady = provider.IsAnonymousAccessAllowed;
+            var isDataReady = provider.IsDataReady;
             var totalPoints = isDataReady ? totalPointsByProvider.GetValueOrDefault(provider.Id, 0) : (int?)null;
             var visitedPoints = isDataReady ? visitedPointsByProvider.GetValueOrDefault(provider.Id, 0) : (int?)null;
             return StampingProviderDetailsDto.Create(provider, isEnabled, isDataReady, totalPoints, visitedPoints);

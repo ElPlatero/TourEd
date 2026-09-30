@@ -49,7 +49,7 @@ public sealed class ProviderProgressOverviewIntegrationTests : IAsyncLifetime
             Name = "Other Test Provider",
             Abbreviation = "OTP",
             Slug = OtherProviderSlug,
-            IsAnonymousAccessAllowed = true,
+            IsDataReady = true,
             Description = "Other provider description.",
             WebsiteUri = new Uri("https://provider.example.test/info"),
             DataSourceAttribution = "Provider test data",
@@ -67,7 +67,7 @@ public sealed class ProviderProgressOverviewIntegrationTests : IAsyncLifetime
             Name = "Unready Provider",
             Abbreviation = "UNR",
             Slug = UnreadyProviderSlug,
-            IsAnonymousAccessAllowed = false,
+            IsDataReady = false,
             Description = "Unready provider description."
         };
 

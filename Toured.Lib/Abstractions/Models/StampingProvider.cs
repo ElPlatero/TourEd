@@ -23,7 +23,11 @@ public class StampingProvider
     public string Slug { get; set; } = null!;
     public string Name { get; set; } = null!;
     public string? Abbreviation { get; set; }
-    public bool IsAnonymousAccessAllowed { get; set; }
+    /// <summary>
+    /// The provider's point data is complete and may be shown to entitled users.
+    /// Exposed as <c>isDataReady</c> and, for older offline snapshots, as the legacy <c>isAnonymousAccessAllowed</c>.
+    /// </summary>
+    public bool IsDataReady { get; set; }
     public Uri? WebsiteUri { get; set; }
     public string? Description { get; set; }
     public Uri? DataSourceUri { get; set; }
