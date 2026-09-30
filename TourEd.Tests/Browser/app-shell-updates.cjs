@@ -38,7 +38,7 @@ const server = createServer((req, res) => {
         res.setHeader('Content-Type', type);
         // Deliberately leave unversioned assets in HTTP cache. Worker installation
         // must reload them, independently of the previous release's HTTP lifetime.
-        if (file === 'js/toured.js' || file === 'css/toured.css') res.setHeader('Cache-Control', 'public, max-age=31536000');
+        if (file.startsWith('js/') || file === 'css/toured.css') res.setHeader('Cache-Control', 'public, max-age=31536000');
         res.end(body);
     } catch { res.writeHead(404).end('not found'); }
 });
