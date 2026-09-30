@@ -1,6 +1,4 @@
-using Api.Entities;
-
-namespace Api.Repositories.Seeds;
+namespace Api.Entities.Seeds;
 
 /// <summary>Seeded stamping points of the trail providers without network import. Anonymous objects are used because <see cref="StampingPoint"/> is a positional record with ignored members.</summary>
 internal static class StampingPointSeed

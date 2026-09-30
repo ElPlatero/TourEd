@@ -1,6 +1,4 @@
-using Api.Entities;
-
-namespace Api.Repositories.Seeds;
+namespace Api.Entities.Seeds;
 
 /// <summary>Seeded provider-scoped series; each provider has at least its standard series.</summary>
 internal static class StampingSeriesSeed

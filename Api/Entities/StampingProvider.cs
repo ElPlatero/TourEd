@@ -1,4 +1,4 @@
-using Api.Repositories.Seeds;
+using Api.Entities.Seeds;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
