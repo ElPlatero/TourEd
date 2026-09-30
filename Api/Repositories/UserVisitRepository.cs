@@ -7,6 +7,9 @@ namespace Api.Repositories;
 
 public sealed class UserVisitRepository
 {
+    /// <summary>SQLITE_CONSTRAINT: the visit already exists because of a concurrent insert.</summary>
+    private const int SqliteConstraintViolation = 19;
+
     private readonly DataContext _dbContext;
 
     public UserVisitRepository(DataContext dbContext)
@@ -100,7 +103,7 @@ public sealed class UserVisitRepository
                 return (await GetUserVisitOrDefaultAsync(currentUser, stampingPointId, cancellationToken), false);
             }
             catch (DbUpdateException exception) when (
-                exception.InnerException is SqliteException { SqliteErrorCode: 19 })
+                exception.InnerException is SqliteException { SqliteErrorCode: SqliteConstraintViolation })
             {
                 _dbContext.ChangeTracker.Clear();
                 var concurrentVisit = await GetUserVisitOrDefaultAsync(currentUser, stampingPointId, cancellationToken);

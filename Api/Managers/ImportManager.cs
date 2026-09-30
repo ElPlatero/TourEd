@@ -71,7 +71,11 @@ public class ImportManager : IImportManager
             .Union(standardImportData.SelectMany(area => area.OrphanedStampPoints))
             .DistinctBy(point => point.Id)
             .ToDictionary(point => point.Id, point => point.StampPointNumber);
-        _ = hikingTours.ToDictionary(tour => tour.Id);
+        var duplicateTourId = hikingTours.GroupBy(tour => tour.Id).FirstOrDefault(group => group.Count() > 1)?.Key;
+        if (duplicateTourId is not null)
+        {
+            throw new InvalidDataException($"The Touringen tour source contains tour {duplicateTourId} more than once.");
+        }
         if (numbersByExternalId.Values.Any(number => !standardNumbers.Contains(number)) ||
             hikingTours.SelectMany(tour => tour.StampingPoints)
                 .Any(point => !numbersByExternalId.ContainsKey(point.StampingPointId)))
@@ -104,11 +108,14 @@ public class ImportManager : IImportManager
     public async Task ImportHarzerWandernadelDataAsync(CancellationToken cancellationToken = default)
     {
         var snapshot = await _harzerWandernadelImporter.DownloadStampingPointsAsync(cancellationToken);
-        var expectedNumbers = Enumerable.Range(1, 222);
-        if (snapshot.Points.Count != 222 ||
-            !snapshot.Points.Where(point => point.Number.HasValue).Select(point => point.Number!.Value).OrderBy(number => number).SequenceEqual(expectedNumbers))
+        var standardSeries = await _providers.GetSeriesAsync(StampingSeries.HarzerWandernadelStandardId, cancellationToken);
+        var expectedCount = standardSeries.ExpectedPointCount
+            ?? throw new InvalidOperationException("The HWN standard series has no expected point count.");
+        if (snapshot.Points.Count != expectedCount ||
+            !snapshot.Points.Where(point => point.Number.HasValue).Select(point => point.Number!.Value).OrderBy(number => number)
+                .SequenceEqual(Enumerable.Range(1, expectedCount)))
         {
-            throw new InvalidDataException("The HWN import must contain every regular number from 1 through 222 exactly once.");
+            throw new InvalidDataException($"The HWN import must contain every regular number from 1 through {expectedCount} exactly once.");
         }
         ValidateSourceImport(StampingProvider.HarzerWandernadelId, snapshot);
         await using var unitOfWork = await _unitOfWorkFactory.BeginAsync(cancellationToken);
@@ -175,7 +182,7 @@ public class ImportManager : IImportManager
         var providerFilter = await _providerManager.ResolveFilterAsync(userId: user.Id, cancellationToken: cancellationToken);
         var stampingPointsMap = (await _points.GetStampingPointsAsync(
                 providerFilter: providerFilter,
-                seriesSlug: StampingSeries.TouringenStandardSlug,
+                seriesSlug: StampingSeries.DefaultSlug,
                 stampingPointNumbers: visits.Select(p => p.Number).ToArray(),
                 cancellationToken: cancellationToken))
             .Select(p => p.Point)
@@ -233,8 +240,21 @@ public class ImportManager : IImportManager
         {
             throw new InvalidOperationException("A provider source import must contain points for exactly that provider.");
         }
-        _ = snapshot.Points.Where(point => point.Number.HasValue)
-            .ToDictionary(point => (point.SeriesId, point.Number));
-        _ = snapshot.Points.ToDictionary(point => (point.ProviderId, point.ExternalId));
+        var duplicateNumber = snapshot.Points
+            .Where(point => point.Number.HasValue)
+            .GroupBy(point => (point.SeriesId, point.Number))
+            .FirstOrDefault(group => group.Count() > 1)?.Key;
+        if (duplicateNumber is { } number)
+        {
+            throw new InvalidDataException($"The source import contains number {number.Number} of series {number.SeriesId} more than once.");
+        }
+
+        var duplicateExternalId = snapshot.Points
+            .GroupBy(point => point.ExternalId)
+            .FirstOrDefault(group => group.Count() > 1)?.Key;
+        if (duplicateExternalId is not null)
+        {
+            throw new InvalidDataException($"The source import contains stamping point '{duplicateExternalId}' more than once.");
+        }
     }
 }

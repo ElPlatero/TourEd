@@ -22,7 +22,7 @@ public sealed class StampingPointRepository
 
     public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, string? seriesSlug = null, int? userId = null, bool? excludeVisited = null, IReadOnlyCollection<int>? stampingPointNumbers = null, CancellationToken cancellationToken = default)
     {
-        IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking().Include(point => point.Series);
+        IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking();
         if (providerFilter?.UserId is { } permittedUserId)
         {
             query = query.Where(point => _dbContext.UserStampingProviders.Any(access =>
@@ -39,7 +39,7 @@ public sealed class StampingPointRepository
         if (!string.IsNullOrWhiteSpace(seriesSlug))
         {
             var normalizedSeriesSlug = seriesSlug.Trim().ToLowerInvariant();
-            query = query.Where(point => point.Series.Slug.ToLower() == normalizedSeriesSlug);
+            query = query.Where(point => point.Series.Slug == normalizedSeriesSlug);
         }
 
         if (!string.IsNullOrWhiteSpace(nameFilter))
@@ -54,7 +54,7 @@ public sealed class StampingPointRepository
         }
 
         var result = from point in query
-            join rawTourPoint in _dbContext.StampingPointsInTours.Include(p => p.Tour).ThenInclude(p => p.StampingPoints).ThenInclude(p => p.StampingPoint) on point.Id equals rawTourPoint.StampingPointId into joinedTourPoints
+            join rawTourPoint in _dbContext.StampingPointsInTours on point.Id equals rawTourPoint.StampingPointId into joinedTourPoints
             from tourPoint in joinedTourPoints.DefaultIfEmpty()
             group tourPoint by point into groupedTours
             select new { Point = groupedTours.Key, UserVisit = userId == null ? null : _dbContext.UserVisits.FirstOrDefault(p => p.StampingPointId == groupedTours.Key.Id && p.UserId == userId), Tours = groupedTours.Select(p => p.Tour).ToList() };
@@ -91,11 +91,11 @@ public sealed class StampingPointRepository
             .Where(p => p.Number == stampingPointNumber && p.ProviderId == providerFilter.ProviderId);
         if (!string.IsNullOrWhiteSpace(normalizedSeriesSlug))
         {
-            query = query.Where(point => point.Series.Slug.ToLower() == normalizedSeriesSlug);
+            query = query.Where(point => point.Series.Slug == normalizedSeriesSlug);
         }
         else
         {
-            query = query.Where(point => point.Series.Slug == StampingSeries.TouringenStandardSlug);
+            query = query.Where(point => point.Series.Slug == StampingSeries.DefaultSlug);
         }
 
         return await query.FirstOrDefaultAsync(cancellationToken)
@@ -127,7 +127,15 @@ public sealed class StampingPointRepository
         var importedUnnumberedPoints = points
             .Where(point => !point.Number.HasValue)
             .ToDictionary(point => (point.ProviderId, point.ExternalId));
-        _ = points.ToDictionary(point => (point.ProviderId, point.ExternalId));
+        var duplicateExternalId = points
+            .GroupBy(point => (point.ProviderId, point.ExternalId))
+            .FirstOrDefault(group => group.Count() > 1)?.Key;
+        if (duplicateExternalId is { } duplicate)
+        {
+            throw new ArgumentException(
+                $"Stamping point '{duplicate.ExternalId}' of provider {duplicate.ProviderId} occurs more than once.",
+                nameof(points));
+        }
         var seriesIds = points.Select(point => point.SeriesId).Distinct().ToArray();
         var providerIds = points.Select(point => point.ProviderId).Distinct().ToArray();
         var existingPoints = await _dbContext.StampingPoints.AsNoTracking()

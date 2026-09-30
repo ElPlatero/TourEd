@@ -30,7 +30,7 @@ public sealed class ImportServiceTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
             })
             .Build();
-        await using var context = new DataContext(configuration);
+        await using var context = new DataContext(TestDbContextOptions.For(configuration));
 
         await context.Database.MigrateAsync();
 
@@ -98,7 +98,7 @@ public sealed class ImportServiceTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
             })
             .Build();
-        await using var context = new DataContext(configuration);
+        await using var context = new DataContext(TestDbContextOptions.For(configuration));
         await context.Database.MigrateAsync();
         context.Users.Add(new User { Email = "rollback@example.test" });
         await context.SaveChangesAsync();
@@ -126,7 +126,7 @@ public sealed class ImportServiceTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
             })
             .Build();
-        await using var context = new DataContext(configuration);
+        await using var context = new DataContext(TestDbContextOptions.For(configuration));
         await context.Database.MigrateAsync("20260828181042_AddGoogleSubjectToUsers");
         await context.Database.ExecuteSqlRawAsync(
             "UPDATE StampingProviders SET Description = 'Locally customized.' WHERE Id = {0};",
@@ -149,7 +149,7 @@ public sealed class ImportServiceTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
             })
             .Build();
-        await using var context = new DataContext(configuration);
+        await using var context = new DataContext(TestDbContextOptions.For(configuration));
         await context.Database.MigrateAsync("20231014145354_AddForeignKeyToSortedStampingPoint");
         await context.Database.ExecuteSqlRawAsync(
             "INSERT INTO Users (Id, Email) VALUES (7, 'existing@example.test');");
@@ -215,7 +215,7 @@ public sealed class ImportServiceTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
             })
             .Build();
-        await using var context = new DataContext(configuration);
+        await using var context = new DataContext(TestDbContextOptions.For(configuration));
         await context.Database.MigrateAsync("20231014145354_AddForeignKeyToSortedStampingPoint");
         await context.Database.ExecuteSqlRawAsync(
             "INSERT INTO Users (Id, Email) VALUES (7, 'existing@example.test');");
@@ -606,6 +606,22 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task TouringenImportRejectsDuplicateToursBeforeWriting()
+    {
+        await using var context = await CreateContextAsync();
+        var repository = new StampingPointRepository(context);
+        var rawTour = new RawTour(101, "Tour", [CreateRawStampPoint(101, 1)], false, true, false, null, "Start", "End");
+        var rawData = JsonSerializer.Serialize(new[] { new RawArea(1, "Area", [rawTour, rawTour], []) });
+        var manager = CreateImportManager(context, repository, rawData);
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => manager.ImportTouringenDataAsync());
+
+        Assert.Contains("tour 101 more than once", exception.Message, StringComparison.Ordinal);
+        Assert.False(await context.StampingPoints.AsNoTracking().AnyAsync(point => point.ProviderId == StampingProvider.TouringenId));
+        Assert.Empty(await context.HikingTours.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
     public async Task TouringenImportSavesOsmProvenanceAndEnablesGeoJsonExport()
     {
         await using var context = await CreateContextAsync();
@@ -639,7 +655,7 @@ public sealed class ImportServiceTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
             })
             .Build();
-        var context = new DataContext(configuration);
+        var context = new DataContext(TestDbContextOptions.For(configuration));
         await context.Database.EnsureCreatedAsync();
         return context;
     }

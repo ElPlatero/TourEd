@@ -912,7 +912,7 @@ public sealed class RegistrationRequestNotificationTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
             })
             .Build();
-        return new DataContext(configuration);
+        return new DataContext(TestDbContextOptions.For(configuration));
     }
 
     private async Task<DataContext> CreateInitializedContextAsync()

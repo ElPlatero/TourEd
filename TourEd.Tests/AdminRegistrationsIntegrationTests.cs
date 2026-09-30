@@ -31,7 +31,7 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
         await using var scope = _factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<DataContext>();
         // Migrations belong to the production context type, not the interceptor subclass.
-        await using (var migrationContext = new DataContext(scope.ServiceProvider.GetRequiredService<IConfiguration>()))
+        await using (var migrationContext = new DataContext(TestDbContextOptions.For(scope.ServiceProvider.GetRequiredService<IConfiguration>())))
         {
             await migrationContext.Database.MigrateAsync();
         }
@@ -487,7 +487,7 @@ public sealed class AdminRegistrationsIntegrationTests : IAsyncLifetime
     }
 
     private sealed class InterceptedDataContext(IConfiguration configuration, TransactionGateInterceptor gate)
-        : DataContext(configuration)
+        : DataContext(TestDbContextOptions.For(configuration))
     {
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {

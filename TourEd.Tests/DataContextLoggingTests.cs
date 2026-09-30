@@ -40,7 +40,7 @@ public sealed class DataContextLoggingTests
     }
 
     private sealed class LoggingDataContext(IConfiguration configuration, List<string> messages)
-        : DataContext(configuration)
+        : DataContext(TestDbContextOptions.For(configuration))
     {
         protected override void OnConfiguring(DbContextOptionsBuilder options)
         {
