@@ -1,10 +1,9 @@
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using Api.Repositories;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Abstractions.Interfaces.Services;
 
 namespace Api.Authentication;
 

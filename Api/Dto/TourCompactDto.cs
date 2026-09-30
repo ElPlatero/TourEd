@@ -1,4 +1,4 @@
-﻿using TourEd.Lib.Abstractions.Models;
+﻿using Api.Entities;
 
 namespace Api.Dto;
 

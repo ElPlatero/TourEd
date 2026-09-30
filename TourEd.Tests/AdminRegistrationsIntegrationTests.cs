@@ -1,18 +1,18 @@
 using System.Data.Common;
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using Api.Dto;
+using Api.Entities;
 using Api.Managers;
 using Api.Repositories;
 using Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
 

@@ -1,10 +1,10 @@
+using Api.Entities;
 using Api.Extensions;
 using Api.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
 

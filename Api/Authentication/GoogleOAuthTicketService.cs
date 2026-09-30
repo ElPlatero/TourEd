@@ -1,7 +1,5 @@
 using System.Security.Claims;
 using System.Text.Json;
-using TourEd.Lib.Abstractions.Interfaces.Services;
-using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Authentication;
 

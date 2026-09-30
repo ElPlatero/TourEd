@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore.Storage;
-using TourEd.Lib.Abstractions;
 
 namespace Api.Repositories;
 

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using TourEd.Lib.Abstractions.Exceptions;
 
 namespace Api.ErrorHandling;
 

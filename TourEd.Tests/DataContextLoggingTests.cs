@@ -1,8 +1,8 @@
+using Api.Entities;
 using Api.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
 

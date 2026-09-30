@@ -1,4 +1,5 @@
 using System.Reflection;
+using Api.Entities;
 using Api.Options;
 using Api.Repositories;
 using Api.Services;
@@ -8,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MimeKit;
-using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
 

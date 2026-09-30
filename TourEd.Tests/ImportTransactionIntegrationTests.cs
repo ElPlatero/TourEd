@@ -1,21 +1,22 @@
-using System.Net;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Security.Claims;
-using System.Text;
 using System.Text.Json;
+using System.Text;
+using Api.Authentication;
 using Api.Controllers.Admin;
+using Api.Dto;
+using Api.Entities;
+using Api.Imports;
+using Api.Managers;
 using Api.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Abstractions.Interfaces;
-using TourEd.Lib.Abstractions.Interfaces.Services;
-using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
 

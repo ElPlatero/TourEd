@@ -1,10 +1,10 @@
+using Api.Authentication;
 using Api.Dto;
+using Api.Entities;
 using Api.Managers;
 using Api.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Extensions;
 
 namespace Api.Controllers.Points;
 

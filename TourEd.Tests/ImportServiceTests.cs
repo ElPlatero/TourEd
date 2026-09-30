@@ -1,19 +1,17 @@
 using System.Globalization;
 using System.Security.Claims;
-using System.Text;
 using System.Text.Json;
+using System.Text;
+using Api.Entities;
+using Api.ErrorHandling;
+using Api.Imports;
 using Api.Managers;
+using Api.Options;
 using Api.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using TourEd.Lib.Abstractions;
-using TourEd.Lib.Abstractions.Exceptions;
-using TourEd.Lib.Abstractions.Interfaces.Services;
-using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Abstractions.Options;
-using TourEd.Lib.Services;
 
 namespace TourEd.Tests;
 

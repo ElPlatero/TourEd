@@ -1,11 +1,10 @@
 using System.Text.Json;
+using Api.Entities;
 using Api.ErrorHandling;
 using Api.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using TourEd.Lib.Abstractions.Exceptions;
-using TourEd.Lib.Abstractions.Models;
 
 namespace TourEd.Tests;
 

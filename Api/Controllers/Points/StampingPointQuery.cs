@@ -1,5 +1,5 @@
+using Api.Entities;
 using Microsoft.AspNetCore.Mvc;
-using TourEd.Lib.Abstractions.Models;
 
 namespace Api.Controllers.Points;
 

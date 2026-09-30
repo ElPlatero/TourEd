@@ -1,11 +1,10 @@
 using Api.Authentication;
-using Microsoft.AspNetCore.Authentication;
+using Api.Entities;
+using Api.Repositories;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
-using TourEd.Lib.Abstractions.Interfaces.Services;
-using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Extensions;
 
 namespace Api.Extensions;
 

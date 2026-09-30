@@ -2,9 +2,9 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Xml;
-using TourEd.Lib.Abstractions.Models;
-using TourEd.Lib.Abstractions.Options;
-using TourEd.Lib.Services;
+using Api.Entities;
+using Api.Imports;
+using Api.Options;
 
 namespace TourEd.Tests;
 
