@@ -16,7 +16,7 @@ public sealed class HealthCheckTests : IDisposable
     public async Task ReportsHealthyForMigratedDatabase()
     {
         var configuration = CreateConfiguration();
-        await using (var context = new DataContext(configuration))
+        await using (var context = new DataContext(TestDbContextOptions.For(configuration)))
         {
             await context.Database.MigrateAsync();
         }
@@ -44,7 +44,7 @@ public sealed class HealthCheckTests : IDisposable
     public async Task ReportsUnhealthyWhenDefaultProviderIsMissing()
     {
         var configuration = CreateConfiguration();
-        await using (var context = new DataContext(configuration))
+        await using (var context = new DataContext(TestDbContextOptions.For(configuration)))
         {
             await context.Database.MigrateAsync();
             await context.Database.ExecuteSqlRawAsync(
@@ -77,7 +77,7 @@ public sealed class HealthCheckTests : IDisposable
         var services = new ServiceCollection();
         services.AddSingleton(configuration);
         services.AddLogging();
-        services.AddDbContext<DataContext>();
+        services.AddDbContext<DataContext>(options => options.UseSqlite(configuration.GetConnectionString("TouredDb")));
         services.AddTouredHealthChecks();
         return services.BuildServiceProvider();
     }

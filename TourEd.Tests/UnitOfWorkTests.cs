@@ -124,7 +124,7 @@ public sealed class UnitOfWorkTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath};Pooling=False"
             })
             .Build();
-        var context = new DataContext(configuration);
+        var context = new DataContext(TestDbContextOptions.For(configuration));
         await context.Database.EnsureCreatedAsync();
         return context;
     }

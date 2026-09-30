@@ -5,9 +5,9 @@ namespace Api.Repositories;
 
 public class DataContext : DbContext
 {
-    private readonly IConfiguration _configuration;
-
-    public DataContext(IConfiguration configuration) { _configuration = configuration; }
+    public DataContext(DbContextOptions<DataContext> options) : base(options)
+    {
+    }
 
     public DbSet<Import> Imports { get; set; } = null!;
     public DbSet<StampingProvider> StampingProviders { get; set; } = null!;
@@ -21,12 +21,6 @@ public class DataContext : DbContext
     public DbSet<AdminAuditEntry> AdminAuditEntries { get; set; } = null!;
     public DbSet<RegistrationRequest> RegistrationRequests { get; set; } = null!;
     public DbSet<RegistrationNotificationState> RegistrationNotificationStates { get; set; } = null!;
-    
-    
-    protected override void OnConfiguring(DbContextOptionsBuilder options)
-    {
-        options.UseSqlite(_configuration.GetConnectionString("TouredDb"));
-    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -23,7 +23,7 @@ public sealed class StampingProviderRepository
     {
         var normalizedSlug = providerSlug.Trim().ToLowerInvariant();
         return _dbContext.StampingProviders.AsNoTracking()
-            .FirstOrDefaultAsync(provider => provider.Slug.ToLower() == normalizedSlug, cancellationToken);
+            .FirstOrDefaultAsync(provider => provider.Slug == normalizedSlug, cancellationToken);
     }
 
     public Task<StampingProvider> GetProviderAsync(int providerId, CancellationToken cancellationToken = default)
@@ -46,7 +46,7 @@ public sealed class StampingProviderRepository
     {
         var normalizedSlug = providerSlug.Trim().ToLowerInvariant();
         return _dbContext.StampingProviders.AsNoTracking().SingleOrDefaultAsync(
-            item => item.Slug.ToLower() == normalizedSlug &&
+            item => item.Slug == normalizedSlug &&
                     item.IsAnonymousAccessAllowed &&
                     item.DataSourceUri != null &&
                     item.DataSourceAttribution != null &&
@@ -104,6 +104,9 @@ public sealed class StampingProviderRepository
             .GroupBy(providerId => providerId)
             .Select(group => new { ProviderId = group.Key, Count = group.Count() })
             .ToDictionaryAsync(group => group.ProviderId, group => group.Count, cancellationToken);
+
+    public Task<StampingSeries> GetSeriesAsync(int seriesId, CancellationToken cancellationToken = default)
+        => _dbContext.StampingSeries.AsNoTracking().SingleAsync(series => series.Id == seriesId, cancellationToken);
 
     public Task<List<StampingSeries>> GetSeriesAsync(CancellationToken cancellationToken = default)
         => _dbContext.StampingSeries.AsNoTracking()

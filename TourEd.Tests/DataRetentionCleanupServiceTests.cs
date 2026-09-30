@@ -188,7 +188,7 @@ public sealed class DataRetentionCleanupServiceTests : IDisposable
         services.AddLogging();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<TimeProvider>(timeProvider);
-        services.AddDbContext<DataContext>();
+        services.AddDbContext<DataContext>(options => options.UseSqlite(configuration.GetConnectionString("TouredDb")));
         services.AddScoped<RegistrationRequestRepository>();
         services.AddScoped<AdminAuditRepository>();
         services.AddSingleton<DataRetentionCleanupService>();
@@ -260,7 +260,7 @@ public sealed class DataRetentionCleanupServiceTests : IDisposable
         services.AddLogging();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<TimeProvider>(timeProvider);
-        services.AddDbContext<DataContext>();
+        services.AddDbContext<DataContext>(options => options.UseSqlite(configuration.GetConnectionString("TouredDb")));
         services.AddScoped<RegistrationRequestRepository>();
         services.AddScoped<AdminAuditRepository>();
         await using var innerProvider = services.BuildServiceProvider();
@@ -306,7 +306,7 @@ public sealed class DataRetentionCleanupServiceTests : IDisposable
                 ["ConnectionStrings:TouredDb"] = $"Data Source={_databasePath}"
             })
             .Build();
-        return new DataContext(configuration);
+        return new DataContext(TestDbContextOptions.For(configuration));
     }
 
     private async Task<DataContext> CreateInitializedContextAsync()

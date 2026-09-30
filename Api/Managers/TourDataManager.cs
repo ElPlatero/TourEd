@@ -170,7 +170,7 @@ public class TourDataManager
             }
 
             var seriesSlug = string.IsNullOrWhiteSpace(request.Series)
-                ? StampingSeries.TouringenStandardSlug
+                ? StampingSeries.DefaultSlug
                 : request.Series.Trim().ToLowerInvariant();
 
             if (!seriesByProviderAndSlug.TryGetValue((provider.Id, seriesSlug), out var series))
