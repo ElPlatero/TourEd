@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Api.Entities;
 
-public class UserVisit
+public sealed class UserVisit
 {
     public int Id { get; set; }
     public int UserId { get; set; }

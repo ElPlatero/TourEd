@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Api.Entities;
 
-public record SortedStampingPoint(int Position)
+public sealed record SortedStampingPoint(int Position)
 {
     public int StampingPointId { get; init; }
     public HikingTour Tour { get; set; } = null!;

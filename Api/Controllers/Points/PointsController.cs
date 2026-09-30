@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Api.Controllers.Points;
 
 [Authorize, ApiController, Route("api/[controller]")]
-public class PointsController : ControllerBase
+public sealed class PointsController : ControllerBase
 {
     private readonly TourDataManager _manager;
 

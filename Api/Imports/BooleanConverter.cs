@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Api.Imports;
 
-public class BooleanConverter : JsonConverter<bool>
+public sealed class BooleanConverter : JsonConverter<bool>
 {
     public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options) => writer.WriteBooleanValue(value);
 
@@ -17,7 +17,7 @@ public class BooleanConverter : JsonConverter<bool>
     };
 }
 
-public class FalseOrNullConverter<T> : JsonConverter<T>
+public sealed class FalseOrNullConverter<T> : JsonConverter<T>
 {
     public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
         if (reader.TokenType == JsonTokenType.False) return default;

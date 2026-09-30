@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Api.Controllers.Admin;
 
 [ApiController, Route("api/admin/[controller]"), Authorize(Policy = TouredAuthorizationPolicies.CliImport)]
-public class PointsController : ControllerBase
+public sealed class PointsController : ControllerBase
 {
     private readonly TourDataManager _tourDataManager;
 

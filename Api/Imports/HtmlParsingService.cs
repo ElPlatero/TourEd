@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace Api.Imports;
 
-public partial class HtmlParsingService : IHtmlParsingService
+public sealed partial class HtmlParsingService : IHtmlParsingService
 {
     private readonly HttpClient _client;
     private readonly ConcurrentDictionary<string, string> _htmlContents = new(StringComparer.InvariantCultureIgnoreCase);

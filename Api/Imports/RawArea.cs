@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Api.Imports;
 
-public record RawArea(
+public sealed record RawArea(
     [property: JsonPropertyName("uid")] int Id,
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("touren")] RawTour[] Touren,

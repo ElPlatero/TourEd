@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Api.Controllers.Admin;
 
 [ApiController, Route("api/admin/[controller]"), Authorize(Policy = TouredAuthorizationPolicies.CliImport)]
-public class ImportsController : ControllerBase
+public sealed class ImportsController : ControllerBase
 {
     private readonly IImportManager _importManager;
 

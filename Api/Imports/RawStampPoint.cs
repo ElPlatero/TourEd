@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Api.Imports;
 
-public record RawStampPoint(
+public sealed record RawStampPoint(
     [property: JsonPropertyName("uid")] int Id,
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("latitude")] decimal Latitude,

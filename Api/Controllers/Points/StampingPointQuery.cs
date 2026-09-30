@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers.Points;
 
-public class StampingPointQuery
+public sealed class StampingPointQuery
 {
     [FromQuery(Name = "cen")]
     public string? Centre { get; set; }

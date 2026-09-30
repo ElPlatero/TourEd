@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace Api.Managers;
 
-public class ImportManager : IImportManager
+public sealed class ImportManager : IImportManager
 {
     private static readonly HashSet<int> TouringenNaturalTreasureAreaIds = [102, 103, 104, 105, 106, 107, 108, 109];
     private readonly IHtmlParsingService _htmlParser;

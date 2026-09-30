@@ -1,6 +1,6 @@
 namespace Api.Options;
 
-public class TouringenWebsiteConfiguration
+public sealed class TouringenWebsiteConfiguration
 {
     public long RelationId { get; set; } = 14773147;
     public Uri RelationApiUri { get; set; } = null!;

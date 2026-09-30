@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Api.Entities;
 
-public class StampingSeries
+public sealed class StampingSeries
 {
     public const int TouringenStandardId = 1;
     public const int TouringenNaturalTreasuresId = 2;
