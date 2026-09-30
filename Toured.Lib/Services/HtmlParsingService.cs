@@ -14,9 +14,9 @@ public partial class HtmlParsingService : IHtmlParsingService
         _client = client;
     }
     
-    public async Task<string?> GetRawDmoStringAsync(Uri uri)
+    public async Task<string?> GetRawDmoStringAsync(Uri uri, CancellationToken cancellationToken = default)
     {
-        var body = await GetBodyAsync(_client, uri);
+        var body = await GetBodyAsync(_client, uri, cancellationToken);
         var match = GetDmoRegex().Match(body);
         if (!match.Success || string.IsNullOrWhiteSpace(match.Groups[1].Value))
         {
@@ -26,16 +26,16 @@ public partial class HtmlParsingService : IHtmlParsingService
         return Regex.Unescape(match.Groups[1].Value);
     }
 
-    private async Task<string> GetBodyAsync(HttpClient client, Uri uri)
+    private async Task<string> GetBodyAsync(HttpClient client, Uri uri, CancellationToken cancellationToken)
     {
         if (_htmlContents.TryGetValue(uri.ToString(), out var body))
         {
             return body;
         }
-        var response = await client.GetAsync(uri);
+        using var response = await client.GetAsync(uri, cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadAsStringAsync();
+        var result = await response.Content.ReadAsStringAsync(cancellationToken);
         _htmlContents.TryAdd(uri.ToString(), result);
         return result;
     }

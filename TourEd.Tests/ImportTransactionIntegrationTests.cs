@@ -7,6 +7,7 @@ using Api.Controllers.Admin;
 using Api.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -83,21 +84,26 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
     public async Task PausedCsvReadDoesNotBlockIndependentVisitWrite()
     {
         await using var scope = _factory.Services.CreateAsyncScope();
-        scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = new DefaultHttpContext
+        var controller = new ImportsController(scope.ServiceProvider.GetRequiredService<IImportManager>())
         {
-            User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+            ControllerContext = new ControllerContext
             {
-                new Claim(Constants.ClaimsNames.UserId, _userId.ToString()),
-                new Claim(Constants.ClaimsNames.UserEmail, Email)
-            }, "test"))
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                    {
+                        new Claim(Constants.ClaimsNames.UserId, _userId.ToString()),
+                        new Claim(Constants.ClaimsNames.UserEmail, Email)
+                    }, "test"))
+                }
+            }
         };
-        var controller = new ImportsController(scope.ServiceProvider.GetRequiredService<IImportManager>());
         await using var stream = new PausedStream(Encoding.UTF8.GetBytes("2;01.02.2026;12:30"));
         // MVC normally buffers multipart uploads; pause the parser's file stream here.
         var import = controller.CreateNewUserDataImport(new FormFileCollection
         {
             new FormFile(stream, 0, stream.Length, "csvImport", "visits.csv")
-        });
+        }, CancellationToken.None);
         try
         {
             await stream.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -126,7 +132,7 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
         {
             var db = scope.ServiceProvider.GetRequiredService<DataContext>();
             var repository = scope.ServiceProvider.GetRequiredService<StampingPointRepository>();
-            var point = Assert.Single(await repository.SaveStampingPointsAsync(Sources.Point(providerId, 1) with { Name = "Original" }));
+            var point = Assert.Single(await repository.SaveStampingPointsAsync([Sources.Point(providerId, 1) with { Name = "Original" }]));
             originalId = point.Id;
             await scope.ServiceProvider.GetRequiredService<UserVisitRepository>().AddUserVisitAsync(new User { Id = _userId }, point.Id, null, false);
             originalReadiness = (await db.StampingProviders.SingleAsync(p => p.Id == providerId)).IsAnonymousAccessAllowed;
@@ -174,17 +180,9 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
     public async Task InvalidCsvDateIsRejectedBeforeStartingTransaction()
     {
         await using var scope = _factory.Services.CreateAsyncScope();
-        scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = new DefaultHttpContext
-        {
-            User = new ClaimsPrincipal(new ClaimsIdentity(new[]
-            {
-                new Claim(Constants.ClaimsNames.UserId, _userId.ToString()),
-                new Claim(Constants.ClaimsNames.UserEmail, Email)
-            }, "test"))
-        };
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2;31.02.2026;12:30"));
         var manager = scope.ServiceProvider.GetRequiredService<IImportManager>();
-        var result = await manager.ImportUserDataAsync(stream);
+        var result = await manager.ImportUserDataAsync(new User { Id = _userId, Email = Email }, stream);
         Assert.Equal(1, Assert.Single(result.Errors).Line);
         Assert.Equal(0, _factory.TransactionsStarted);
         Assert.Empty(await scope.ServiceProvider.GetRequiredService<DataContext>().UserVisits.ToListAsync());
@@ -316,7 +314,7 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
         public bool Invalid;
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public Task<string?> GetRawDmoStringAsync(Uri uri)
+        public Task<string?> GetRawDmoStringAsync(Uri uri, CancellationToken cancellationToken = default)
         {
             var point = new RawStampPoint(9001, "Point", 50m, 11m, 1, Invalid ? 2 : 1, 10, "Point");
             var tour = new RawTour(901, "Imported tour", [point], false, true, false, null, "Start", "End");

@@ -20,7 +20,7 @@ public sealed class StampingPointRepository
             .OrderBy(point => point.Number)
             .ToListAsync(cancellationToken);
 
-    public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, string? seriesSlug = null, int? userId = null, bool? excludeVisited = null, params int[] stampingPointsNr)
+    public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, string? seriesSlug = null, int? userId = null, bool? excludeVisited = null, IReadOnlyCollection<int>? stampingPointNumbers = null, CancellationToken cancellationToken = default)
     {
         IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking().Include(point => point.Series);
         if (providerFilter?.UserId is { } permittedUserId)
@@ -47,9 +47,10 @@ public sealed class StampingPointRepository
             query = query.Where(p => p.Name.ToLower().Contains(nameFilter.Trim().ToLowerInvariant()));
         }
 
-        if (stampingPointsNr.Length > 0)
+        if (stampingPointNumbers is { Count: > 0 })
         {
-            query = query.Where(p => p.Number.HasValue && stampingPointsNr.Contains(p.Number.Value));
+            var numbers = stampingPointNumbers.ToArray();
+            query = query.Where(p => p.Number.HasValue && numbers.Contains(p.Number.Value));
         }
 
         var result = from point in query
@@ -65,20 +66,20 @@ public sealed class StampingPointRepository
                 : result.Where(p => _dbContext.UserVisits.Where(q => q.UserId == userId.Value).Any(q => q.StampingPointId == p.Point.Id));
         }
         
-        var dto = await result.ToListAsync();
+        var dto = await result.ToListAsync(cancellationToken);
         if (geoFilter != null)
         {
             dto = dto.Where(p => Position.GetDistance(p.Point.Position, geoFilter.Value.Centre) < geoFilter.Value.Radius).ToList();
         }
-        var providers = await GetStampingProvidersAsync(dto.Select(p => p.Point.ProviderId));
-        var series = await GetStampingSeriesAsync(dto.Select(p => p.Point.SeriesId));
+        var providers = await GetStampingProvidersAsync(dto.Select(p => p.Point.ProviderId), cancellationToken);
+        var series = await GetStampingSeriesAsync(dto.Select(p => p.Point.SeriesId), cancellationToken);
         return dto.Select(p =>
             (p.Point with { Provider = providers[p.Point.ProviderId], Series = series[p.Point.SeriesId] },
                 p.Tours.Any(q => q != null) ? p.Tours : null,
                 (UserVisit?) p.UserVisit)).ToList();
     }
 
-    public async Task<StampingPoint> GetStampingPointAsync(int stampingPointNumber, StampingProviderFilter providerFilter, string? seriesSlug = null)
+    public async Task<StampingPoint> GetStampingPointAsync(int stampingPointNumber, StampingProviderFilter providerFilter, string? seriesSlug = null, CancellationToken cancellationToken = default)
     {
         if (providerFilter.IncludesAllProviders)
         {
@@ -97,11 +98,11 @@ public sealed class StampingPointRepository
             query = query.Where(point => point.Series.Slug == StampingSeries.TouringenStandardSlug);
         }
 
-        return await query.FirstOrDefaultAsync()
+        return await query.FirstOrDefaultAsync(cancellationToken)
                ?? throw EntityNotFoundException.Create<StampingPoint>(stampingPointNumber);
     }
 
-    public async Task<StampingPoint> GetStampingPointByIdAsync(int stampingPointId, StampingProviderFilter providerFilter)
+    public async Task<StampingPoint> GetStampingPointByIdAsync(int stampingPointId, StampingProviderFilter providerFilter, CancellationToken cancellationToken = default)
     {
         if (providerFilter.IncludesAllProviders)
         {
@@ -109,13 +110,13 @@ public sealed class StampingPointRepository
         }
 
         return await _dbContext.StampingPoints.Include(point => point.Provider).Include(point => point.Series)
-                   .FirstOrDefaultAsync(point => point.Id == stampingPointId && point.ProviderId == providerFilter.ProviderId)
+                   .FirstOrDefaultAsync(point => point.Id == stampingPointId && point.ProviderId == providerFilter.ProviderId, cancellationToken)
                ?? throw EntityNotFoundException.Create<StampingPoint>(stampingPointId);
     }
 
-    public async Task<IReadOnlyList<StampingPoint>> SaveStampingPointsAsync(params StampingPoint[] points)
+    public async Task<IReadOnlyList<StampingPoint>> SaveStampingPointsAsync(IReadOnlyList<StampingPoint> points, CancellationToken cancellationToken = default)
     {
-        if (points.Length == 0)
+        if (points.Count == 0)
         {
             return Array.Empty<StampingPoint>();
         }
@@ -131,13 +132,13 @@ public sealed class StampingPointRepository
         var providerIds = points.Select(point => point.ProviderId).Distinct().ToArray();
         var existingPoints = await _dbContext.StampingPoints.AsNoTracking()
             .Where(point => seriesIds.Contains(point.SeriesId) || providerIds.Contains(point.ProviderId))
-            .ToArrayAsync();
+            .ToArrayAsync(cancellationToken);
         var existingNumberedPoints = existingPoints
             .Where(point => point.Number.HasValue)
             .ToDictionary(point => (point.SeriesId, Number: point.Number!.Value));
         var existingPointsByExternalId = existingPoints
             .ToDictionary(point => (point.ProviderId, point.ExternalId));
-        var savedPoints = new List<StampingPoint>(points.Length);
+        var savedPoints = new List<StampingPoint>(points.Count);
 
         foreach (var (key, importedPoint) in importedNumberedPoints)
         {
@@ -162,7 +163,7 @@ public sealed class StampingPointRepository
         {
             if (pointToSave.Id == default)
             {
-                await _dbContext.AddAsync(pointToSave);
+                await _dbContext.AddAsync(pointToSave, cancellationToken);
             }
             else
             {
@@ -172,7 +173,7 @@ public sealed class StampingPointRepository
             savedPoints.Add(pointToSave);
         }
 
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync(cancellationToken);
         savedPoints.ForEach(p => _dbContext.Entry(p).State = EntityState.Detached);
         return savedPoints;
     }
@@ -180,16 +181,9 @@ public sealed class StampingPointRepository
     public async Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync(
         (Position Centre, decimal Range)? circularRange = null,
         int? userId = null,
-        params StampingPoint[] stampingPoints)
+        CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.HikingTours.AsNoTracking();
-        if (stampingPoints.Any())
-        {
-            var stampingPointIds = stampingPoints.Select(p => p.Id).Distinct().ToArray();
-            query = query.Where(p => p.StampingPoints.Any(stampingPoint => stampingPointIds.Contains(stampingPoint.StampingPointId)));
-        }
-
-        var result = from tour in query
+        var result = from tour in _dbContext.HikingTours.AsNoTracking()
             join tourPoint in _dbContext.StampingPointsInTours.AsNoTracking() on tour.Id equals tourPoint.Tour.Id
             join point in _dbContext.StampingPoints.AsNoTracking()
                 .Where(point => userId == null || _dbContext.UserStampingProviders.Any(access =>
@@ -198,23 +192,23 @@ public sealed class StampingPointRepository
             group point by tour into groupedStampingPoints
             select new { Tour = groupedStampingPoints.Key, Points = groupedStampingPoints.ToList() };
 
-        var dto = await result.ToListAsync();
+        var dto = await result.ToListAsync(cancellationToken);
         if (circularRange != null)
         {
             dto = dto.Where(p => p.Points.Any(point => Position.GetDistance(point.Position, circularRange.Value.Centre) < circularRange.Value.Range)).ToList();
         }
-        var providers = await GetStampingProvidersAsync(dto.SelectMany(p => p.Points).Select(p => p.ProviderId));
-        var series = await GetStampingSeriesAsync(dto.SelectMany(p => p.Points).Select(p => p.SeriesId));
+        var providers = await GetStampingProvidersAsync(dto.SelectMany(p => p.Points).Select(p => p.ProviderId), cancellationToken);
+        var series = await GetStampingSeriesAsync(dto.SelectMany(p => p.Points).Select(p => p.SeriesId), cancellationToken);
         return dto.Select(p =>
             (p.Tour, p.Points.Select(point => point with { Provider = providers[point.ProviderId], Series = series[point.SeriesId] }).ToList())).ToList();
     }
 
-    public async Task SaveHikingToursAsync(params HikingTour[] tours)
+    public async Task SaveHikingToursAsync(IReadOnlyList<HikingTour> tours, CancellationToken cancellationToken = default)
     {
         List<HikingTour> updatedEntries = new();
 
         var updatedTours = tours.ToDictionary(p => p.Id);
-        var allTours = await _dbContext.HikingTours.AsNoTracking().ToListAsync();
+        var allTours = await _dbContext.HikingTours.AsNoTracking().ToListAsync(cancellationToken);
 
         foreach (var existingTour in allTours.Where(p => updatedTours.ContainsKey(p.Id)))
         {
@@ -223,26 +217,26 @@ public sealed class StampingPointRepository
             updatedTours.Remove(existingTour.Id);
         }
 
-        await _dbContext.AddRangeAsync(updatedTours.Values);
+        await _dbContext.AddRangeAsync(updatedTours.Values, cancellationToken);
         updatedEntries.AddRange(updatedTours.Values);
 
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync(cancellationToken);
         updatedEntries.ForEach(p => _dbContext.Entry(p).State = EntityState.Detached);
     }
 
-    private async Task<Dictionary<int, StampingProvider>> GetStampingProvidersAsync(IEnumerable<int> providerIds)
+    private async Task<Dictionary<int, StampingProvider>> GetStampingProvidersAsync(IEnumerable<int> providerIds, CancellationToken cancellationToken)
     {
         var ids = providerIds.Distinct().ToArray();
         return await _dbContext.StampingProviders.AsNoTracking()
             .Where(provider => ids.Contains(provider.Id))
-            .ToDictionaryAsync(provider => provider.Id);
+            .ToDictionaryAsync(provider => provider.Id, cancellationToken);
     }
 
-    private async Task<Dictionary<int, StampingSeries>> GetStampingSeriesAsync(IEnumerable<int> seriesIds)
+    private async Task<Dictionary<int, StampingSeries>> GetStampingSeriesAsync(IEnumerable<int> seriesIds, CancellationToken cancellationToken)
     {
         var ids = seriesIds.Distinct().ToArray();
         return await _dbContext.StampingSeries.AsNoTracking()
             .Where(series => ids.Contains(series.Id))
-            .ToDictionaryAsync(series => series.Id);
+            .ToDictionaryAsync(series => series.Id, cancellationToken);
     }
 }

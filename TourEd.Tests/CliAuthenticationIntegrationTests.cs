@@ -242,6 +242,7 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IImportManager>();
+                services.AddHttpContextAccessor();
                 services.AddSingleton<CapturingImportManager>();
                 services.AddSingleton<IImportManager>(provider => provider.GetRequiredService<CapturingImportManager>());
             });
@@ -274,7 +275,10 @@ public sealed class CliAuthenticationIntegrationTests : IAsyncLifetime
             return Task.CompletedTask;
         }
 
-        public Task<TourEd.Lib.Abstractions.Models.UserDataImportResult> ImportUserDataAsync(Stream stream)
+        public Task<TourEd.Lib.Abstractions.Models.UserDataImportResult> ImportUserDataAsync(
+            TourEd.Lib.Abstractions.Models.User user,
+            Stream stream,
+            CancellationToken cancellationToken = default)
         {
             CapturePrincipal();
             Interlocked.Increment(ref _userImportCount);
