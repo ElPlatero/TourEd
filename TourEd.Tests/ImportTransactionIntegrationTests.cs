@@ -295,12 +295,18 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
                 services.AddSingleton<IHarzerWandernadelImportService>(Sources);
                 services.AddSingleton<ITouringenStampingPointImportService>(Sources);
                 services.AddSingleton<IHtmlParsingService>(Sources);
-                services.AddTransient<Func<IUnitOfWork>>(provider => () =>
-                {
-                    Interlocked.Increment(ref TransactionsStarted);
-                    return provider.GetRequiredService<IUnitOfWork>();
-                });
+                services.AddScoped<IUnitOfWorkFactory>(provider =>
+                    new CountingUnitOfWorkFactory(new UnitOfWorkFactory(provider.GetRequiredService<DataContext>()), this));
             });
+        }
+    }
+
+    private sealed class CountingUnitOfWorkFactory(IUnitOfWorkFactory inner, ImportFactory factory) : IUnitOfWorkFactory
+    {
+        public Task<IUnitOfWork> BeginAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref factory.TransactionsStarted);
+            return inner.BeginAsync(cancellationToken);
         }
     }
 
