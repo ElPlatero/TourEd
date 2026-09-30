@@ -1,6 +1,4 @@
-using Api.Entities;
-
-namespace Api.Repositories.Seeds;
+namespace Api.Entities.Seeds;
 
 /// <summary>Seeded stamping providers; imported providers receive their provenance on import.</summary>
 internal static class StampingProviderSeed
