@@ -39,14 +39,7 @@ public class ImportsController : ControllerBase
                 [new(null, "Upload exactly one non-empty CSV file in csvImport.")]));
         }
         await using var stream = csvImport[0].OpenReadStream();
-        try
-        {
-            var result = await _importManager.ImportUserDataAsync(stream);
-            return result.Errors.Count > 0 ? BadRequest(result) : Ok(result);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden);
-        }
+        var result = await _importManager.ImportUserDataAsync(stream);
+        return result.Errors.Count > 0 ? BadRequest(result) : Ok(result);
     }
 }

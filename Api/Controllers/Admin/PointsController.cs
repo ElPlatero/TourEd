@@ -32,22 +32,11 @@ public class PointsController : ControllerBase
             });
         }
 
-        try
+        using (unitOfWork)
         {
-            using (unitOfWork)
-            {
-                var result = await _tourDataManager.SaveAdminStampingPointsAsync(requests, cancellationToken);
-                await unitOfWork.CommitAsync();
-                return Ok(result);
-            }
-        }
-        catch (InvalidDataException ex)
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Validation failed",
-                Detail = ex.Message
-            });
+            var result = await _tourDataManager.SaveAdminStampingPointsAsync(requests, cancellationToken);
+            await unitOfWork.CommitAsync();
+            return Ok(result);
         }
     }
 }

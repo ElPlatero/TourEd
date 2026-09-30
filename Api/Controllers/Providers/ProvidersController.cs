@@ -45,24 +45,17 @@ public sealed class ProvidersController : ControllerBase
         {
             return Unauthorized();
         }
-        try
+        var result = await _manager.GetPublicProviderDataAsync(providerSlug, currentUser.Id, cancellationToken);
+        if (result is not { } providerData)
         {
-            var result = await _manager.GetPublicProviderDataAsync(providerSlug, currentUser.Id, cancellationToken);
-            if (result is not { } providerData)
-            {
-                return NotFound();
-            }
+            return NotFound();
+        }
 
-            return new JsonResult(StampingPointGeoJsonFeatureCollectionDto.Create(
-                providerData.Provider,
-                providerData.Points))
-            {
-                ContentType = "application/geo+json"
-            };
-        }
-        catch (UnauthorizedAccessException)
+        return new JsonResult(StampingPointGeoJsonFeatureCollectionDto.Create(
+            providerData.Provider,
+            providerData.Points))
         {
-            return Forbid();
-        }
+            ContentType = "application/geo+json"
+        };
     }
 }

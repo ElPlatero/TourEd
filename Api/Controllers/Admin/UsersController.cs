@@ -50,18 +50,11 @@ public sealed class UsersController : ControllerBase
             return BadRequest(new ProblemDetails { Title = "Invalid request", Detail = "Providers is required." });
         }
 
-        try
-        {
-            var updated = await _manager.UpdateProvidersAsync(
-                userId,
-                request,
-                User.GetUser().Id,
-                cancellationToken);
-            return updated is null ? NotFound() : Ok(updated);
-        }
-        catch (InvalidDataException exception)
-        {
-            return BadRequest(new ProblemDetails { Title = "Validation failed", Detail = exception.Message });
-        }
+        var updated = await _manager.UpdateProvidersAsync(
+            userId,
+            request,
+            User.GetUser().Id,
+            cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
     }
 }

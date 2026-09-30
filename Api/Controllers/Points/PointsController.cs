@@ -2,7 +2,6 @@ using Api.Dto;
 using Api.Managers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TourEd.Lib.Abstractions.Exceptions;
 using TourEd.Lib.Abstractions.Models;
 using TourEd.Lib.Extensions;
 
@@ -27,19 +26,8 @@ public class PointsController : ControllerBase
             return Unauthorized();
         }
 
-        try
-        {
-            var result = await _manager.GetStampingPointsAsync(query.Provider, currentUser.Id, query.GetGeoFilterOrDefault(), query.GetUserFilterOrDefault(currentUser));
-            return Ok(new GetStampingPointsResponse(result.Count, result.OrderBy(p => p.Point.Provider.Slug).ThenBy(p => p.Point.Series.Slug).ThenBy(p => p.Point.Number.HasValue ? 0 : 1).ThenBy(p => p.Point.Number).ThenBy(p => p.Point.Name).Select(CreateDto)));
-        }
-        catch (EntityNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
-        }
+        var result = await _manager.GetStampingPointsAsync(query.Provider, currentUser.Id, query.GetGeoFilterOrDefault(), query.GetUserFilterOrDefault(currentUser));
+        return Ok(new GetStampingPointsResponse(result.Count, result.OrderBy(p => p.Point.Provider.Slug).ThenBy(p => p.Point.Series.Slug).ThenBy(p => p.Point.Number.HasValue ? 0 : 1).ThenBy(p => p.Point.Number).ThenBy(p => p.Point.Name).Select(CreateDto)));
     }
 
     [Authorize]
@@ -51,23 +39,8 @@ public class PointsController : ControllerBase
             return Unauthorized();
         }
 
-        try
-        {
-            var (stampingPoint, userVisit) = await _manager.GetVisitAsync(currentUser, stampingPointNumber, provider, series);
-            return Ok(new GetVisitResult(VisitDto.Create(userVisit, StampingPointDto.Create(stampingPoint, userVisit))));
-        }
-        catch (EntityNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (NotSupportedException)
-        {
-            return BadRequest();
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
-        }
+        var (stampingPoint, userVisit) = await _manager.GetVisitAsync(currentUser, stampingPointNumber, provider, series);
+        return Ok(new GetVisitResult(VisitDto.Create(userVisit, StampingPointDto.Create(stampingPoint, userVisit))));
     }
 
     [Authorize]
@@ -79,27 +52,8 @@ public class PointsController : ControllerBase
             return Unauthorized();
         }
 
-        try
-        {
-            await _manager.AddVisitAsync(currentUser, stampingPointNumber, request.VisitedOn, request.VisitedAt, provider, series);
-            return NoContent();
-        }
-        catch (EntityNotFoundException)
-        {
-            return NotFound();
-        } 
-        catch (NotSupportedException)
-        {
-            return BadRequest();
-        }
-        catch (InvalidOperationException)
-        {
-            return Conflict();
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
-        }
+        await _manager.AddVisitAsync(currentUser, stampingPointNumber, request.VisitedOn, request.VisitedAt, provider, series);
+        return NoContent();
     }
 
     [Authorize]
@@ -111,23 +65,8 @@ public class PointsController : ControllerBase
             return Unauthorized();
         }
 
-        try
-        {
-            await _manager.UpdateVisitAsync(currentUser, stampingPointNumber, request.VisitedOn, request.VisitedAt, provider, series);
-            return NoContent();
-        }
-        catch (EntityNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (NotSupportedException)
-        {
-            return BadRequest();
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
-        }
+        await _manager.UpdateVisitAsync(currentUser, stampingPointNumber, request.VisitedOn, request.VisitedAt, provider, series);
+        return NoContent();
     }
 
     [Authorize]
@@ -139,23 +78,8 @@ public class PointsController : ControllerBase
             return Unauthorized();
         }
 
-        try
-        {
-            await _manager.DeleteVisitAsync(currentUser, stampingPointNumber, provider, series);
-            return NoContent();
-        }
-        catch (EntityNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (NotSupportedException)
-        {
-            return BadRequest();
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
-        }
+        await _manager.DeleteVisitAsync(currentUser, stampingPointNumber, provider, series);
+        return NoContent();
     }
 
     [Authorize]
@@ -168,20 +92,14 @@ public class PointsController : ControllerBase
         [FromQuery] string? provider = null)
     {
         if (!User.TryGetUser(out var currentUser)) return Unauthorized();
-        try
-        {
-            var result = await _manager.SynchronizeVisitByIdAsync(
-                currentUser,
-                stampingPointId,
-                CreateState(request.Expected!),
-                CreateState(request.Desired!),
-                provider);
-            var dto = VisitDto.Create(result.Visit, StampingPointDto.Create(result.StampingPoint, result.Visit));
-            return result.IsConflict ? Conflict(dto) : Ok(dto);
-        }
-        catch (EntityNotFoundException) { return NotFound(); }
-        catch (NotSupportedException) { return BadRequest(); }
-        catch (UnauthorizedAccessException) { return Forbid(); }
+        var result = await _manager.SynchronizeVisitByIdAsync(
+            currentUser,
+            stampingPointId,
+            CreateState(request.Expected!),
+            CreateState(request.Desired!),
+            provider);
+        var dto = VisitDto.Create(result.Visit, StampingPointDto.Create(result.StampingPoint, result.Visit));
+        return result.IsConflict ? Conflict(dto) : Ok(dto);
     }
 
     [Authorize]
@@ -189,14 +107,8 @@ public class PointsController : ControllerBase
     public async Task<IActionResult> GetVisitById(int stampingPointId, [FromQuery] string? provider = null)
     {
         if (!User.TryGetUser(out var currentUser)) return Unauthorized();
-        try
-        {
-            var (stampingPoint, userVisit) = await _manager.GetVisitByIdAsync(currentUser, stampingPointId, provider);
-            return Ok(new GetVisitResult(VisitDto.Create(userVisit, StampingPointDto.Create(stampingPoint, userVisit))));
-        }
-        catch (EntityNotFoundException) { return NotFound(); }
-        catch (NotSupportedException) { return BadRequest(); }
-        catch (UnauthorizedAccessException) { return Forbid(); }
+        var (stampingPoint, userVisit) = await _manager.GetVisitByIdAsync(currentUser, stampingPointId, provider);
+        return Ok(new GetVisitResult(VisitDto.Create(userVisit, StampingPointDto.Create(stampingPoint, userVisit))));
     }
 
     [Authorize]
@@ -204,15 +116,8 @@ public class PointsController : ControllerBase
     public async Task<IActionResult> AddVisitById(int stampingPointId, [FromBody] SaveVisitRequest request, [FromQuery] string? provider = null)
     {
         if (!User.TryGetUser(out var currentUser)) return Unauthorized();
-        try
-        {
-            await _manager.AddVisitByIdAsync(currentUser, stampingPointId, request.VisitedOn, request.VisitedAt, provider);
-            return NoContent();
-        }
-        catch (EntityNotFoundException) { return NotFound(); }
-        catch (NotSupportedException) { return BadRequest(); }
-        catch (InvalidOperationException) { return Conflict(); }
-        catch (UnauthorizedAccessException) { return Forbid(); }
+        await _manager.AddVisitByIdAsync(currentUser, stampingPointId, request.VisitedOn, request.VisitedAt, provider);
+        return NoContent();
     }
 
     [Authorize]
@@ -220,14 +125,8 @@ public class PointsController : ControllerBase
     public async Task<IActionResult> UpdateVisitById(int stampingPointId, [FromBody] SaveVisitRequest request, [FromQuery] string? provider = null)
     {
         if (!User.TryGetUser(out var currentUser)) return Unauthorized();
-        try
-        {
-            await _manager.UpdateVisitByIdAsync(currentUser, stampingPointId, request.VisitedOn, request.VisitedAt, provider);
-            return NoContent();
-        }
-        catch (EntityNotFoundException) { return NotFound(); }
-        catch (NotSupportedException) { return BadRequest(); }
-        catch (UnauthorizedAccessException) { return Forbid(); }
+        await _manager.UpdateVisitByIdAsync(currentUser, stampingPointId, request.VisitedOn, request.VisitedAt, provider);
+        return NoContent();
     }
 
     [Authorize]
@@ -235,14 +134,8 @@ public class PointsController : ControllerBase
     public async Task<IActionResult> DeleteVisitById(int stampingPointId, [FromQuery] string? provider = null)
     {
         if (!User.TryGetUser(out var currentUser)) return Unauthorized();
-        try
-        {
-            await _manager.DeleteVisitByIdAsync(currentUser, stampingPointId, provider);
-            return NoContent();
-        }
-        catch (EntityNotFoundException) { return NotFound(); }
-        catch (NotSupportedException) { return BadRequest(); }
-        catch (UnauthorizedAccessException) { return Forbid(); }
+        await _manager.DeleteVisitByIdAsync(currentUser, stampingPointId, provider);
+        return NoContent();
     }
     
     private static StampingPointDto CreateDto((StampingPoint Point, List<HikingTour>? Tours, UserVisit? Visit) data)
