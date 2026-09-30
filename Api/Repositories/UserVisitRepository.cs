@@ -67,7 +67,7 @@ public sealed class UserVisitRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<(UserVisit? Visit, bool IsConflict)> SynchronizeUserVisitAsync(
+    public async Task<VisitSynchronization> SynchronizeUserVisitAsync(
         User currentUser,
         int stampingPointId,
         VisitStateValue expected,
@@ -80,12 +80,12 @@ public sealed class UserVisitRepository
 
         if (current == desired)
         {
-            return (currentVisit, false);
+            return new VisitSynchronization(currentVisit, false);
         }
 
         if (current != expected)
         {
-            return (currentVisit, true);
+            return new VisitSynchronization(currentVisit, true);
         }
 
         if (!expected.IsVisited)
@@ -100,14 +100,14 @@ public sealed class UserVisitRepository
             try
             {
                 await _dbContext.SaveChangesAsync(cancellationToken);
-                return (await GetUserVisitOrDefaultAsync(currentUser, stampingPointId, cancellationToken), false);
+                return new VisitSynchronization(await GetUserVisitOrDefaultAsync(currentUser, stampingPointId, cancellationToken), false);
             }
             catch (DbUpdateException exception) when (
                 exception.InnerException is SqliteException { SqliteErrorCode: SqliteConstraintViolation })
             {
                 _dbContext.ChangeTracker.Clear();
                 var concurrentVisit = await GetUserVisitOrDefaultAsync(currentUser, stampingPointId, cancellationToken);
-                return (concurrentVisit, VisitStateValue.FromVisit(concurrentVisit) != desired);
+                return new VisitSynchronization(concurrentVisit, VisitStateValue.FromVisit(concurrentVisit) != desired);
             }
         }
 
@@ -126,10 +126,10 @@ public sealed class UserVisitRepository
         var finalVisit = await GetUserVisitOrDefaultAsync(currentUser, stampingPointId, cancellationToken);
         if (affected == 1 || VisitStateValue.FromVisit(finalVisit) == desired)
         {
-            return (finalVisit, false);
+            return new VisitSynchronization(finalVisit, false);
         }
 
-        return (finalVisit, true);
+        return new VisitSynchronization(finalVisit, true);
     }
 
     public async Task<int> SaveUserDataAsync(IReadOnlyList<UserVisit> visits, CancellationToken cancellationToken = default)

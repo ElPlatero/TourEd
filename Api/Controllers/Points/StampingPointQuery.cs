@@ -14,7 +14,7 @@ public sealed class StampingPointQuery
     [FromQuery(Name = "provider")]
     public string? Provider { get; set; }
 
-    public (Position, decimal)? GetGeoFilterOrDefault()
+    public GeoCircle? GetAreaOrDefault()
     {
         if (string.IsNullOrWhiteSpace(Centre)) return null;
         if (Radius <= 0) return null;
@@ -24,13 +24,9 @@ public sealed class StampingPointQuery
         if (!decimal.TryParse(coordinatesplit[0], out var latitude)) return null;
         if (!decimal.TryParse(coordinatesplit[1], out var longitude)) return null;
 
-        return (new Position(longitude, latitude), Radius * 1_000);
+        return new GeoCircle(new Position(longitude, latitude), Radius * 1_000);
     }
 
-    public (int UserId, bool ExcludeVisited)? GetUserFilterOrDefault(User? currentUser)
-    {
-        return ShowVisited != null && currentUser != null
-            ? (currentUser.Id, !ShowVisited.Value)
-            : null;
-    }
+    /// <summary><c>vis=true</c> excludes open points, <c>vis=false</c> excludes visited points.</summary>
+    public bool? GetExcludeVisitedOrDefault() => ShowVisited is { } showVisited ? !showVisited : null;
 }

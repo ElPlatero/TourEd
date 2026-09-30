@@ -20,8 +20,17 @@ public sealed class StampingPointRepository
             .OrderBy(point => point.Number)
             .ToListAsync(cancellationToken);
 
-    public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? visit)>> GetStampingPointsAsync(string? nameFilter = null, (Position Centre, decimal Radius)? geoFilter = null, StampingProviderFilter? providerFilter = null, string? seriesSlug = null, int? userId = null, bool? excludeVisited = null, IReadOnlyCollection<int>? stampingPointNumbers = null, CancellationToken cancellationToken = default)
+    public async Task<List<StampingPointDetails>> GetStampingPointsAsync(
+        StampingPointCriteria criteria,
+        CancellationToken cancellationToken = default)
     {
+        var providerFilter = criteria.ProviderFilter;
+        var seriesSlug = criteria.SeriesSlug;
+        var nameFilter = criteria.NameFilter;
+        var stampingPointNumbers = criteria.StampingPointNumbers;
+        var userId = criteria.UserId;
+        var excludeVisited = criteria.ExcludeVisited;
+
         IQueryable<StampingPoint> query = _dbContext.StampingPoints.AsNoTracking();
         if (providerFilter?.UserId is { } permittedUserId)
         {
@@ -67,16 +76,17 @@ public sealed class StampingPointRepository
         }
 
         var dto = await result.ToListAsync(cancellationToken);
-        if (geoFilter != null)
+        if (criteria.Area is { } area)
         {
-            dto = dto.Where(p => Position.GetDistance(p.Point.Position, geoFilter.Value.Centre) < geoFilter.Value.Radius).ToList();
+            dto = dto.Where(p => area.Contains(p.Point.Position)).ToList();
         }
         var providers = await GetStampingProvidersAsync(dto.Select(p => p.Point.ProviderId), cancellationToken);
         var series = await GetStampingSeriesAsync(dto.Select(p => p.Point.SeriesId), cancellationToken);
-        return dto.Select(p =>
-            (p.Point with { Provider = providers[p.Point.ProviderId], Series = series[p.Point.SeriesId] },
+        return dto.Select(p => new StampingPointDetails(
+                p.Point with { Provider = providers[p.Point.ProviderId], Series = series[p.Point.SeriesId] },
                 p.Tours.Any(q => q != null) ? p.Tours : null,
-                (UserVisit?) p.UserVisit)).ToList();
+                p.UserVisit))
+            .ToList();
     }
 
     public async Task<StampingPoint> GetStampingPointAsync(int stampingPointNumber, StampingProviderFilter providerFilter, string? seriesSlug = null, CancellationToken cancellationToken = default)
@@ -186,8 +196,8 @@ public sealed class StampingPointRepository
         return savedPoints;
     }
 
-    public async Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync(
-        (Position Centre, decimal Range)? circularRange = null,
+    public async Task<List<HikingTourWithPoints>> GetHikingToursAsync(
+        GeoCircle? area = null,
         int? userId = null,
         CancellationToken cancellationToken = default)
     {
@@ -201,14 +211,16 @@ public sealed class StampingPointRepository
             select new { Tour = groupedStampingPoints.Key, Points = groupedStampingPoints.ToList() };
 
         var dto = await result.ToListAsync(cancellationToken);
-        if (circularRange != null)
+        if (area is not null)
         {
-            dto = dto.Where(p => p.Points.Any(point => Position.GetDistance(point.Position, circularRange.Value.Centre) < circularRange.Value.Range)).ToList();
+            dto = dto.Where(p => p.Points.Any(point => area.Contains(point.Position))).ToList();
         }
         var providers = await GetStampingProvidersAsync(dto.SelectMany(p => p.Points).Select(p => p.ProviderId), cancellationToken);
         var series = await GetStampingSeriesAsync(dto.SelectMany(p => p.Points).Select(p => p.SeriesId), cancellationToken);
-        return dto.Select(p =>
-            (p.Tour, p.Points.Select(point => point with { Provider = providers[point.ProviderId], Series = series[point.SeriesId] }).ToList())).ToList();
+        return dto.Select(p => new HikingTourWithPoints(
+                p.Tour,
+                p.Points.Select(point => point with { Provider = providers[point.ProviderId], Series = series[point.SeriesId] }).ToList()))
+            .ToList();
     }
 
     public async Task SaveHikingToursAsync(IReadOnlyList<HikingTour> tours, CancellationToken cancellationToken = default)

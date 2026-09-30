@@ -26,34 +26,45 @@ public sealed class TourDataManager
         _providerManager = providerManager;
     }
 
-    public async Task<List<(StampingPoint Point, List<HikingTour>? Tours, UserVisit? Visit)>> GetStampingPointsAsync(string? providerSlug = null, int? currentUserId = null, (Position, decimal)? geoFilter = null, (int UserId, bool ExcludeVisited)? userFilter = null, CancellationToken cancellationToken = default)
-    {
-        var providerFilter = await _providerManager.ResolveFilterAsync(providerSlug, currentUserId, cancellationToken);
-        return await _points.GetStampingPointsAsync(geoFilter: geoFilter, providerFilter: providerFilter, userId: currentUserId, excludeVisited: userFilter?.ExcludeVisited, cancellationToken: cancellationToken);
-    }
-
-    public Task<List<(HikingTour Tour, List<StampingPoint> Points)>> GetHikingToursAsync(
+    public async Task<List<StampingPointDetails>> GetStampingPointsAsync(
+        string? providerSlug,
         int currentUserId,
-        (Position Centre, decimal Range)? distance = null,
+        GeoCircle? area = null,
+        bool? excludeVisited = null,
         CancellationToken cancellationToken = default)
     {
-        return _points.GetHikingToursAsync(distance, currentUserId, cancellationToken);
+        var providerFilter = await _providerManager.ResolveFilterAsync(providerSlug, currentUserId, cancellationToken);
+        return await _points.GetStampingPointsAsync(
+            new StampingPointCriteria
+            {
+                ProviderFilter = providerFilter,
+                Area = area,
+                UserId = currentUserId,
+                ExcludeVisited = excludeVisited
+            },
+            cancellationToken);
     }
 
-    public async Task<(StampingPoint StampingPoint, UserVisit? UserVisit)> GetVisitAsync(User currentUser, int stampingPointNumber, string? providerSlug = null, string? seriesSlug = null, CancellationToken cancellationToken = default)
+    public Task<List<HikingTourWithPoints>> GetHikingToursAsync(
+        int currentUserId,
+        GeoCircle? area = null,
+        CancellationToken cancellationToken = default)
+        => _points.GetHikingToursAsync(area, currentUserId, cancellationToken);
+
+    public async Task<PointVisit> GetVisitAsync(User currentUser, int stampingPointNumber, string? providerSlug = null, string? seriesSlug = null, CancellationToken cancellationToken = default)
     {
         var providerFilter = await _providerManager.ResolveFilterAsync(providerSlug, currentUser.Id, cancellationToken);
         var stampingPoint = await _points.GetStampingPointAsync(stampingPointNumber, providerFilter, seriesSlug, cancellationToken);
         var userVisit = await _visits.GetUserVisitOrDefaultAsync(currentUser, stampingPoint.Id, cancellationToken);
-        return (stampingPoint, userVisit);
+        return new PointVisit(stampingPoint, userVisit);
     }
 
-    public async Task<(StampingPoint StampingPoint, UserVisit? UserVisit)> GetVisitByIdAsync(User currentUser, int stampingPointId, string? providerSlug = null, CancellationToken cancellationToken = default)
+    public async Task<PointVisit> GetVisitByIdAsync(User currentUser, int stampingPointId, string? providerSlug = null, CancellationToken cancellationToken = default)
     {
         var providerFilter = await _providerManager.ResolveFilterAsync(providerSlug, currentUser.Id, cancellationToken);
         var stampingPoint = await _points.GetStampingPointByIdAsync(stampingPointId, providerFilter, cancellationToken);
         var userVisit = await _visits.GetUserVisitOrDefaultAsync(currentUser, stampingPoint.Id, cancellationToken);
-        return (stampingPoint, userVisit);
+        return new PointVisit(stampingPoint, userVisit);
     }
 
     public async Task AddVisitAsync(User currentUser, int stampingPointNumber, DateOnly? visitedOn, TimeOnly? visitedAt, string? providerSlug = null, string? seriesSlug = null, CancellationToken cancellationToken = default)
