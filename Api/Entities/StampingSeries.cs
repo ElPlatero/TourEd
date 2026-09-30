@@ -1,3 +1,7 @@
+using Api.Repositories.Seeds;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
 namespace Api.Entities;
 
 public class StampingSeries
@@ -36,4 +40,19 @@ public class StampingSeries
     public bool IsTemporary { get; set; }
     public int? ExpectedPointCount { get; set; }
     public StampingProvider Provider { get; set; } = null!;
+
+    internal sealed class Configuration : IEntityTypeConfiguration<StampingSeries>
+    {
+        public void Configure(EntityTypeBuilder<StampingSeries> builder)
+        {
+            builder.HasKey(p => p.Id);
+            builder.HasAlternateKey(p => new { p.Id, p.ProviderId });
+            builder.Property(p => p.Id).ValueGeneratedOnAdd();
+            builder.Property(p => p.Slug).IsRequired();
+            builder.Property(p => p.Name).IsRequired();
+            builder.HasOne(p => p.Provider).WithMany().OnDelete(DeleteBehavior.Restrict);
+            builder.HasIndex(p => new { p.ProviderId, p.Slug }).IsUnique();
+            builder.HasData(StampingSeriesSeed.Data);
+        }
+    }
 }

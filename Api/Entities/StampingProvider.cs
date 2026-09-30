@@ -1,3 +1,7 @@
+using Api.Repositories.Seeds;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
 namespace Api.Entities;
 
 public class StampingProvider
@@ -38,4 +42,17 @@ public class StampingProvider
     public DateTime? DataSourceUpdatedAt { get; set; }
     public DateTime? DataImportedAt { get; set; }
     public List<UserStampingProvider> Users { get; set; } = [];
+
+    internal sealed class Configuration : IEntityTypeConfiguration<StampingProvider>
+    {
+        public void Configure(EntityTypeBuilder<StampingProvider> builder)
+        {
+            builder.HasKey(p => p.Id);
+            builder.Property(p => p.Id).ValueGeneratedOnAdd();
+            builder.Property(p => p.Slug).IsRequired();
+            builder.Property(p => p.Name).IsRequired();
+            builder.HasIndex(p => p.Slug).IsUnique();
+            builder.HasData(StampingProviderSeed.Data);
+        }
+    }
 }

@@ -1,5 +1,4 @@
 using Api.Entities;
-using Api.Repositories.Configurations;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Repositories;
@@ -26,17 +25,17 @@ public class DataContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
-            .ApplyConfiguration(new ImportConfiguration())
-            .ApplyConfiguration(new StampingProviderConfiguration())
-            .ApplyConfiguration(new StampingPointConfiguration())
-            .ApplyConfiguration(new StampingSeriesConfiguration())
-            .ApplyConfiguration(new SortedStampingPointConfiguration())
-            .ApplyConfiguration(new HikingTourConfiguration())
-            .ApplyConfiguration(new UserConfiguration())
-            .ApplyConfiguration(new UserStampingProviderConfiguration())
-            .ApplyConfiguration(new AdminAuditEntryConfiguration())
-            .ApplyConfiguration(new RegistrationRequestConfiguration())
-            .ApplyConfiguration(new RegistrationNotificationStateConfiguration())
-            .ApplyConfiguration(new UserVisitConfiguration());
+            .ApplyConfiguration(new Import.Configuration())
+            .ApplyConfiguration(new StampingProvider.Configuration())
+            .ApplyConfiguration(new StampingPoint.Configuration())
+            .ApplyConfiguration(new StampingSeries.Configuration())
+            .ApplyConfiguration(new SortedStampingPoint.Configuration())
+            .ApplyConfiguration(new HikingTour.Configuration())
+            .ApplyConfiguration(new User.Configuration())
+            .ApplyConfiguration(new UserStampingProvider.Configuration())
+            .ApplyConfiguration(new AdminAuditEntry.Configuration())
+            .ApplyConfiguration(new RegistrationRequest.Configuration())
+            .ApplyConfiguration(new RegistrationNotificationState.Configuration())
+            .ApplyConfiguration(new UserVisit.Configuration());
     }
 }
