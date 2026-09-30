@@ -1,24 +1,29 @@
 // Two real Chromium tabs share one BrowserContext, cookie state and IndexedDB.
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
+const { loadPatchedModules } = require('./module-patches.cjs');
 const { join, resolve } = require('node:path');
 const { createServer } = require('node:http');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = resolve(__dirname, '../../Api/wwwroot');
 
-let script = readFileSync(process.env.TOURED_SCRIPT || join(root, 'js/toured.js'), 'utf8');
 // Expose production functions solely to await completion and trigger reconnection.
-script = script.replace(/    initialize\(\);\r?\n\}\)\(\);/, `    window.__syncTest = {
-        app, synchronizePendingActions, refreshFromStoredSnapshot, clearRetryTimer,
-        acquireSyncLease, releaseSyncLease, finishPendingAction
-    };
-    initialize();
-})();`);
+const syncTestExports = `window.__syncTest = {
+    app, synchronizePendingActions, refreshFromStoredSnapshot, clearRetryTimer,
+    acquireSyncLease, releaseSyncLease, finishPendingAction
+};`;
+const modules = loadPatchedModules(root, [{
+    name: 'expose synchronization',
+    // The final initialize() call of the entry module, or of the former single-script
+    // IIFE (then followed by "})();") when TOURED_SCRIPT runs a negative control.
+    find: [/( *)initialize\(\);(\r?\n\}\)\(\);)?\s*$/],
+    replace: `$1${syncTestExports}\n$1initialize();$2\n`
+}], process.env.TOURED_SCRIPT);
 const server = createServer((req, res) => {
     const path = new URL(req.url, 'http://localhost').pathname;
     const file = path === '/' ? 'index.html' : path.slice(1);
     try {
-        const body = file === 'js/toured.js' ? script : readFileSync(join(root, file));
+        const body = modules.get(file) ?? readFileSync(join(root, file));
         res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html');
         res.end(body);
     } catch { res.writeHead(404).end(); }

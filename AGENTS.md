@@ -10,7 +10,7 @@ Stamping points are anchored by `StampingProvider` and belong to a provider-scop
 
 ## Frontend
 
-The repository contains one user-facing frontend rooted at `Api/wwwroot/index.html`, with its local CSS and JavaScript in `Api/wwwroot/css/toured.css` and `Api/wwwroot/js/toured.js`. It is part of the ASP.NET Core application and is published and deployed together with the API.
+The repository contains one user-facing frontend rooted at `Api/wwwroot/index.html`, with its local CSS in `Api/wwwroot/css/toured.css` and its JavaScript as native ES modules under `Api/wwwroot/js/`: the entry module `toured.js` (loaded with `<script type="module">` after the classic deferred `ol.js`) imports the other modules. There is no bundler; every module must be listed in the service worker's precache list, which the .NET contract test `EveryImportedFrontendModuleIsPrecachedByTheServiceWorker` enforces, and frontend contract tests read all precached modules. It is part of the ASP.NET Core application and is published and deployed together with the API.
 
 It is a plain HTML, CSS, and vanilla-JavaScript application using OpenLayers. It has no frontend build process. It loads OpenStreetMap tiles and displays stamping points as map markers.
 

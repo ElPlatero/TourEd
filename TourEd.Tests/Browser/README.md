@@ -1,5 +1,7 @@
 # Snapshot initialization regressions (Issue #77)
 
+The patching tests use `module-patches.cjs`: each test-only patch is applied to whichever frontend module contains its anchor and must match exactly once across all modules, so a patch cannot silently stop applying after code moves between modules.
+
 This standalone test uses Node.js, Playwright and Chromium. There is no frontend build or production dependency. Install Playwright in a temporary directory; the tests use the bundled OpenLayers assets:
 
 ```bash
@@ -21,7 +23,7 @@ Covered interleavings:
 - Logout in A changes its initialization generation while the write is pending.
 - A's confirmed session expires before its final write.
 
-For a negative control, `TOURED_SCRIPT` can point to an older copy of `toured.js`; `SCENARIOS=queued` or `SCENARIOS=completed-old` selects a deterministic regression case. The pre-fix implementation fails both. These frontend fixtures supplement the .NET integration suite; they do not replace backend authentication and entitlement tests.
+For a negative control, `TOURED_SCRIPT` can point to an older single-script copy of `toured.js` (served as the entry module; the patches also match the former IIFE layout); `SCENARIOS=queued` or `SCENARIOS=completed-old` selects a deterministic regression case. The pre-fix implementation fails both. These frontend fixtures supplement the .NET integration suite; they do not replace backend authentication and entitlement tests.
 
 ## Local OpenLayers installation (Issue #84)
 

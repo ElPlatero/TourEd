@@ -1007,7 +1007,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         using var client = CreateClient(_factory);
 
         var html = await client.GetStringAsync("/");
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
         var normalizedFrontend = $"{html}\n{script}".ToLowerInvariant();
 
         Assert.Contains("href=\"auth/login\"", normalizedFrontend, StringComparison.Ordinal);
@@ -1038,7 +1038,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         var html = await client.GetStringAsync("/");
         var css = await client.GetStringAsync("/css/toured.css");
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
         var neutralPinResponse = await client.GetAsync("/img/pin_icon_neutral.svg");
         var neutralPin = await neutralPinResponse.Content.ReadAsStringAsync();
         var visitedPinResponse = await client.GetAsync("/img/pin_icon_visited.svg");
@@ -1097,7 +1097,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         var html = await client.GetStringAsync("/");
         var css = await client.GetStringAsync("/css/toured.css");
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
 
         Assert.Contains("id=\"providerMenuButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aria-controls=\"providerPanel\"", html, StringComparison.OrdinalIgnoreCase);
@@ -1140,7 +1140,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         var html = await client.GetStringAsync("/");
         var css = await client.GetStringAsync("/css/toured.css");
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
 
         var locateButtonPosition = html.IndexOf("id=\"locateButton\"", StringComparison.OrdinalIgnoreCase);
         var visitFilterButtonPosition = html.IndexOf("id=\"visitFilterButton\"", StringComparison.OrdinalIgnoreCase);
@@ -1195,7 +1195,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         var html = await client.GetStringAsync("/");
         var css = await client.GetStringAsync("/css/toured.css");
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
 
         Assert.Contains("id=\"copyPointLinkButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("id=\"pointShareStatus\"", html, StringComparison.OrdinalIgnoreCase);
@@ -1216,7 +1216,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     {
         using var client = CreateClient(_factory);
 
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
 
         Assert.Contains("new ol.source.Cluster", script, StringComparison.Ordinal);
         Assert.Contains("distance: 44", script, StringComparison.Ordinal);
@@ -1239,7 +1239,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
 
         var html = await client.GetStringAsync("/");
         var css = await client.GetStringAsync("/css/toured.css");
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
 
         Assert.Contains("id=\"visitNowButton\"", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Jetzt stempeln", html, StringComparison.Ordinal);
@@ -1297,10 +1297,10 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     public async Task BundledFrontendDeclaresEveryReferencedDomElement()
     {
         using var client = CreateClient(_factory);
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
         var registry = Regex.Match(
             script,
-            @"const elements = \{(?<body>.*?)^\s{4}\};",
+            @"const elements = \{(?<body>.*?)^\s*\};",
             RegexOptions.Multiline | RegexOptions.Singleline);
         Assert.True(registry.Success);
         var declarations = Regex.Matches(
@@ -1514,7 +1514,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         var swScript = await response.Content.ReadAsStringAsync();
 
         // Core caching rules
-        Assert.Contains("toured-shell-v18", swScript, StringComparison.Ordinal);
+        Assert.Contains("toured-shell-v19", swScript, StringComparison.Ordinal);
         Assert.Contains("css/toured.css", swScript, StringComparison.Ordinal);
         Assert.Contains("js/toured.js", swScript, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", swScript, StringComparison.Ordinal);
@@ -1600,7 +1600,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
     {
         using var client = CreateClient(_factory);
 
-        var script = await client.GetStringAsync("/js/toured.js");
+        var script = await GetFrontendScriptAsync(client);
 
         Assert.DoesNotContain("localStorage", script, StringComparison.Ordinal);
         Assert.DoesNotContain("sessionStorage", script, StringComparison.Ordinal);
@@ -1779,6 +1779,40 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         await _factory.DisposeAsync();
         DeleteFile(_databasePath);
         DeleteDirectory(_keysPath);
+    }
+
+    [Fact]
+    public async Task EveryImportedFrontendModuleIsPrecachedByTheServiceWorker()
+    {
+        using var client = CreateClient(_factory);
+        var precached = await GetPrecachedFrontendModulesAsync(client);
+        Assert.Contains("js/toured.js", precached);
+
+        foreach (var module in precached)
+        {
+            var source = await client.GetStringAsync("/" + module);
+            var imports = Regex.Matches(source, @"^\s*import\s[^;]*?from\s+""\./(?<file>[\w-]+\.js)"";", RegexOptions.Multiline)
+                .Select(match => "js/" + match.Groups["file"].Value);
+            Assert.All(imports, imported => Assert.Contains(imported, precached));
+        }
+    }
+
+    /// <summary>All frontend modules the service worker precaches, starting with the entry module.</summary>
+    private static async Task<IReadOnlyList<string>> GetPrecachedFrontendModulesAsync(HttpClient client)
+    {
+        var worker = await client.GetStringAsync("/service-worker.js");
+        return Regex.Matches(worker, @"""(?<file>js/[\w-]+\.js)""")
+            .Select(match => match.Groups["file"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>The source of every precached frontend module, for contract checks across modules.</summary>
+    private static async Task<string> GetFrontendScriptAsync(HttpClient client)
+    {
+        var modules = await GetPrecachedFrontendModulesAsync(client);
+        var sources = await Task.WhenAll(modules.Select(module => client.GetStringAsync("/" + module)));
+        return string.Join("\n", sources);
     }
 
     private static HttpClient CreateClient(WebApplicationFactory<Program> factory, bool handleCookies = true)

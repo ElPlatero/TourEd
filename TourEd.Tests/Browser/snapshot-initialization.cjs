@@ -3,25 +3,35 @@
 // Separate Playwright BrowserContexts would isolate storage and cannot reproduce this race.
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
+const { loadPatchedModules } = require('./module-patches.cjs');
 const { join, resolve } = require('node:path');
 const { createServer } = require('node:http');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = resolve(__dirname, '../../Api/wwwroot');
 
-let script = readFileSync(process.env.TOURED_SCRIPT || join(root, 'js/toured.js'), 'utf8');
 // Pause immediately before the production write transaction, after any earlier reads.
-script = script.replace('const updateStoredSnapshot =', 'const performStoredSnapshotUpdate =')
-    .replace('    const clearStoredSnapshot =', `    const updateStoredSnapshot = async mutation => {
-        await window.__beforeSnapshotWrite?.();
-        return performStoredSnapshotUpdate(mutation);
-    };
-    const clearStoredSnapshot =`)
-    .replace(/(            (?:let initializedSnapshot =|const currentSnapshot = await getStoredSnapshot\(\);))/, '            window.__initializationReady = true;\n$1');
+const modules = loadPatchedModules(root, [
+    { name: 'rename snapshot update', find: ['const updateStoredSnapshot ='], replace: 'const performStoredSnapshotUpdate =' },
+    {
+        name: 'pause snapshot update',
+        find: [/^( *)const clearStoredSnapshot =/m],
+        replace: `$1const updateStoredSnapshot = async mutation => {
+$1    await window.__beforeSnapshotWrite?.();
+$1    return performStoredSnapshotUpdate(mutation);
+$1};
+$1const clearStoredSnapshot =`
+    },
+    {
+        name: 'signal initialization',
+        find: [/^( *)(let initializedSnapshot =|const currentSnapshot = await getStoredSnapshot\(\);)/m],
+        replace: '$1window.__initializationReady = true;\n$1$2'
+    }
+], process.env.TOURED_SCRIPT);
 const server = createServer((req, res) => {
     const path = new URL(req.url, 'http://localhost').pathname;
     const file = path === '/' ? 'index.html' : path.slice(1);
     try {
-        const body = file === 'js/toured.js' ? script : readFileSync(join(root, file));
+        const body = modules.get(file) ?? readFileSync(join(root, file));
         res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html');
         res.end(body);
     } catch { res.writeHead(404).end(); }
