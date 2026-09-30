@@ -17,7 +17,7 @@ public class PointsController : ControllerBase
     {
         _manager = manager;
     }
-    
+
     [ProducesResponseType(typeof(GetStampingPointsResponse), StatusCodes.Status200OK)]
     [HttpGet]
     public async Task<IActionResult> GetStampingPoints([FromQuery] StampingPointQuery query, CancellationToken cancellationToken)
@@ -140,7 +140,7 @@ public class PointsController : ControllerBase
         await _manager.DeleteVisitByIdAsync(currentUser, stampingPointId, provider, cancellationToken);
         return NoContent();
     }
-    
+
     private static StampingPointDto CreateDto((StampingPoint Point, List<HikingTour>? Tours, UserVisit? Visit) data)
     {
         var result = StampingPointDto.Create(data.Point, data.Visit);

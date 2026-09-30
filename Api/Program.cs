@@ -1,5 +1,5 @@
-using System.Text.Json.Serialization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Api.ErrorHandling;
 using Api.Extensions;
 using Api.Imports;
@@ -54,7 +54,7 @@ builder.Services
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
-    
+
 
 var app = builder.Build();
 

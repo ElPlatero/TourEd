@@ -1,4 +1,4 @@
-﻿using Api.Dto;
+using Api.Dto;
 using Microsoft.AspNetCore.Routing.Constraints;
 
 namespace Api.Controllers.Points;

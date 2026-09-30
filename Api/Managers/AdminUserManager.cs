@@ -1,4 +1,4 @@
-﻿using Api.Dto;
+using Api.Dto;
 using Api.Entities;
 using Api.ErrorHandling;
 using Api.Repositories;

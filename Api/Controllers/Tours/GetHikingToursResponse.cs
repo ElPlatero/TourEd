@@ -1,4 +1,4 @@
-﻿using Api.Dto;
+using Api.Dto;
 
 namespace Api.Controllers.Tours;
 

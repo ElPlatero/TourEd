@@ -16,7 +16,7 @@ public class ToursController : ControllerBase
     {
         _manager = manager;
     }
-    
+
     [HttpGet]
     public async Task<IActionResult> GetHikingTours([FromQuery] HikingTourQuery query, CancellationToken cancellationToken)
     {
