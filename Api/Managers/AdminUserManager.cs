@@ -11,20 +11,20 @@ public sealed class AdminUserManager
     private readonly UserRepository _users;
     private readonly RegistrationRequestRepository _registrationRequests;
     private readonly AdminAuditRepository _audit;
-    private readonly TouredRepository _repository;
+    private readonly StampingProviderRepository _providers;
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
 
     public AdminUserManager(
         UserRepository users,
         RegistrationRequestRepository registrationRequests,
         AdminAuditRepository audit,
-        TouredRepository repository,
+        StampingProviderRepository providers,
         IUnitOfWorkFactory unitOfWorkFactory)
     {
         _users = users;
         _registrationRequests = registrationRequests;
         _audit = audit;
-        _repository = repository;
+        _providers = providers;
         _unitOfWorkFactory = unitOfWorkFactory;
     }
 
@@ -32,7 +32,7 @@ public sealed class AdminUserManager
         => (await _users.GetUserSummariesAsync(cancellationToken)).Select(CreateDto).ToList();
 
     public async Task<List<AdminProviderDto>> GetProvidersAsync(CancellationToken cancellationToken)
-        => (await _repository.GetStampingProvidersAsync(includeRestrictedProviders: true))
+        => (await _providers.GetProvidersAsync(cancellationToken))
             .Select(provider => new AdminProviderDto(provider.Id, provider.Slug, provider.Name, provider.Abbreviation))
             .ToList();
 
@@ -97,7 +97,7 @@ public sealed class AdminUserManager
             throw new RequestValidationException("The default provider must be included in Providers.");
         }
 
-        var providersBySlug = (await _repository.GetStampingProvidersAsync(includeRestrictedProviders: true))
+        var providersBySlug = (await _providers.GetProvidersAsync(cancellationToken))
             .Where(provider => requestedSlugs.Contains(provider.Slug.ToLowerInvariant()))
             .ToDictionary(provider => provider.Slug.ToLowerInvariant(), StringComparer.Ordinal);
         var unknownSlugs = requestedSlugs.Except(providersBySlug.Keys).Order().ToArray();

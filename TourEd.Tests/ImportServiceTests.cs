@@ -591,9 +591,9 @@ public sealed class ImportServiceTests : IDisposable
         Assert.NotNull(provider.DataImportedAt);
         Assert.True(provider.IsAnonymousAccessAllowed);
 
-        var publicData = await repository.GetPublicProviderDataAsync(StampingProvider.TouringenSlug);
-        Assert.NotNull(publicData);
-        Assert.Single(publicData.Value.Points);
+        var publicProvider = await new StampingProviderRepository(context).FindPublicDataProviderAsync(StampingProvider.TouringenSlug);
+        Assert.NotNull(publicProvider);
+        Assert.Single(await repository.GetPointsForProviderAsync(publicProvider.Id));
     }
 
     private async Task<DataContext> CreateContextAsync()
@@ -634,7 +634,8 @@ public sealed class ImportServiceTests : IDisposable
             Options.Create(new TouringenWebsiteConfiguration { StempelstellenUri = new Uri("https://example.test/stamping-points") }),
             new HikingToursImportService(),
             repository,
-            new UnitOfWorkFactory(context));
+            new UnitOfWorkFactory(context),
+            new StampingProviderManager(new StampingProviderRepository(context), repository));
     }
 
     private static IReadOnlyList<StampingPoint> CreateTouringenPoints(string? rawData)
