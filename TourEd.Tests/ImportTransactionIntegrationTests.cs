@@ -125,10 +125,10 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<DataContext>();
-            var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+            var repository = scope.ServiceProvider.GetRequiredService<StampingPointRepository>();
             var point = Assert.Single(await repository.SaveStampingPointsAsync(Sources.Point(providerId, 1) with { Name = "Original" }));
             originalId = point.Id;
-            await repository.AddUserVisitAsync(new User { Id = _userId }, point.Id, null, false);
+            await scope.ServiceProvider.GetRequiredService<UserVisitRepository>().AddUserVisitAsync(new User { Id = _userId }, point.Id, null, false);
             originalReadiness = (await db.StampingProviders.SingleAsync(p => p.Id == providerId)).IsAnonymousAccessAllowed;
             var failureTrigger = providerSlug == "touringen"
                 ? "CREATE TRIGGER fail_final_import BEFORE INSERT ON SortedStampingPoint BEGIN SELECT RAISE(ABORT, 'Injected import failure'); END;"
@@ -269,7 +269,7 @@ public sealed class ImportTransactionIntegrationTests : IAsyncLifetime
     private async Task WriteIndependentVisitAsync()
     {
         await using var scope = _factory.Services.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<TouredRepository>();
+        var repository = scope.ServiceProvider.GetRequiredService<UserVisitRepository>();
         await repository.AddUserVisitAsync(new User { Id = _userId }, _visitPointId, null, false);
     }
 
